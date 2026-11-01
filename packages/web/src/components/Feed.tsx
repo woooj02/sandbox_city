@@ -1,4 +1,5 @@
 import { useStore } from '../store';
+import { PayPalConsole } from './PayPalConsole';
 import { clock, LANE_NAMES } from './meta';
 
 export function Feed() {
@@ -14,6 +15,7 @@ export function Feed() {
           </li>
         ))}
       </ul>
+      <PayPalConsole />
     </aside>
   );
 }

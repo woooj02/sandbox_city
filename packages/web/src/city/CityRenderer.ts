@@ -1,7 +1,7 @@
 import { Application, Container, Graphics, Sprite, Text, TextStyle, Texture } from 'pixi.js';
 import { AdvancedBloomFilter, GlitchFilter, ShockwaveFilter } from 'pixi-filters';
 import { DISTRICTS, SimEvent } from '@sandbox-city/core';
-import type { MerchantLite, TickMsg, WorldSnapshot } from '../sim/protocol';
+import type { MerchantLite, TickMsg, WorldSnapshot } from '@sandbox-city/core';
 import { makeTextures, Textures } from './textures';
 import { C, CATEGORY_COLORS, DISTRICT_COLORS } from './palette';
 

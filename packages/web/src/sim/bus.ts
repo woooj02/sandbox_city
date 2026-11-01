@@ -1,4 +1,4 @@
-import type { TickMsg, WorldSnapshot } from './protocol';
+import type { TickMsg, WorldSnapshot } from '@sandbox-city/core';
 
 type Handlers = { tick: (m: TickMsg) => void; world: (w: WorldSnapshot) => void; reset: () => void };
 const subs: { [K in keyof Handlers]: Set<Handlers[K]> } = { tick: new Set(), world: new Set(), reset: new Set() };

@@ -34,7 +34,7 @@ function toRow(lane: number, e: SimEvent): Row | null {
     if (e.duplicateCharge) tone = 'double';
     return {
       key: `${lane}-${e.id}`, lane: LANE_NAMES[lane], t: e.t, kind: 'ORDER', id: e.id, paypal: e.paypal?.captureId ?? e.paypal?.authId ?? e.paypal?.orderId ?? '—',
-      rail: e.paypal ? (e.paypal.rail === 'sandbox' ? 'PayPal sandbox' : 'twin') : '', buyer: names.get(e.buyer) ?? e.buyer, store: names.get(e.merchant) ?? e.merchant,
+      rail: e.rail === 'sandbox' ? 'PayPal sandbox' : 'twin', buyer: names.get(e.buyer) ?? e.buyer, store: names.get(e.merchant) ?? e.merchant,
       amount: e.amount, gate: e.escrow && e.decision === 'allow' ? 'escrow' : e.decision, outcome: e.duplicateCharge ? 'charged ×2' : e.outcome,
       rules: e.hits.map((h) => h.reason).join(' · '), truth: tr.malicious ? (tr.attack ? ATTACK_SHORT[tr.attack] : 'attacker') : 'honest', harm: tr.harm, tone,
     };

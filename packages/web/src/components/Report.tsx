@@ -1,4 +1,5 @@
 import { ATTACK_KINDS, Metrics } from '@sandbox-city/core';
+import { useEffect, useState } from 'react';
 import { useStore } from '../store';
 import { ATTACK_SHORT, LANE_NAMES, money, pct } from './meta';
 
@@ -13,6 +14,26 @@ function findings(m: Metrics) {
   const turned = m.honest.blocked + m.honest.abandoned;
   out.push(`${turned} honest purchases were turned away (${money(m.honest.blockedValue)} of good business lost).`);
   return out;
+}
+
+interface Recon { sim: { net: number; orders: number; refunds: number }; paypal: { net: number; transactions: number }; delta: number; matched: boolean }
+
+function LiveReconcile() {
+  const runId = useStore((s) => s.runId);
+  const [r, setR] = useState<Recon | { error: string } | null>(null);
+  useEffect(() => {
+    if (!runId) return;
+    fetch(`/api/reconcile/${runId}`).then((x) => x.json()).then(setR, (e: Error) => setR({ error: e.message }));
+  }, [runId]);
+  if (!runId) return null;
+  if (!r) return <div className="recon">Reconciling with PayPal Transaction Search…</div>;
+  if ('error' in r) return <div className="recon warn">Reconciliation unavailable: {r.error}</div>;
+  return (
+    <div className={`recon ${r.matched ? 'ok' : 'warn'}`}>
+      <b>{r.matched ? '✓ RECONCILED WITH PAYPAL' : 'PAYPAL NOT YET SETTLED'}</b>
+      <span>sim says {money(r.sim.net)} moved over {r.sim.orders} orders / {r.sim.refunds} refunds · PayPal reports {money(r.paypal.net)} across {r.paypal.transactions} transactions{r.matched ? '' : ` · Δ ${money(r.delta)} (Transaction Search can lag)`}</span>
+    </div>
+  );
 }
 
 export function Report() {
@@ -39,6 +60,7 @@ export function Report() {
             </div>
           ))}
         </div>
+        <LiveReconcile />
         <button className="btn" onClick={() => useStore.setState({ showReport: false })}>CLOSE</button>
       </div>
     </div>

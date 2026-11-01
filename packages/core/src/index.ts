@@ -6,3 +6,5 @@ export * from './policy';
 export * from './gen';
 export * from './genome';
 export * from './world';
+export * from './protocol';
+export * from './runner';

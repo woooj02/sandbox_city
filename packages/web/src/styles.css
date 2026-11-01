@@ -205,6 +205,22 @@ i.leak { background: var(--rd); box-shadow: 0 0 6px var(--rd); }
 .feed .tone-attack span { color: #ff6f9c; } .feed .tone-good span { color: #8ff5ff; } .feed .tone-bad span { color: #ff4a62; font-weight: 600; }
 .feed .tone-warn span { color: #ffc35c; } .feed .tone-info span { color: #c8d0f0; }
 
+/* ───── live PayPal ───── */
+.rail-badge { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 10.5px; letter-spacing: 2px; padding: 5px 10px; border: 1px solid var(--line); color: var(--dim); white-space: nowrap; }
+.rail-badge i { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+.rail-badge.sandbox { color: #ffd84a; border-color: rgba(255,216,74,.5); box-shadow: 0 0 18px rgba(255,216,74,.18) inset; }
+.rail-badge.sandbox i { background: #ffd84a; box-shadow: 0 0 10px #ffd84a; animation: livePulse 1.2s ease-in-out infinite; }
+@keyframes livePulse { 50% { opacity: .25; } }
+.ppc { border-top: 1px solid var(--line); flex: none; }
+.ppc ul { list-style: none; margin: 0; padding: 4px 10px 8px; font-family: var(--mono); font-size: 10.5px; }
+.ppc li { display: flex; gap: 7px; align-items: baseline; padding: 2px 0; animation: feedIn .3s ease-out; white-space: nowrap; overflow: hidden; }
+.ppc li b { flex: none; width: 26px; } .ppc li.ok b { color: var(--gr); } .ppc li.warn b { color: #ffc35c; } .ppc li.err b { color: #ff4a62; }
+.ppc .m { color: var(--cy); flex: none; } .ppc .p { color: #c8d0f0; overflow: hidden; text-overflow: ellipsis; } .ppc .ms { color: var(--dim); margin-left: auto; flex: none; }
+.ppc code { color: #ffd84a; opacity: .8; flex: none; } .ppc .idle { color: var(--dim); }
+.recon { margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--line); font-size: 12.5px; display: flex; flex-direction: column; gap: 4px; }
+.recon b { letter-spacing: 3px; font-family: var(--mono); } .recon.ok { border-color: rgba(77,255,160,.5); } .recon.ok b { color: var(--gr); } .recon.warn b { color: #ffc35c; }
+.recon span { color: var(--dim); }
+
 /* ───── report ───── */
 .report-wrap { position: fixed; inset: 0; z-index: 40; background: rgba(2,2,8,.72); display: grid; place-items: center; backdrop-filter: blur(4px); animation: fade .4s; }
 @keyframes fade { from { opacity: 0; } }

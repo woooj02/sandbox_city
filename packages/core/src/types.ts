@@ -158,10 +158,12 @@ export type SimEvent =
   | { type: 'order'; t: number; id: string; buyer: string; merchant: string; amount: number; qty: number;
       decision: Decision; outcome: Outcome; hits: RuleHit[]; escrow: boolean;
       paypal?: { orderId?: string; captureId?: string; authId?: string; status: string; rail: 'twin' | 'sandbox'; debugId?: string };
-      truth: OrderIntent['truth']; retries: number; duplicateCharge: boolean; charges: number }
+      truth: OrderIntent['truth']; retries: number; duplicateCharge: boolean; charges: number;
+      /** Rails the payment was attempted on (set even when every attempt failed). */
+      rail: 'twin' | 'sandbox' }
   | { type: 'refund'; t: number; id: string; order: string; buyer: string; merchant: string; amount: number;
-      approved: boolean; reason: string; hits: RuleHit[]; truth: { malicious: boolean; attack?: AttackKind; harm: number } }
-  | { type: 'capture'; t: number; order: string; amount: number }
+      approved: boolean; reason: string; hits: RuleHit[]; rail: 'twin' | 'sandbox'; truth: { malicious: boolean; attack?: AttackKind; harm: number } }
+  | { type: 'capture'; t: number; order: string; amount: number; rail: 'twin' | 'sandbox' }
   | { type: 'ship'; t: number; order: string; merchant: string; buyer: string; tracking: string }
   | { type: 'store_open'; t: number; merchant: string; name: string; honest: boolean; attacker?: string }
   | { type: 'store_close'; t: number; merchant: string; reason: string }

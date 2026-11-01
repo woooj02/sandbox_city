@@ -1,4 +1,5 @@
-import type { AttackKind, Policy, SimEvent } from '@sandbox-city/core';
+import type { AttackKind, SimEvent } from './types';
+import type { Policy } from './policy';
 
 export interface MerchantLite { id: string; name: string; x: number; y: number; district: number; honest: boolean; category: string; verified: boolean; owner?: string }
 export interface ShopperLite { id: string; name: string; x: number; y: number; district: number; hero: boolean; controlledBy?: string; passport: boolean }
@@ -19,7 +20,10 @@ export type FromSim =
   | { type: 'world'; world: WorldSnapshot }
   | TickMsg
   | { type: 'done'; lane: number }
-  | { type: 'status'; running: boolean; tps: number; mode: 'local' | 'server' };
+  | { type: 'status'; running: boolean; tps: number; mode: 'local' | 'server'; paypal?: 'sandbox' | 'twin' }
+  | { type: 'paypal_call'; lane: number; method: string; path: string; status: number; ms: number; debugId?: string; requestId?: string }
+  | { type: 'run'; runId: string }
+  | { type: 'error'; message: string };
 
 export interface LaneSpec { policy: Policy }
 

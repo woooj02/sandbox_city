@@ -7,7 +7,7 @@ const SPEEDS = [2, 8, 24, 80, 240];
 const SPEED_LABEL: Record<number, string> = { 2: '¼×', 8: '1×', 24: '3×', 80: '10×', 240: 'MAX' };
 
 export function TopBar() {
-  const { running, tps, xray, policies } = useStore();
+  const { running, tps, xray, policies, paypal } = useStore();
   const lane0 = useStore((s) => s.lanes[0]);
   const t = lane0?.t ?? 0, total = lane0?.world?.ticks ?? 1440;
   const fork = () => {
@@ -23,6 +23,9 @@ export function TopBar() {
           <div className="logo-title glitch" data-text="SANDBOX CITY">SANDBOX CITY</div>
           <div className="logo-sub">サンドボックス・シティ · crash-test lab for AI commerce</div>
         </div>
+      </div>
+      <div className={`rail-badge ${paypal}`} title={paypal === 'sandbox' ? 'Lane A moves real money on the PayPal sandbox' : 'All payments run on the in-browser PayPal twin'}>
+        <i />{paypal === 'sandbox' ? 'LIVE · PAYPAL SANDBOX' : 'PAYPAL TWIN'}
       </div>
       <div className="clockbox">
         <div className="clock-big">DAY 1 · {clock(t)}</div>

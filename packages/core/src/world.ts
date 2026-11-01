@@ -39,6 +39,8 @@ interface AgentStats { first: number; orders: number; refunds: number; times: nu
 interface MerchantStats { orders: number; fulfilled: number; refunds: number; buyers: Map<string, number> }
 interface OrderRec {
   r: Rng;
+  /** The rails this order was paid on; its whole lifecycle (capture, void, refund) stays there. */
+  lane: Rails;
   intent: OrderIntent; card: CardRef; payer: string; captureId?: string; authId?: string; amountHeld: number;
   shipped?: number; tracking?: string; carrierScan: boolean; delivered: boolean; refunded: boolean; leaked: number;
 }
@@ -563,8 +565,8 @@ export class World {
     let retries = 0, duplicateCharge = false, charges = 0;
     const card: CardRef = this.cardFor(o);
 
+    const lane = this.live && (this.shoppers.get(o.buyer)?.hero || r.chance(this.cfg.liveSample ?? 0)) ? this.live : this.rails;
     if (outcome === 'completed') {
-      const lane = this.live && (this.shoppers.get(o.buyer)?.hero || r.chance(this.cfg.liveSample ?? 0)) ? this.live : this.rails;
       const mockCode = card.state === 'stolen' && r.chance(0.3) ? 'INSTRUMENT_DECLINED' : undefined;
       const res = await this.pay(lane, {
         intent: gate.escrow ? 'AUTHORIZE' : 'CAPTURE', amount: o.amount, currency: 'USD', payeeMerchantId: m.id, payerId: o.buyer,
@@ -584,7 +586,7 @@ export class World {
         if (pr.status === 'DECLINED') outcome = 'declined';
         else {
           outcome = gate.escrow ? 'escrowed' : 'completed';
-          const rec: OrderRec = { r, intent: o, card, payer: o.buyer, captureId: pr.captureId, authId: pr.authorizationId, amountHeld: gate.escrow ? o.amount : 0, carrierScan: false, delivered: false, refunded: false, leaked: 0 };
+          const rec: OrderRec = { r, lane, intent: o, card, payer: o.buyer, captureId: pr.captureId, authId: pr.authorizationId, amountHeld: gate.escrow ? o.amount : 0, carrierScan: false, delivered: false, refunded: false, leaked: 0 };
           this.orders.set(o.id, rec);
           this.recordStats(identity, m.id);
           this.afterPayment(rec, m);
@@ -621,7 +623,7 @@ export class World {
     }
     this.m.orders++;
 
-    this.emit({ type: 'order', t: this.t, id: o.id, buyer: o.buyer, merchant: m.id, amount: o.amount, qty: o.qty, decision: gate.decision, outcome, hits: gate.hits, escrow: gate.escrow, paypal, truth: o.truth, retries, duplicateCharge, charges });
+    this.emit({ type: 'order', t: this.t, id: o.id, buyer: o.buyer, merchant: m.id, amount: o.amount, qty: o.qty, decision: gate.decision, outcome, hits: gate.hits, escrow: gate.escrow, paypal, truth: o.truth, retries, duplicateCharge, charges, rail: lane.name });
   }
 
   private challengePass(o: OrderIntent): number {
@@ -699,10 +701,10 @@ export class World {
         this.mStats.get(m.id)!.fulfilled++;
         this.emit({ type: 'ship', t: this.t, order: o.id, merchant: m.id, buyer: o.buyer, tracking: rec.tracking });
         if (rec.authId && rec.amountHeld > 0) {
-          const c = await this.lifecycle(() => this.rails.captureAuthorization(rec.authId!, `cap-${o.id}`));
+          const c = await this.lifecycle(() => rec.lane.captureAuthorization(rec.authId!, `cap-${o.id}`));
           if (c) {
             rec.captureId = c.captureId; rec.amountHeld = 0;
-            this.emit({ type: 'capture', t: this.t, order: o.id, amount: o.amount });
+            this.emit({ type: 'capture', t: this.t, order: o.id, amount: o.amount, rail: rec.lane.name });
             if (o.truth.malicious && o.truth.harm > 0) this.leak(o.id, o.truth.attack!, o.truth.harm);
           }
         }
@@ -713,7 +715,7 @@ export class World {
       case 'deliver': rec.delivered = true; break;
       case 'escrowExpire': {
         if (!rec.authId || rec.amountHeld <= 0) break;
-        await this.lifecycle(() => this.rails.voidAuthorization(rec.authId!, `void-${o.id}`));
+        await this.lifecycle(() => rec.lane.voidAuthorization(rec.authId!, `void-${o.id}`));
         rec.amountHeld = 0;
         if (o.truth.malicious && o.truth.harm > 0) this.prevent(o.truth.attack!, o.truth.harm);
         break;
@@ -747,7 +749,7 @@ export class World {
     // a vanished store can't refund anything
     if (!m.honest && m.closed) approved = false;
     if (approved) {
-      const ok = await this.lifecycle(() => this.rails.refundCapture(rec.captureId!, o.amount, `rf-${o.id}`));
+      const ok = await this.lifecycle(() => rec.lane.refundCapture(rec.captureId!, o.amount, `rf-${o.id}`));
       if (ok) rec.refunded = true; else approved = false;
     }
     const st = this.aStats.get(o.buyer);
@@ -764,7 +766,7 @@ export class World {
       // a legit claim denied on an honest store = honest money lost to the rules
       if (!approved && !harmCase && !remorse && m.honest) this.m.honest.blockedValue = round2(this.m.honest.blockedValue + o.amount);
     }
-    this.emit({ type: 'refund', t: this.t, id: `R${o.id}`, order: o.id, buyer: o.buyer, merchant: m.id, amount: o.amount, approved, reason, hits: decision.hits, truth: { malicious: abuse, attack: abuse ? 'refund_abuse' : undefined, harm: abuse ? o.amount : 0 } });
+    this.emit({ type: 'refund', t: this.t, id: `R${o.id}`, order: o.id, buyer: o.buyer, merchant: m.id, amount: o.amount, approved, reason, hits: decision.hits, rail: rec.lane.name, truth: { malicious: abuse, attack: abuse ? 'refund_abuse' : undefined, harm: abuse ? o.amount : 0 } });
   }
 
   /** Platform-side lifecycle calls always reuse their PayPal-Request-Id, so retries are safe. */

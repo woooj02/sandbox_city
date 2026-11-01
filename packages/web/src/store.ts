@@ -1,11 +1,13 @@
 import { create } from 'zustand';
 import type { Metrics, Policy } from '@sandbox-city/core';
 import { PRESETS } from '@sandbox-city/core';
-import type { WorldSnapshot } from './sim/protocol';
+import type { WorldSnapshot } from '@sandbox-city/core';
 
 export type CutInKind = 'attack' | 'blocked' | 'breach' | 'double' | 'sale' | 'falsepos' | 'replay' | 'escrow';
 export interface CutIn { id: number; kind: CutInKind; lane: number; title: string; kanji: string; line: string; sub?: string; amount?: number; who?: string }
 export interface FeedItem { id: number; t: number; lane: number; tone: 'attack' | 'good' | 'bad' | 'warn' | 'info'; text: string }
+
+export interface PayPalCall { id: number; method: string; path: string; status: number; ms: number; debugId?: string; requestId?: string }
 
 interface LaneState { world: WorldSnapshot | null; metrics: Metrics | null; t: number; done: boolean; sale: boolean; phases: Record<string, string>; history: { t: number; safety: number; access: number; net: number }[] }
 
@@ -20,6 +22,10 @@ interface State {
   cutins: CutIn[];
   feed: FeedItem[];
   showReport: boolean;
+  paypal: 'twin' | 'sandbox';
+  runId: string | null;
+  paypalCalls: PayPalCall[];
+  pushCall: (c: Omit<PayPalCall, 'id'>) => void;
   set: (p: Partial<State>) => void;
   setLane: (lane: number, p: Partial<LaneState>) => void;
   pushCutIn: (c: Omit<CutIn, 'id'>) => void;
@@ -41,6 +47,10 @@ export const useStore = create<State>((set, get) => ({
   cutins: [],
   feed: [],
   showReport: false,
+  paypal: 'twin',
+  runId: null,
+  paypalCalls: [],
+  pushCall: (c) => set({ paypalCalls: [{ ...c, id: nid++ }, ...get().paypalCalls].slice(0, 40) }),
   set: (p) => set(p),
   setLane: (lane, p) => {
     const lanes = get().lanes.slice();

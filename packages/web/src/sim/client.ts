@@ -1,6 +1,6 @@
 import { ATTACK_LABEL, Policy, PRESETS, SimEvent } from '@sandbox-city/core';
 import { bus } from './bus';
-import type { FromSim, ToSim, WorldSnapshot } from './protocol';
+import type { FromSim, ToSim, WorldSnapshot } from '@sandbox-city/core';
 import { resetLanes, useStore } from '../store';
 
 const worlds: WorldSnapshot[] = [];
@@ -100,22 +100,54 @@ function narrate(lane: number, events: SimEvent[], focusLane: number) {
 
 export interface SimSource { send(m: ToSim): void }
 
+/** Where the sim runs: an in-browser worker (twin rails), or the lab server (real PayPal sandbox lane). */
+function makeSource(onMsg: (m: FromSim) => void): SimSource {
+  const q = new URLSearchParams(location.search);
+  const local = (): SimSource => {
+    const w = new Worker(new URL('./sim.worker.ts', import.meta.url), { type: 'module' });
+    w.onmessage = (ev: MessageEvent<FromSim>) => onMsg(ev.data);
+    return { send: (m) => w.postMessage(m) };
+  };
+  if (q.get('live') !== '1') return local();
+  const url = q.get('server') ?? `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
+  const pending: ToSim[] = [];
+  let fallback: SimSource | null = null;
+  let open = false;
+  const ws = new WebSocket(url);
+  ws.onopen = () => { open = true; for (const m of pending.splice(0)) ws.send(JSON.stringify(m)); };
+  ws.onmessage = (ev) => onMsg(JSON.parse(String(ev.data)) as FromSim);
+  const toLocal = () => {
+    if (fallback) return;
+    useStore.getState().pushFeed([{ t: 0, lane: 0, tone: 'warn', text: 'Lab server unreachable: running on the local PayPal twin' }]);
+    fallback = local();
+    for (const m of pending.splice(0)) fallback.send(m);
+  };
+  ws.onerror = () => { if (!open) toLocal(); };
+  ws.onclose = () => { if (open) useStore.setState({ running: false }); else toLocal(); };
+  return {
+    send: (m) => {
+      if (fallback) return fallback.send(m);
+      if (open && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m));
+      else pending.push(m);
+    },
+  };
+}
+
 class Client {
-  private worker: Worker;
+  private src: SimSource;
   focusLane = 0;
   private lastSale: boolean[] = [];
   constructor() {
-    this.worker = new Worker(new URL('./sim.worker.ts', import.meta.url), { type: 'module' });
-    this.worker.onmessage = (ev: MessageEvent<FromSim>) => this.receive(ev.data);
+    this.src = makeSource((m) => this.receive(m));
   }
-  send(m: ToSim) { this.worker.postMessage(m); }
+  send(m: ToSim) { this.src.send(m); }
 
   start(policies: Policy[]) {
     const st = useStore.getState();
     resetLanes(policies.length);
     seenAttackers.clear();
     worlds.length = 0;
-    useStore.setState({ policies });
+    useStore.setState({ policies, paypalCalls: [], runId: null });
     bus.emit('reset');
     this.send({ cmd: 'init', seed: st.seed, lanes: policies.map((policy) => ({ policy })), chaos: st.chaos });
   }
@@ -145,7 +177,13 @@ class Client {
       st.setLane(m.lane, { done: true });
       if (useStore.getState().lanes.every((l) => l.done)) useStore.setState({ showReport: true });
     } else if (m.type === 'status') {
-      useStore.setState({ running: m.running, tps: m.tps });
+      useStore.setState({ running: m.running, tps: m.tps, paypal: m.paypal ?? 'twin' });
+    } else if (m.type === 'run') {
+      useStore.setState({ runId: m.runId });
+    } else if (m.type === 'paypal_call') {
+      st.pushCall({ method: m.method, path: m.path, status: m.status, ms: m.ms, debugId: m.debugId, requestId: m.requestId });
+    } else if (m.type === 'error') {
+      st.pushFeed([{ t: st.lanes[0]?.t ?? 0, lane: 0, tone: 'warn', text: `Sim error: ${m.message}` }]);
     }
   }
 }
