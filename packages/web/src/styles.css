@@ -452,4 +452,12 @@ i.leak { background: var(--rd); box-shadow: 0 0 6px var(--rd); }
 .fk-head { display: flex; justify-content: space-between; gap: 6px; font-size: 12px; } .fk-head span { font-family: var(--mono); color: var(--dim); font-size: 11px; } .fk-head em { font-style: normal; color: #ff6f8a; }
 .fk ul { margin: 4px 0 0; padding-left: 14px; font-size: 11px; color: #c8d0f0; line-height: 1.45; } .fk li.dim { color: var(--dim); list-style: none; margin-left: -14px; }
 @media (max-width: 820px) { .forge-kinds { grid-template-columns: 1fr; } }
+.forge-grid { margin-top: 14px; border: 1px solid var(--line); background: rgba(5,6,18,.6); }
+.forge-grid .ag-row.fg-up { box-shadow: inset 3px 0 0 #ff2a4a; background: rgba(255,42,74,.06); }
+.forge-grid .fg-code { font-weight: 700; letter-spacing: 1px; color: rgba(255,120,150,.85); }
+.forge-grid .fg-dim { color: var(--dim); } .forge-grid .fg-now { color: #ff6f8a; font-weight: 700; }
+.forge-grid .fg-tactics { line-height: 1.5; padding-top: 4px; padding-bottom: 4px; font-size: 11px; color: #c8d0f0; }
+.forge-grid .fg-gain { color: var(--dim); } .forge-grid .fg-gain.up { color: #ff2a4a; font-weight: 700; }
+.forge-grid .fg-gain small { margin-left: 6px; font-weight: 400; color: #ff8fa3; }
+.forge-grid { --ag-value-change-value-highlight-background-color: rgba(255,42,74,.45); }
 .forge .report-head .glyph, .tune .report-head .glyph { white-space: nowrap; }

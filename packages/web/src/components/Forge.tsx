@@ -1,4 +1,8 @@
-import { ATTACK_KINDS, describeGenome, type Policy } from '@sandbox-city/core';
+import { useMemo } from 'react';
+import { ATTACK_KINDS, describeGenome, type AttackKind, type ForgeScore, type Policy } from '@sandbox-city/core';
+import { AgGridReact } from 'ag-grid-react';
+import type { ColDef, ICellRendererParams } from 'ag-grid-community';
+import { gridTheme } from './Ledger';
 import { emptyForge, useStore } from '../store';
 import { client } from '../sim/client';
 import { startTune } from './AutoTune';
@@ -39,6 +43,47 @@ function Curve() {
       <circle cx={x(last.evals)} cy={y(last.best)} r={9} className="halo" />
       <circle cx={x(last.evals)} cy={y(last.best)} r={4} className="head" />
     </svg>
+  );
+}
+
+interface KRow { kind: AttackKind; code: string; family: string; was: number; now: number; gain: number; tactics: string }
+
+const Gain = ({ data }: ICellRendererParams<KRow>) => {
+  if (!data) return null;
+  const up = data.now > data.was + 1;
+  return <span className={`fg-gain ${up ? 'up' : ''}`}>{up ? `+${money(data.now - data.was)}` : '—'}{up && data.was > 0 && <small>×{(data.now / data.was).toFixed(1)}</small>}</span>;
+};
+
+/** One row per attack family: what the stock crews stole, what the forged crews steal, and the tactics that did it. */
+function ForgeGrid({ best, base }: { best: ForgeScore; base: ForgeScore }) {
+  const rows = useMemo<KRow[]>(() => ATTACK_KINDS.map((k) => {
+    const tactics = describeGenome(k, best.genomes[k] ?? {});
+    return { kind: k, code: ATTACK_CODE[k], family: ATTACK_SHORT[k], was: base.byKind[k], now: best.byKind[k], gain: best.byKind[k] - base.byKind[k], tactics: tactics.length ? tactics.join(' · ') : 'no better tactic found' };
+  }), [best, base]);
+  const cols = useMemo<ColDef<KRow>[]>(() => [
+    { field: 'code', headerName: 'SIG', width: 70, cellClass: 'fg-code' },
+    { field: 'family', headerName: 'ATTACK', width: 150 },
+    { field: 'was', headerName: 'STOCK / DAY', width: 116, type: 'rightAligned', valueFormatter: (p) => money(p.value), cellClass: 'ag-right-aligned-cell fg-dim' },
+    { field: 'now', headerName: 'FORGED / DAY', width: 122, type: 'rightAligned', valueFormatter: (p) => money(p.value), cellClass: 'ag-right-aligned-cell fg-now', enableCellChangeFlash: true },
+    { field: 'gain', headerName: 'GAIN', width: 130, type: 'rightAligned', sort: 'desc', cellRenderer: Gain },
+    { field: 'tactics', headerName: 'WHAT THEY LEARNED', flex: 1, minWidth: 240, wrapText: true, autoHeight: true, cellClass: (p) => `fg-tactics ${p.data && p.data.gain <= 1 ? 'fg-dim' : ''}` },
+  ], []);
+  return (
+    <div className="forge-grid">
+      <AgGridReact<KRow>
+        theme={gridTheme}
+        rowData={rows}
+        columnDefs={cols}
+        getRowId={(p) => p.data.kind}
+        rowClassRules={{ 'fg-up': (p) => !!p.data && p.data.gain > 1 }}
+        domLayout="autoHeight"
+        animateRows
+        suppressCellFocus
+        suppressMovableColumns
+        headerHeight={26}
+        defaultColDef={{ sortable: true, resizable: false }}
+      />
+    </div>
   );
 }
 
@@ -86,23 +131,7 @@ export function Forge() {
             )}
           </div>
         </div>
-        {b && base && (
-          <div className="forge-kinds">
-            {ATTACK_KINDS.map((k) => {
-              const was = base.byKind[k], now = b.byKind[k];
-              const tactics = describeGenome(k, b.genomes[k] ?? {});
-              return (
-                <div key={k} className={`fk ${now > was + 1 ? 'up' : ''}`}>
-                  <span className="glyph">{ATTACK_CODE[k]}</span>
-                  <div className="fk-main">
-                    <div className="fk-head"><b>{ATTACK_SHORT[k]}</b><span>{money(was)} → <em>{money(now)}</em></span></div>
-                    <ul>{tactics.length ? tactics.map((t) => <li key={t}>{t}</li>) : <li className="dim">no better tactic found</li>}</ul>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        {b && base && <ForgeGrid best={b} base={base} />}
         <div className="tune-foot">
           {f.running
             ? <button className="btn" onClick={() => { client.send({ cmd: 'forge_stop' }); useStore.setState({ forge: { ...f, running: false } }); }}>■ STOP</button>
