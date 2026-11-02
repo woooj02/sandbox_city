@@ -24,6 +24,19 @@ export interface RunnerOptions {
   liveSample?: number;
 }
 
+const clampN = (v: number | undefined, lo: number, hi: number) => (v === undefined || !Number.isFinite(v) ? undefined : Math.max(lo, Math.min(hi, Math.round(v))));
+
+/** Requests can come from anyone on a public lab server: keep every size inside what the lab itself ever asks for. */
+function clampMsg(msg: ToSim): ToSim {
+  switch (msg.cmd) {
+    case 'init': return { ...msg, lanes: msg.lanes.slice(0, 2), shoppers: clampN(msg.shoppers, 50, 1200), chaos: Math.max(0, Math.min(1, Number(msg.chaos) || 0)) };
+    case 'speed': return { ...msg, tps: clampN(msg.tps, 1, 2400) ?? 8 };
+    case 'tune': return { ...msg, generations: clampN(msg.generations, 1, 8), children: clampN(msg.children, 1, 12), trainDays: clampN(msg.trainDays, 1, 5) };
+    case 'forge': return { ...msg, generations: clampN(msg.generations, 1, 8), children: clampN(msg.children, 1, 10) };
+    default: return msg;
+  }
+}
+
 export class SimRunner {
   worlds: World[] = [];
   running = false;
@@ -40,7 +53,8 @@ export class SimRunner {
     this.post({ type: 'status', running: this.running, tps: this.tps, mode: this.opts.mode, paypal: this.worlds.some((w) => w.cfg.liveRails) ? 'sandbox' : 'twin' });
   }
 
-  handle(msg: ToSim) {
+  handle(raw: ToSim) {
+    const msg = clampMsg(raw);
     if (msg.cmd === 'init') {
       this.lastInit = msg;
       this.gen++;
@@ -123,7 +137,8 @@ export class SimRunner {
     }
   }
 
-  stop() { this.running = false; this.gen++; if (this.timer) clearTimeout(this.timer); }
+  /** Ends everything this runner started, searches included, so a closed socket leaves no work behind. */
+  stop() { this.running = false; this.gen++; this.tuneGen++; this.forgeGen++; if (this.timer) clearTimeout(this.timer); }
 
   private async loop(g: number) {
     if (!this.running || g !== this.gen) return;

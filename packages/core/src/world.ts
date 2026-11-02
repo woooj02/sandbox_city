@@ -299,7 +299,10 @@ export class World {
   }
 
   async run(onTick?: (ev: SimEvent[]) => void): Promise<Metrics> {
-    while (!this.done) { const ev = await this.step(); onTick?.(ev); }
+    // in Node, hand the event loop back every 15 minutes of sim time so one search never freezes other sockets;
+    // browsers have no setImmediate and run this in a worker anyway
+    const breathe = typeof setImmediate === 'function' ? () => new Promise<void>((r) => setImmediate(r)) : null;
+    while (!this.done) { const ev = await this.step(); onTick?.(ev); if (breathe && this.t % 15 === 0) await breathe(); }
     return this.snapshot();
   }
 

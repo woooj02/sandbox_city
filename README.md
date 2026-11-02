@@ -105,7 +105,17 @@ Fill in `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` and a sandbox test card, then
 npm run build && npm run server
 ```
 
-Open http://localhost:8787/?live=1. If the server is unreachable, the page falls back to the twin. `npm run dev` proxies `/api` and `/ws` to the lab server, so http://localhost:5173/?live=1 works too.
+Open http://localhost:8787/?live=1. If the server is unreachable, the page falls back to the twin.
+
+On a public server, two environment variables bound the load:
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `MAX_SESSIONS` | 8 | Cities that can run on the server at once |
+| `MAX_LIVE` | 2 | Of those, how many pay on the PayPal sandbox; the rest run on the twin |
+| `LIVE_SAMPLE` | 0.02 | Share of ordinary shoppers whose payments also go to the sandbox |
+
+Request sizes are clamped, searches stop when the browser disconnects, and the engine yields to the event loop every 15 simulated minutes, so one visitor's auto-tune never freezes another's city. `npm run dev` proxies `/api` and `/ws` to the lab server, so http://localhost:5173/?live=1 works too.
 
 ### Deep links
 

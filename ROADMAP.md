@@ -7,7 +7,7 @@ Product work in progress. Items are ticked as they land on `main`.
 - [x] **Welcome screen.** First visit offers "Watch the film" or "Explore the lab", with a three-line explanation.
 - [x] **Report fixes.** Honest subtitle on the twin, buttons to race the winning rulebook or run auto-tune, one word for money lost everywhere.
 - [ ] **PayPal proof on the twin.** Show the last verified sandbox reconcile (orders, refunds, total, run id, PayPal ids).
-- [ ] **Server hardening.** Clamp request sizes, cancel searches on disconnect, cap concurrent live sessions, run heavy searches off the main thread.
+- [x] **Server hardening.** Clamp request sizes, cancel searches on disconnect, cap concurrent live sessions, run heavy searches off the main thread.
 - [ ] **Small screens.** Fix 1366×768 (clock wrap, metrics panel); on phones, play the film full screen.
 - [ ] **AG Grid extras.** Editable rulebook grid, ledger CSV export, totals row for the filtered view.
 - [x] **Quieter alerts when exploring.** Full-screen alerts only for large breaches outside the film.

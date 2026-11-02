@@ -44,6 +44,9 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
   const runs = new Map<string, { ledger: LiveLedger; rails: SandboxRails }>();
   app.decorate('runs', runs);
   const recentCalls: CallLog[] = [];
+  // a public lab: bound how many cities run at once, and how many of them spend sandbox calls
+  const maxSessions = Number(process.env.MAX_SESSIONS ?? 8), maxLive = Number(process.env.MAX_LIVE ?? 2);
+  let sessions = 0, liveSessions = 0;
 
   await app.register(websocket);
 
@@ -94,6 +97,10 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
   app.get('/ws', { websocket: true }, (socket) => {
     let current: { ledger: LiveLedger; rails: SandboxRails } | null = null;
     const send = (m: FromSim) => { if (socket.readyState === 1) socket.send(JSON.stringify(m)); };
+    if (sessions >= maxSessions) { send({ type: 'error', message: 'lab server is full, try again in a minute' }); socket.close(1013, 'busy'); return; }
+    sessions++;
+    let holdsLive = false;
+    const releaseLive = () => { if (holdsLive) { holdsLive = false; liveSessions--; } };
     const post = (m: FromSim) => {
       if (m.type === 'tick' && current) sandboxMoves(current.ledger, m.events);
       send(m);
@@ -101,8 +108,12 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
     const runner = new SimRunner(post, {
       mode: 'server', crypto: 'ed25519', liveSample: opts.liveSample ?? 0.02,
       liveRails: () => {
+        if (!holdsLive && liveSessions >= maxLive) { current = null; send({ type: 'error', message: 'every live PayPal lane is busy: this run uses the twin' }); return undefined; }
         const rails = makeRails();
-        if (!rails) { current = null; return undefined; }
+        if (!rails) { current = null; releaseLive(); return undefined; }
+        if (!holdsLive) { holdsLive = true; liveSessions++; }
+        // finished runs keep their ledger for reconciliation; only the newest few are worth keeping
+        if (runs.size >= 50) runs.delete(runs.keys().next().value!);
         const ledger: LiveLedger = { runId: rails.runId, startedAt: Date.now(), captured: 0, refunded: 0, orders: 0, refunds: 0, captureIds: new Set() };
         current = { ledger, rails };
         runs.set(rails.runId, current);
@@ -123,7 +134,7 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
       runner.handle(msg);
       if (msg.cmd === 'init' && current) send({ type: 'run', runId: current.ledger.runId });
     });
-    socket.on('close', () => runner.stop());
+    socket.on('close', () => { runner.stop(); releaseLive(); sessions--; });
   });
 
   const here = dirname(fileURLToPath(import.meta.url));
