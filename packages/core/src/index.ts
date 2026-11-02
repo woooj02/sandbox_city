@@ -8,3 +8,4 @@ export * from './genome';
 export * from './world';
 export * from './protocol';
 export * from './runner';
+export * from './whatif';

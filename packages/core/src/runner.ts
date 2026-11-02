@@ -6,6 +6,7 @@ import { World, DEFAULT_CONFIG, WorldConfig } from './world';
 import type { Merchant, Shopper } from './types';
 import type { FromSim, MerchantLite, ShopperLite, ToSim } from './protocol';
 import type { Rails } from './rails';
+import { whatIf } from './whatif';
 
 export const mLite = (m: Merchant): MerchantLite => ({
   id: m.id, name: m.name, x: m.x, y: m.y, district: m.district, honest: m.honest, verified: m.verified, owner: m.owner, category: m.catalog[0]?.category ?? 'home',
@@ -26,6 +27,7 @@ export class SimRunner {
   tps = 8;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private gen = 0;
+  private lastInit: Extract<ToSim, { cmd: 'init' }> | null = null;
 
   constructor(private post: (m: FromSim) => void, private opts: RunnerOptions) {}
 
@@ -35,6 +37,7 @@ export class SimRunner {
 
   handle(msg: ToSim) {
     if (msg.cmd === 'init') {
+      this.lastInit = msg;
       this.gen++;
       this.running = false;
       if (this.timer) clearTimeout(this.timer);
@@ -61,6 +64,13 @@ export class SimRunner {
     } else if (msg.cmd === 'speed') {
       this.tps = msg.tps;
       this.status();
+    } else if (msg.cmd === 'whatif') {
+      const init = this.lastInit;
+      if (!init) return;
+      const g = this.gen;
+      whatIf({ seed: init.seed, chaos: init.chaos, shoppers: init.shoppers, mine: init.lanes.map((l) => l.policy) })
+        .then((r) => { if (g === this.gen) this.post({ type: 'whatif', ...r }); })
+        .catch((e: Error) => this.post({ type: 'error', message: `what-if: ${e.message}` }));
     }
   }
 

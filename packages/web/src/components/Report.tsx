@@ -1,6 +1,7 @@
 import { ATTACK_KINDS, Metrics } from '@sandbox-city/core';
 import { useEffect, useState } from 'react';
 import { useStore } from '../store';
+import { WhatIf } from './WhatIf';
 import { ATTACK_SHORT, LANE_NAMES, money, pct } from './meta';
 
 function findings(m: Metrics) {
@@ -60,6 +61,7 @@ export function Report() {
             </div>
           ))}
         </div>
+        <WhatIf />
         <LiveReconcile />
         <button className="btn" onClick={() => useStore.setState({ showReport: false })}>CLOSE</button>
       </div>

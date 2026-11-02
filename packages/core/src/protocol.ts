@@ -1,5 +1,6 @@
 import type { AttackKind, SimEvent } from './types';
 import type { Policy } from './policy';
+import type { DaySummary } from './whatif';
 
 export interface MerchantLite { id: string; name: string; x: number; y: number; district: number; honest: boolean; category: string; verified: boolean; owner?: string }
 export interface ShopperLite { id: string; name: string; x: number; y: number; district: number; hero: boolean; controlledBy?: string; passport: boolean }
@@ -23,6 +24,7 @@ export type FromSim =
   | { type: 'status'; running: boolean; tps: number; mode: 'local' | 'server'; paypal?: 'sandbox' | 'twin' }
   | { type: 'paypal_call'; lane: number; method: string; path: string; status: number; ms: number; debugId?: string; requestId?: string }
   | { type: 'run'; runId: string }
+  | { type: 'whatif'; mine: DaySummary[]; alternatives: DaySummary[] }
   | { type: 'error'; message: string };
 
 export interface LaneSpec { policy: Policy }
@@ -31,4 +33,6 @@ export type ToSim =
   | { cmd: 'init'; seed: string; lanes: LaneSpec[]; chaos: number; shoppers?: number }
   | { cmd: 'play' }
   | { cmd: 'pause' }
-  | { cmd: 'speed'; tps: number };
+  | { cmd: 'speed'; tps: number }
+  /** Replay the last initialised day under every preset (counterfactual savings). */
+  | { cmd: 'whatif' };

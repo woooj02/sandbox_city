@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { Metrics, Policy } from '@sandbox-city/core';
 import { PRESETS } from '@sandbox-city/core';
-import type { WorldSnapshot } from '@sandbox-city/core';
+import type { DaySummary, WorldSnapshot } from '@sandbox-city/core';
 
 export type CutInKind = 'attack' | 'blocked' | 'breach' | 'double' | 'sale' | 'falsepos' | 'replay' | 'escrow';
 export interface CutIn { id: number; kind: CutInKind; lane: number; title: string; kanji: string; line: string; sub?: string; amount?: number; who?: string }
@@ -25,6 +25,7 @@ interface State {
   paypal: 'twin' | 'sandbox';
   runId: string | null;
   paypalCalls: PayPalCall[];
+  whatif: { mine: DaySummary[]; alternatives: DaySummary[] } | 'pending' | null;
   pushCall: (c: Omit<PayPalCall, 'id'>) => void;
   set: (p: Partial<State>) => void;
   setLane: (lane: number, p: Partial<LaneState>) => void;
@@ -50,6 +51,7 @@ export const useStore = create<State>((set, get) => ({
   paypal: 'twin',
   runId: null,
   paypalCalls: [],
+  whatif: null,
   pushCall: (c) => set({ paypalCalls: [{ ...c, id: nid++ }, ...get().paypalCalls].slice(0, 40) }),
   set: (p) => set(p),
   setLane: (lane, p) => {

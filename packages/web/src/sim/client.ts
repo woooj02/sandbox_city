@@ -147,7 +147,7 @@ class Client {
     resetLanes(policies.length);
     seenAttackers.clear();
     worlds.length = 0;
-    useStore.setState({ policies, paypalCalls: [], runId: null });
+    useStore.setState({ policies, paypalCalls: [], runId: null, whatif: null });
     bus.emit('reset');
     this.send({ cmd: 'init', seed: st.seed, lanes: policies.map((policy) => ({ policy })), chaos: st.chaos });
   }
@@ -175,9 +175,14 @@ class Client {
       narrate(m.lane, m.events, this.focusLane);
     } else if (m.type === 'done') {
       st.setLane(m.lane, { done: true });
-      if (useStore.getState().lanes.every((l) => l.done)) useStore.setState({ showReport: true });
+      if (useStore.getState().lanes.every((l) => l.done)) {
+        useStore.setState({ showReport: true, whatif: 'pending' });
+        this.send({ cmd: 'whatif' });
+      }
     } else if (m.type === 'status') {
       useStore.setState({ running: m.running, tps: m.tps, paypal: m.paypal ?? 'twin' });
+    } else if (m.type === 'whatif') {
+      useStore.setState({ whatif: { mine: m.mine, alternatives: m.alternatives } });
     } else if (m.type === 'run') {
       useStore.setState({ runId: m.runId });
     } else if (m.type === 'paypal_call') {
