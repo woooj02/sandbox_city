@@ -9,7 +9,7 @@ import { clock, LANE_NAMES } from './meta';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
-const theme = themeQuartz.withPart(colorSchemeDark).withParams({
+export const gridTheme = themeQuartz.withPart(colorSchemeDark).withParams({
   backgroundColor: 'rgba(6,8,22,0.0)', foregroundColor: '#cfd8ff', headerBackgroundColor: 'rgba(20,24,60,0.85)', headerTextColor: '#8fa2ff',
   borderColor: 'rgba(110,130,255,0.14)', rowHoverColor: 'rgba(76,242,255,0.08)', fontFamily: 'JetBrains Mono, monospace', fontSize: 11.5,
   headerFontFamily: 'Chakra Petch, sans-serif', headerFontSize: 11, headerFontWeight: 700, rowHeight: 26, headerHeight: 30, spacing: 5,
@@ -102,7 +102,7 @@ export function Ledger() {
       <div className="panel-title"><span>LIVE LEDGER</span><em>/ledger/tx</em><small>every order and refund on the PayPal rails · what the gate decided · what was really going on</small></div>
       <div className="grid-wrap">
         <AgGridReact<Row>
-          theme={theme}
+          theme={gridTheme}
           columnDefs={cols}
           rowData={[]}
           getRowId={(p) => p.data.key}

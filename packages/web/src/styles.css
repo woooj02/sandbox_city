@@ -235,6 +235,16 @@ i.leak { background: var(--rd); box-shadow: 0 0 6px var(--rd); }
 .whatif tr.best td:first-child { color: var(--gold); }
 .whatif .crown { font-style: normal; font-family: var(--mono); font-size: 9px; letter-spacing: 1.5px; margin-left: 8px; padding: 1px 5px; border: 1px solid var(--gold); color: var(--gold); }
 .whatif td.bad { color: #ff6f8a; } .whatif td.good { color: var(--gr); } .whatif td.warn { color: #ffc35c; } .whatif td.dim { color: var(--dim); }
+.whatif-grid { --ag-font-size: 12px; }
+.whatif-grid .ag-row.wi-mine { background: rgba(76,242,255,.08); } .whatif-grid .ag-row.wi-mine .wi-name { color: var(--cy); box-shadow: inset 3px 0 0 var(--cy); }
+.whatif-grid .ag-row.wi-best .wi-name { color: var(--gold); }
+.whatif-grid .good { color: var(--gr); } .whatif-grid .bad { color: #ff6f8a; } .whatif-grid .dim { color: var(--dim); }
+.wi-bar { position: relative; height: 100%; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.wi-bar i { position: absolute; left: 0; bottom: 4px; height: 3px; background: currentColor; opacity: .55; box-shadow: 0 0 8px currentColor; transition: width .6s cubic-bezier(.2,.9,.2,1); }
+.wi-bar::before { content: ''; position: absolute; left: 0; right: 0; bottom: 4px; height: 3px; background: currentColor; opacity: .08; }
+.wi-bar span { position: relative; } .wi-bar.bad { color: #ff6f8a; } .wi-bar.warn { color: #ffc35c; } .wi-bar.gold { color: #fff; } .wi-bar.gold i { background: var(--gold); }
+.wi-bar .crown { position: relative; order: -1; margin-right: auto; font: 700 9.5px var(--mono, 'JetBrains Mono', monospace); letter-spacing: .18em; color: #03030a; background: var(--gold); padding: 1px 6px; box-shadow: 0 0 12px var(--gold); }
+.wi-bar.gold i { opacity: .8; }
 .whatif-verdict { margin: 10px 0 0; font-size: 13px; color: #dfe5ff; line-height: 1.5; }
 .whatif-loading { height: 3px; background: rgba(255,255,255,.06); overflow: hidden; }
 .whatif-loading i { display: block; width: 30%; height: 100%; background: var(--gold); animation: wiLoad 1.1s ease-in-out infinite; }
