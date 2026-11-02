@@ -33,6 +33,10 @@ export class SandboxRails implements Rails {
   /** Namespaces idempotency keys and invoice ids per run, so replaying a seed never collides at PayPal. */
   runId = `r${Date.now().toString(36)}`;
   onCall?: (c: CallLog) => void;
+  /** Every capture and refund PayPal reported back to this adapter, keyed by PayPal id, so idempotent replays count once.
+   *  Includes responses the sim never saw (e.g. a timeout after PayPal had already committed). */
+  readonly moves = new Map<string, { kind: 'capture' | 'refund'; id: string; amount: number }>();
+  private authAmount = new Map<string, number>();
 
   constructor(private cfg: PayPalConfig) {
     this.base = cfg.base ?? 'https://api-m.sandbox.paypal.com';
@@ -149,6 +153,8 @@ export class SandboxRails implements Rails {
     const cap = pu?.payments?.captures?.[0];
     const auth = pu?.payments?.authorizations?.[0];
     const declined = cap?.status === 'DECLINED' || json.status === 'DECLINED' || auth?.status === 'DENIED';
+    if (cap?.id && cap.status !== 'DECLINED') this.moves.set(cap.id, { kind: 'capture', id: cap.id, amount: input.amount });
+    if (auth?.id) this.authAmount.set(auth.id, input.amount);
     return {
       id: json.id, status: declined ? 'DECLINED' : 'COMPLETED', captureId: cap?.id, captureStatus: cap?.status as OrderResult['captureStatus'],
       authorizationId: auth?.id, debugId: debugId ?? '', rail: 'sandbox', issue: declined ? cap?.status_details?.reason ?? 'DECLINED' : undefined,
@@ -156,8 +162,10 @@ export class SandboxRails implements Rails {
   }
 
   async captureAuthorization(authId: string, requestId: string) {
-    const { status, json } = await this.call<{ id: string; status: string } & PayPalError>('POST', `/v2/payments/authorizations/${authId}/capture`, {}, requestId);
+    const { status, json } = await this.call<{ id: string; status: string; amount?: { value: string } } & PayPalError>('POST', `/v2/payments/authorizations/${authId}/capture`, {}, requestId);
     if (status >= 300) throw new RailsError(status, json.details?.[0]?.issue ?? json.name ?? 'ERROR', status >= 500);
+    const amount = json.amount ? Number(json.amount.value) : this.authAmount.get(authId);
+    if (amount !== undefined) this.moves.set(json.id, { kind: 'capture', id: json.id, amount });
     return { captureId: json.id, status: json.status };
   }
 
@@ -170,7 +178,22 @@ export class SandboxRails implements Rails {
   async refundCapture(captureId: string, amount: number, requestId: string) {
     const { status, json } = await this.call<{ id: string; status: string } & PayPalError>('POST', `/v2/payments/captures/${captureId}/refund`, { amount: { value: amount.toFixed(2), currency_code: 'USD' } }, requestId);
     if (status >= 300) throw new RailsError(status, json.details?.[0]?.issue ?? json.name ?? 'ERROR', status >= 500);
+    this.moves.set(json.id, { kind: 'refund', id: json.id, amount });
     return { refundId: json.id, status: json.status };
+  }
+
+  /** Read back a capture or refund straight from PayPal (no reporting lag). */
+  async getPayment(kind: 'capture' | 'refund', id: string): Promise<{ id: string; status: string; amount: number } | null> {
+    const { status, json } = await this.call<{ id: string; status: string; amount?: { value: string } }>('GET', `/v2/payments/${kind}s/${id}`);
+    if (status >= 300 || !json.amount) return null;
+    return { id: json.id, status: json.status, amount: Number(json.amount.value) };
+  }
+
+  observed() {
+    let captured = 0, refunded = 0, captures = 0, refunds = 0;
+    for (const m of this.moves.values()) m.kind === 'capture' ? (captured += m.amount, captures++) : (refunded += m.amount, refunds++);
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    return { captured: r2(captured), refunded: r2(refunded), net: r2(captured - refunded), captures, refunds };
   }
 
   /** Transaction Search (Reporting API) for reconciliation. Windows are limited to 31 days. */

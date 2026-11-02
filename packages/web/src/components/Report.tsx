@@ -17,7 +17,13 @@ function findings(m: Metrics) {
   return out;
 }
 
-interface Recon { sim: { net: number; orders: number; refunds: number }; paypal: { net: number; transactions: number }; delta: number; matched: boolean }
+interface Recon {
+  sim: { net: number; orders: number; refunds: number };
+  observed: { captures: number; refunds: number };
+  paypal: { net: number; transactions: number; missing: string[] };
+  search: { available: boolean; net?: number };
+  delta: number; matched: boolean;
+}
 
 function LiveReconcile() {
   const runId = useStore((s) => s.runId);
@@ -27,12 +33,16 @@ function LiveReconcile() {
     fetch(`/api/reconcile/${runId}`).then((x) => x.json()).then(setR, (e: Error) => setR({ error: e.message }));
   }, [runId]);
   if (!runId) return null;
-  if (!r) return <div className="recon">Reconciling with PayPal Transaction Search…</div>;
+  if (!r) return <div className="recon">Reading every live payment back from PayPal…</div>;
   if ('error' in r) return <div className="recon warn">Reconciliation unavailable: {r.error}</div>;
   return (
     <div className={`recon ${r.matched ? 'ok' : 'warn'}`}>
-      <b>{r.matched ? '✓ RECONCILED WITH PAYPAL' : 'PAYPAL NOT YET SETTLED'}</b>
-      <span>sim says {money(r.sim.net)} moved over {r.sim.orders} orders / {r.sim.refunds} refunds · PayPal reports {money(r.paypal.net)} across {r.paypal.transactions} transactions{r.matched ? '' : ` · Δ ${money(r.delta)} (Transaction Search can lag)`}</span>
+      <b>{r.matched ? '✓ RECONCILED WITH PAYPAL, TO THE CENT' : '✗ PAYPAL DOES NOT MATCH'}</b>
+      <span>
+        sim says {money(r.sim.net, 2)} moved over {r.sim.orders} live orders / {r.sim.refunds} refunds · PayPal confirms {money(r.paypal.net, 2)} across {r.observed.captures} captures and {r.observed.refunds} refunds, each read back by id
+        {r.search.available ? ` · Transaction Search ${money(r.search.net ?? 0, 2)}` : ''}
+        {r.matched ? '' : ` · Δ ${money(r.delta, 2)}${r.paypal.missing.length ? ` · ${r.paypal.missing.length} not found` : ''}`}
+      </span>
     </div>
   );
 }

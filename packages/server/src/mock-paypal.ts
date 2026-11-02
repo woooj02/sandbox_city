@@ -121,6 +121,19 @@ export function buildMockPayPal(opts: { clientId?: string; clientSecret?: string
     return reply.code(r.status).send(r.body);
   });
 
+  app.get('/v2/payments/captures/:id', async (req, reply) => {
+    const c = state.captures.get((req.params as { id: string }).id);
+    if (!c) return reply.code(404).send({ name: 'RESOURCE_NOT_FOUND', details: [{ issue: 'INVALID_RESOURCE_ID' }] });
+    const st = c.refunded >= c.amount - 0.001 ? 'REFUNDED' : c.refunded > 0 ? 'PARTIALLY_REFUNDED' : 'COMPLETED';
+    return { id: c.id, status: st, amount: { currency_code: 'USD', value: c.amount.toFixed(2) }, custom_id: c.custom };
+  });
+
+  app.get('/v2/payments/refunds/:id', async (req, reply) => {
+    const r = state.refunds.find((x) => x.id === (req.params as { id: string }).id);
+    if (!r) return reply.code(404).send({ name: 'RESOURCE_NOT_FOUND', details: [{ issue: 'INVALID_RESOURCE_ID' }] });
+    return { id: r.id, status: 'COMPLETED', amount: { currency_code: 'USD', value: r.amount.toFixed(2) } };
+  });
+
   app.get('/v1/reporting/transactions', async (req) => {
     const q = req.query as Record<string, string>;
     if (!q.start_date || !q.end_date) return { name: 'INVALID_REQUEST' };

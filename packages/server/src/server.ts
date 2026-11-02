@@ -59,23 +59,36 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
   }));
 
   /**
-   * Compare what the sim believes moved on the sandbox lane with what PayPal's Transaction Search
-   * reports for this run's custom_id prefix. Note: real Transaction Search can lag by hours.
+   * Three-way check of the sandbox lane:
+   *  1. sim:      what the harm ledger says moved (including duplicate and ghost charges)
+   *  2. observed: every capture/refund PayPal returned to the adapter, deduplicated by PayPal id
+   *  3. paypal:   each of those read back from PayPal by id, so it reflects PayPal's own books now
+   * Transaction Search is reported as a bonus when the app has it enabled (it can lag by hours).
    */
   app.get<{ Params: { runId: string } }>('/api/reconcile/:runId', async (req, reply) => {
     const run = runs.get(req.params.runId);
     if (!run) return reply.code(404).send({ error: 'unknown run' });
     const { ledger, rails } = run;
-    const start = new Date(ledger.startedAt - 60_000), end = new Date(Date.now() + 60_000);
-    const txns = (await rails.searchTransactions(start, end)).filter((t) => t.transaction_info.custom_field?.startsWith(`${ledger.runId}:`));
-    let captured = 0, refunded = 0;
-    for (const { transaction_info: ti } of txns) {
-      const v = Number(ti.transaction_amount.value);
-      if (v >= 0) captured += v; else refunded += -v;
-    }
-    const paypal = { captured: round2(captured), refunded: round2(refunded), net: round2(captured - refunded), transactions: txns.length };
     const sim = { captured: ledger.captured, refunded: ledger.refunded, net: round2(ledger.captured - ledger.refunded), orders: ledger.orders, refunds: ledger.refunds };
-    return { runId: ledger.runId, sim, paypal, delta: round2(sim.net - paypal.net), matched: round2(sim.net - paypal.net) === 0 };
+    const observed = rails.observed();
+    const checks = await Promise.all([...rails.moves.values()].map(async (m) => ({ m, got: await rails.getPayment(m.kind, m.id).catch(() => null) })));
+    let captured = 0, refunded = 0;
+    const missing: string[] = [];
+    for (const { m, got } of checks) {
+      if (!got || (m.kind === 'refund' && got.status !== 'COMPLETED')) { missing.push(m.id); continue; }
+      if (m.kind === 'capture') captured += got.amount; else refunded += got.amount;
+    }
+    const paypal = { captured: round2(captured), refunded: round2(refunded), net: round2(captured - refunded), transactions: checks.length - missing.length, missing };
+    let search: { available: boolean; net?: number; transactions?: number; reason?: string };
+    try {
+      const txns = (await rails.searchTransactions(new Date(ledger.startedAt - 60_000), new Date(Date.now() + 60_000))).filter((t) => t.transaction_info.custom_field?.startsWith(`${ledger.runId}:`));
+      const net = txns.reduce((s2, t) => s2 + Number(t.transaction_info.transaction_amount.value), 0);
+      search = { available: true, net: round2(net), transactions: txns.length };
+    } catch (e) {
+      search = { available: false, reason: (e as Error).message };
+    }
+    const delta = round2(sim.net - paypal.net);
+    return { runId: ledger.runId, sim, observed, paypal, search, delta, matched: delta === 0 && observed.net === paypal.net && missing.length === 0 };
   });
 
   app.get('/ws', { websocket: true }, (socket) => {

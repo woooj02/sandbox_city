@@ -131,6 +131,9 @@ describe('live server', () => {
     expect(rec.sim.captured).toBeGreaterThan(0);
     expect(rec.delta).toBe(0);
     expect(rec.matched).toBe(true);
+    expect(rec.observed.net).toBe(rec.sim.net);
+    expect(rec.paypal.missing).toEqual([]);
+    expect(rec.search).toMatchObject({ available: true, net: rec.sim.net });
     await app.close();
   }, 120_000);
 });
