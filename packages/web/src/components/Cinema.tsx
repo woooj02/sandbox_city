@@ -87,7 +87,7 @@ export function Cinema() {
       if (e.key === 'c' || e.key === 'C') useStore.setState({ cinema: { ...st.cinema, on: !st.cinema.on } });
       if (!st.cinema.on) return;
       if (e.key === 'r' || e.key === 'R') director.roll();
-      if (e.key >= '1' && e.key <= '4') director.roll(Number(e.key));
+      if (e.key >= '1' && e.key <= '5') director.roll(Number(e.key));
       if (e.key === 'Escape') director.stop();
     };
     window.addEventListener('keydown', key);
@@ -117,7 +117,7 @@ export function Cinema() {
       </div>
       {!rolling && (
         <button className="cine-roll" onClick={() => director.roll()}>
-          <span>▶ ROLL</span><small>R roll · 1–4 start at act · Esc cut · C leave cinema</small>
+          <span>▶ ROLL</span><small>R roll · 1–5 start at act · Esc cut · C leave cinema</small>
         </button>
       )}
     </div>

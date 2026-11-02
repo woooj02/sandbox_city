@@ -11,6 +11,7 @@ import { Feed } from './Feed';
 import { Report } from './Report';
 import { AutoTune } from './AutoTune';
 import { Cinema } from './Cinema';
+import { Forge } from './Forge';
 
 export function App() {
   const lanes = useStore((s) => s.lanes.length);
@@ -36,6 +37,7 @@ export function App() {
       <Feed />
       <Report />
       <AutoTune />
+      <Forge />
       <Cinema />
     </div>
   );

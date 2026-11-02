@@ -8,6 +8,7 @@ const SPEED_LABEL: Record<number, string> = { 2: '¼×', 8: '1×', 24: '3×', 80
 
 export function TopBar() {
   const { running, tps, xray, policies, paypal } = useStore();
+  const forged = useStore((s) => s.genomes !== null);
   const lane0 = useStore((s) => s.lanes[0]);
   const t = lane0?.t ?? 0, total = lane0?.world?.ticks ?? 1440;
   const fork = () => {
@@ -27,6 +28,11 @@ export function TopBar() {
       <div className={`rail-badge ${paypal}`} title={paypal === 'sandbox' ? 'Lane A moves real money on the PayPal sandbox' : 'All payments run on the in-browser PayPal twin'}>
         <i />{paypal === 'sandbox' ? 'LIVE · PAYPAL SANDBOX' : 'PAYPAL TWIN'}
       </div>
+      {forged && (
+        <button className="rail-badge forged" title="Attackers in this city use tactics evolved by the forge. Click to go back to the stock attackers." onClick={() => { useStore.setState({ genomes: null }); client.start(useStore.getState().policies); setTimeout(() => client.send({ cmd: 'play' }), 300); }}>
+          <i />☠ FORGED ATTACKERS
+        </button>
+      )}
       <div className="clockbox">
         <div className="clock-big">DAY 1 · {clock(t)}</div>
         <div className="progress"><i style={{ width: `${(t / total) * 100}%` }} /></div>

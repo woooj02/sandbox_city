@@ -150,7 +150,7 @@ class Client {
     useStore.setState({ policies, paypalCalls: [], inFlight: [], runId: null, whatif: null });
     bus.emit('reset');
     // while the film rolls only hero shoppers pay on the live sandbox, so real PayPal latency never stalls the shot
-    this.send({ cmd: 'init', seed: st.seed, lanes: policies.map((policy) => ({ policy })), chaos: st.chaos, ...(st.cinema.rolling ? { liveSample: 0 } : {}) });
+    this.send({ cmd: 'init', seed: st.seed, lanes: policies.map((policy) => ({ policy })), chaos: st.chaos, ...(st.cinema.rolling ? { liveSample: 0 } : {}), ...(st.genomes ? { genomes: st.genomes } : {}) });
   }
 
   private receive(m: FromSim) {
@@ -189,6 +189,10 @@ class Client {
       const tune = useStore.getState().tune;
       if (m.phase === 'eval') useStore.setState({ tune: { ...tune, points: [...tune.points, m.point], best: m.best, evals: m.evals, total: m.total, generation: m.generation } });
       else useStore.setState({ tune: { ...tune, running: false, best: m.best, evals: m.evals, total: m.evals, ms: m.ms } });
+    } else if (m.type === 'forge') {
+      const f = useStore.getState().forge;
+      if (m.phase === 'eval') useStore.setState({ forge: { ...f, best: m.best, baseline: m.baseline, evals: m.evals, total: m.total, curve: [...f.curve, { evals: m.evals, best: m.best.stolen, candidate: m.candidate }] } });
+      else useStore.setState({ forge: { ...f, running: false, best: m.best, baseline: m.baseline, evals: m.evals, total: m.evals, ms: m.ms } });
     } else if (m.type === 'whatif') {
       useStore.setState({ whatif: { mine: m.mine, alternatives: m.alternatives } });
     } else if (m.type === 'run') {

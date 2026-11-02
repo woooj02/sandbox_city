@@ -8,6 +8,7 @@ import type { FromSim, MerchantLite, ShopperLite, ToSim } from './protocol';
 import type { Rails } from './rails';
 import { whatIf } from './whatif';
 import { searchRulebook } from './search';
+import { forgeAttacks } from './forge';
 import { PRESETS } from './policy';
 
 export const mLite = (m: Merchant): MerchantLite => ({
@@ -30,6 +31,7 @@ export class SimRunner {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private gen = 0;
   private tuneGen = 0;
+  private forgeGen = 0;
   private lastInit: Extract<ToSim, { cmd: 'init' }> | null = null;
 
   constructor(private post: (m: FromSim) => void, private opts: RunnerOptions) {}
@@ -48,6 +50,7 @@ export class SimRunner {
         ...DEFAULT_CONFIG, seed: msg.seed, chaos: msg.chaos, shoppers: msg.shoppers ?? DEFAULT_CONFIG.shoppers, crypto: this.opts.crypto ?? 'ed25519', policy: l.policy,
         liveRails: lane === 0 ? this.opts.liveRails?.() : undefined,
         liveSample: Math.min(this.opts.liveSample ?? 0, msg.liveSample ?? Infinity),
+        genomes: msg.genomes,
       }));
       this.worlds.forEach((w, lane) => this.post({
         type: 'world',
@@ -78,10 +81,10 @@ export class SimRunner {
       let id = 0;
       // trained on other days; the day on screen stays held out for the replay
       searchRulebook({
-        trainSeeds: [`${init.seed}~train-1`, `${init.seed}~train-2`], testSeeds: [], chaos: init.chaos,
+        trainSeeds: Array.from({ length: Math.max(1, Math.min(5, msg.trainDays ?? 2)) }, (_, i) => `${init.seed}~train-${i + 1}`), testSeeds: [], chaos: init.chaos,
         generations: msg.generations ?? 6, children: msg.children ?? 8, minSafety: msg.minSafety, minAccess: msg.minAccess,
         seed: `${init.seed}~search`, label: msg.minSafety ? `Tuned ≥${Math.round(msg.minSafety * 100)}%` : 'Tuned · max value',
-        world: init.shoppers ? { shoppers: init.shoppers } : undefined,
+        world: { ...(init.shoppers ? { shoppers: init.shoppers } : {}), genomes: init.genomes },
       }, (e) => {
         if (tg !== this.tuneGen) throw new Error('tune cancelled');
         if (e.type !== 'eval') return;
@@ -94,11 +97,27 @@ export class SimRunner {
       }).then((r) => {
         if (tg === this.tuneGen) this.post({ type: 'tune', phase: 'done', best: { policy: r.best.policy, mean: r.best.mean }, evals: r.evals, ms: Date.now() - t0 });
       }).catch((e: Error) => { if (e.message !== 'tune cancelled') this.post({ type: 'error', message: `tune: ${e.message}` }); });
+    } else if (msg.cmd === 'forge_stop') {
+      this.forgeGen++;
+    } else if (msg.cmd === 'forge') {
+      const init = this.lastInit;
+      if (!init) return;
+      const fg = ++this.forgeGen, t0 = Date.now();
+      forgeAttacks({
+        policy: msg.policy, seeds: [`${init.seed}~forge-1`, `${init.seed}~forge-2`], chaos: init.chaos,
+        generations: msg.generations ?? 5, children: msg.children ?? 6, seed: `${init.seed}~forge`, start: init.genomes,
+        world: init.shoppers ? { shoppers: init.shoppers } : undefined,
+      }, (e) => {
+        if (fg !== this.forgeGen) throw new Error('forge cancelled');
+        this.post({ type: 'forge', phase: 'eval', generation: e.generation, evals: e.evals, total: e.total, candidate: e.candidate.stolen, best: e.best, baseline: e.baseline });
+      }).then((r) => {
+        if (fg === this.forgeGen) this.post({ type: 'forge', phase: 'done', best: r.best, baseline: r.baseline, evals: r.evals, ms: Date.now() - t0 });
+      }).catch((e: Error) => { if (e.message !== 'forge cancelled') this.post({ type: 'error', message: `forge: ${e.message}` }); });
     } else if (msg.cmd === 'whatif') {
       const init = this.lastInit;
       if (!init) return;
       const g = this.gen;
-      whatIf({ seed: init.seed, chaos: init.chaos, shoppers: init.shoppers, mine: init.lanes.map((l) => l.policy) })
+      whatIf({ seed: init.seed, chaos: init.chaos, shoppers: init.shoppers, mine: init.lanes.map((l) => l.policy) }, { genomes: init.genomes })
         .then((r) => { if (g === this.gen) this.post({ type: 'whatif', ...r }); })
         .catch((e: Error) => this.post({ type: 'error', message: `what-if: ${e.message}` }));
     }

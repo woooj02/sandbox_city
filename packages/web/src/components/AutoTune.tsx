@@ -8,16 +8,17 @@ const MODES = {
   value: { label: 'MAX VALUE', sub: 'most value for honest people, any fraud rate', minSafety: 0, minAccess: 0.85 },
 } as const;
 
-export function startTune(mode: keyof typeof MODES, size?: { generations: number; children: number }) {
+export function startTune(mode: keyof typeof MODES, size?: { generations?: number; children?: number; trainDays?: number; minSafety?: number }) {
   const m = MODES[mode];
-  useStore.setState({ tune: { ...emptyTune(mode), open: true, running: true } });
-  client.send({ cmd: 'tune', minSafety: m.minSafety, minAccess: m.minAccess, ...size });
+  const minSafety = size?.minSafety ?? m.minSafety;
+  useStore.setState({ tune: { ...emptyTune(mode), open: true, running: true, floor: minSafety, trainDays: size?.trainDays ?? 2 } });
+  client.send({ cmd: 'tune', minAccess: m.minAccess, generations: size?.generations, children: size?.children, trainDays: size?.trainDays, minSafety });
 }
 
 const W = 560, H = 330, PADL = 64, PADR = 16, PADT = 16, PADB = 40;
 
 function Scatter() {
-  const { points, best, mode } = useStore((s) => s.tune);
+  const { points, best, mode, floor: used } = useStore((s) => s.tune);
   if (!points.length) return <div className="tune-plot empty">warming up the first rulebooks…</div>;
   const nets = points.map((p) => p.net);
   const lo = Math.min(...nets), hi = Math.max(...nets);
@@ -25,7 +26,7 @@ function Scatter() {
   const y0 = lo - pad, y1 = hi + pad;
   const x = (s: number) => PADL + s * (W - PADL - PADR);
   const y = (n: number) => PADT + (1 - (n - y0) / (y1 - y0)) * (H - PADT - PADB);
-  const floor = MODES[mode].minSafety;
+  const floor = used ?? MODES[mode].minSafety;
   const bestNet = best?.mean.net, bestSafety = best?.mean.safety;
   const ticks = [0, 0.25, 0.5, 0.75, 1];
   const yt = Array.from({ length: 4 }, (_, i) => y0 + ((i + 0.5) / 4) * (y1 - y0));
@@ -53,6 +54,7 @@ function Scatter() {
 export function AutoTune() {
   const tune = useStore((s) => s.tune);
   const policies = useStore((s) => s.policies);
+  const forged = useStore((s) => s.genomes !== null);
   if (!tune.open) return null;
   const close = () => { if (tune.running) client.send({ cmd: 'tune_stop' }); useStore.setState({ tune: { ...tune, open: false, running: false } }); };
   const replay = (lanes: Policy[]) => { useStore.setState({ tune: { ...tune, open: false } }); client.start(lanes); setTimeout(() => client.send({ cmd: 'play' }), 300); };
@@ -66,7 +68,7 @@ export function AutoTune() {
           <span className="kanji">最適化</span>
           <div>
             <h2>AUTO-TUNE</h2>
-            <p>Evolving rulebooks on two other days. The day on screen stays unseen, so the replay is a fair test.</p>
+            <p>Evolving rulebooks on {['', 'one other day', 'two other days', 'three other days', 'four other days', 'five other days'][tune.trainDays ?? 2]}{forged ? ', against the forged attackers' : ''}. The day on screen stays unseen, so the replay is a fair test.</p>
           </div>
         </div>
         <div className="tune-modes">
@@ -79,7 +81,7 @@ export function AutoTune() {
           <div className="tune-side">
             <div className="tune-status">
               <b>{tune.running ? `GENERATION ${tune.generation}` : tune.ms !== null ? 'SEARCH COMPLETE' : 'STOPPED'}</b>
-              <span>{tune.evals} / {tune.total || '…'} rulebooks · {tune.ms !== null ? `${(tune.ms / 1000).toFixed(0)}s` : 'each one plays two full days'}</span>
+              <span>{tune.evals} / {tune.total || '…'} rulebooks · {tune.ms !== null ? `${(tune.ms / 1000).toFixed(0)}s` : `each one plays ${tune.trainDays ?? 2} full days`}</span>
               <div className="progress"><i style={{ width: `${progress * 100}%` }} /></div>
             </div>
             {b && (

@@ -4,6 +4,7 @@ import { useStore } from '../store';
 import { client } from '../sim/client';
 import { LANE_NAMES } from './meta';
 import { startTune } from './AutoTune';
+import { startForge } from './Forge';
 
 export function Rulebook() {
   const policies = useStore((s) => s.policies);
@@ -61,6 +62,7 @@ export function Rulebook() {
         <div className="rule-actions">
           <button className={`btn apply ${dirty ? 'hot' : ''}`} onClick={apply}>{dirty ? '⟳ REPLAY WITH THESE RULES' : '⟳ REPLAY'}</button>
           <button className="btn tune-btn" title="Search for a better rulebook automatically" onClick={() => startTune('safe')}>✦ AUTO-TUNE</button>
+          <button className="btn forge-btn" title="Evolve the attackers against these rules" onClick={() => startForge()}>☠ ATTACK FORGE</button>
         </div>
         <p>Same seed: same city, same shoppers, same attackers. Only the rules change.</p>
       </div>

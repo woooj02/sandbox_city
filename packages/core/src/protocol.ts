@@ -1,6 +1,7 @@
 import type { AttackKind, SimEvent } from './types';
 import type { Policy } from './policy';
 import type { DaySummary } from './whatif';
+import type { ForgeScore, Genomes } from './forge';
 
 export interface TunePoint { id: number; generation: number; safety: number; access: number; net: number; score: number; preset?: string }
 
@@ -30,6 +31,8 @@ export type FromSim =
   | { type: 'whatif'; mine: DaySummary[]; alternatives: DaySummary[] }
   | { type: 'tune'; phase: 'eval'; point: TunePoint; best: { policy: Policy; mean: DaySummary }; evals: number; total: number; generation: number }
   | { type: 'tune'; phase: 'done'; best: { policy: Policy; mean: DaySummary }; evals: number; ms: number }
+  | { type: 'forge'; phase: 'eval'; generation: number; evals: number; total: number; candidate: number; best: ForgeScore; baseline: ForgeScore }
+  | { type: 'forge'; phase: 'done'; best: ForgeScore; baseline: ForgeScore; evals: number; ms: number }
   | { type: 'error'; message: string };
 
 export interface LaneSpec { policy: Policy }
@@ -37,12 +40,17 @@ export interface LaneSpec { policy: Policy }
 export type ToSim =
   | { cmd: 'init'; seed: string; lanes: LaneSpec[]; chaos: number; shoppers?: number;
       /** Share of non-hero orders sent to the live sandbox lane; capped by the server's own setting. 0 = heroes only. */
-      liveSample?: number }
+      liveSample?: number;
+      /** Attacker tactics for this city; defaults when omitted (see the attack forge). */
+      genomes?: Genomes }
   | { cmd: 'play' }
   | { cmd: 'pause' }
   | { cmd: 'speed'; tps: number }
   /** Replay the last initialised day under every preset (counterfactual savings). */
   | { cmd: 'whatif' }
   /** Search for a better rulebook on days other than the one on screen. */
-  | { cmd: 'tune'; minSafety: number; minAccess: number; generations?: number; children?: number }
-  | { cmd: 'tune_stop' };
+  | { cmd: 'tune'; minSafety: number; minAccess: number; generations?: number; children?: number; trainDays?: number }
+  | { cmd: 'tune_stop' }
+  /** Evolve attacker tactics against a rulebook, on days other than the one on screen. */
+  | { cmd: 'forge'; policy: Policy; generations?: number; children?: number }
+  | { cmd: 'forge_stop' };

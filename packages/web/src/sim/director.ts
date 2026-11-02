@@ -11,6 +11,7 @@ import type { Moment } from '../city/CityRenderer';
 import { useStore, type TitleCard } from '../store';
 import { client } from './client';
 import { startTune } from '../components/AutoTune';
+import { startForge } from '../components/Forge';
 
 const FILM_TPS = 22;
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -21,6 +22,8 @@ class Director {
   private take = 0;
   private slowUntil = 0;
   private baseTps = FILM_TPS;
+  /** The rulebook act II found, reused by act V when the film runs on. */
+  private lastBest: Policy | null = null;
 
   private get st() { return useStore.getState(); }
   private alive(take: number) { return take === this.take && this.st.cinema.rolling; }
@@ -83,7 +86,9 @@ class Director {
   async roll(from = 1) {
     const take = ++this.take;
     this.patch({ rolling: true, card: null, act: '' });
-    useStore.setState({ showReport: false, tune: { ...this.st.tune, open: false } });
+    useStore.setState({ showReport: false, tune: { ...this.st.tune, open: false }, forge: { ...this.st.forge, open: false } });
+    if (from >= 5) return this.adapt(take);
+    useStore.setState({ genomes: null });
     let best: Policy = PRESETS.tuned;
 
     if (from <= 1) {
@@ -116,6 +121,7 @@ class Director {
       await this.until(take, () => !this.st.tune.running);
       await sleep(3500);
       best = this.st.tune.best?.policy ?? best;
+      this.lastBest = best;
       useStore.setState({ tune: { ...this.st.tune, open: false } });
       if (!this.alive(take)) return;
     }
@@ -141,16 +147,74 @@ class Director {
     this.patch({ act: 'IV · THE RECKONING' });
     const [a, b] = this.st.lanes.map((l) => l.metrics as Metrics);
     await this.card(take, { kanji: '清算', act: 'ACT IV', title: 'THE RECKONING', sub: `${money(b.netValue - a.netValue)} more value for honest people, on a day the rulebook never trained on` }, 3600);
+    await this.report(take);
+    await this.endCard(take);
+  }
+
+  private async report(take: number) {
     if (!this.alive(take)) return;
     useStore.setState({ showReport: true });
     await this.until(take, () => this.st.whatif !== 'pending', 30_000);
     await sleep(3500);
     await this.pan(take, '.report', 7000);
     await sleep(6000);
-    if (!this.alive(take)) return;
-    useStore.setState({ showReport: false });
+    if (this.alive(take)) useStore.setState({ showReport: false });
+  }
+  private async endCard(take: number) {
     await this.card(take, { kanji: '砂箱都市', title: 'SANDBOX CITY', sub: 'crash-test every rule before a single real cent moves', big: true }, 6000);
     if (this.alive(take)) this.patch({ rolling: false, act: '' });
+  }
+
+  /** Act V: the red team evolves against the tuned rulebook, then the rulebook is re-tuned against them. */
+  private async adapt(take: number) {
+    const target: Policy = { ...(this.lastBest ?? PRESETS.tuned), name: 'Lab-Tuned' };
+    useStore.setState({ genomes: null });
+    client.start([target]);
+    this.baseTps = 8; this.speed(8);
+    await sleep(400);
+    client.send({ cmd: 'play' });
+    this.patch({ act: 'V · THE ATTACKERS ADAPT' });
+    await this.card(take, { kanji: '反撃', act: 'ACT V', title: 'THE ATTACKERS ADAPT', sub: 'same number of attacks, tactics evolved against Lab-Tuned' }, 3000);
+    if (!this.alive(take)) return;
+    startForge(target, { generations: 4, children: 6 });
+    await this.until(take, () => !this.st.forge.running);
+    await sleep(4500);
+    const f = this.st.forge;
+    useStore.setState({ forge: { ...f, open: false } });
+    if (!this.alive(take) || !f.best || !f.baseline) return;
+    await this.card(take, {
+      kanji: '危機', act: 'RED TEAM', title: `${money(f.best.stolen)} STOLEN A DAY`,
+      sub: `Lab-Tuned held stock attackers to ${money(f.baseline.stolen)}. The forged ones take ×${(f.best.stolen / Math.max(1, f.baseline.stolen)).toFixed(1)}.`,
+    }, 4000);
+
+    // the forged tactics become the city's; the rulebook search now trains against them
+    useStore.setState({ genomes: f.best.genomes });
+    client.start([target]);
+    client.send({ cmd: 'play' });
+    await this.card(take, { kanji: '再調整', act: 'BLUE TEAM', title: 'RE-TUNE AGAINST THEM', sub: 'the rulebook search runs again, on three days full of forged attackers' }, 2800);
+    if (!this.alive(take)) return;
+    // three training days and an 80% floor: chosen on held-out days, where it beat Lab-Tuned on both value and theft
+    startTune('safe', { generations: 4, children: 8, trainDays: 3, minSafety: 0.8 });
+    await this.until(take, () => !this.st.tune.running);
+    await sleep(3500);
+    const hardened: Policy = { ...(this.st.tune.best?.policy ?? target), name: 'Hardened' };
+    useStore.setState({ tune: { ...this.st.tune, open: false } });
+    if (!this.alive(take)) return;
+
+    this.patch({ act: 'V · REMATCH' });
+    client.start([target, hardened]);
+    this.speed(4);
+    await sleep(400);
+    client.send({ cmd: 'play' });
+    await this.card(take, { kanji: '再戦', act: 'REMATCH', title: 'FORGED ATTACKERS. TWO RULEBOOKS.', sub: 'Lab-Tuned on the left · Hardened on the right' }, 2800);
+    this.baseTps = FILM_TPS; this.speed(this.baseTps);
+    await this.until(take, () => this.done());
+    if (!this.alive(take)) return;
+    await sleep(800);
+    const [a, b] = this.st.lanes.map((l) => l.metrics as Metrics);
+    await this.card(take, { kanji: '防御', act: 'RESULT', title: b.netValue >= a.netValue ? `${money(b.netValue - a.netValue)} WON BACK` : `${money(a.netValue - b.netValue)} SHORT`, sub: `stolen ${money(a.fraud.leaked)} → ${money(b.fraud.leaked)} on a day neither rulebook trained on` }, 4200);
+    await this.report(take);
+    await this.endCard(take);
   }
 }
 

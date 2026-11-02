@@ -55,11 +55,13 @@ Presets range from **Wild West** (no rules) through **Passport Theater**, **Know
 - **Fork.** Runs the same day, with the same seed, under two rulebooks side by side.
 - **What-if.** At the end of the day, the same day is replayed under every other rulebook. You see what each would have saved, or cost.
 - **Auto-tune.** An evolutionary search over the rulebook. Candidates are trained on two other days, so the day on screen stays unseen and the replay is a fair test. You can require a safety floor, for example "at least 85% of fraud stopped", and it finds the most value above it.
+- **Attack forge.** The red team. Attack tactics evolve against your rulebook on two other days. Each attack family keeps whichever variant got the most money past the gate. Attack frequency is a fixed budget, so the forge finds smarter attacks, not more of them. You can unleash the forged attackers on the city, or re-tune the rulebook against them.
 - **Ledger.** Every order, refund and PayPal call, in AG Grid.
 - **Cinema mode.** A directed, letterboxed cut of the whole story for presenting:
   - the camera pushes in on breaches, injections and double charges
   - the sim slows down on the biggest moments
   - chapter cards play between acts
+  - five acts: the Wild West, auto-tune, the race, the reckoning, and the attackers adapting (forge, re-tune, rematch)
 
 ## PayPal integration
 
@@ -113,6 +115,7 @@ Open http://localhost:8787/?live=1. If the server is unreachable, the page falls
 | `?speed=24` | Simulated minutes per second |
 | `?cinema=1` | Cinema mode. Press **R** to roll, **Esc** to cut, **C** to toggle |
 | `?cinema=1&roll=1` | Start rolling immediately |
+| `?cinema=1&roll=1&act=5` | Start the film at a given act (1 to 5) |
 | `?live=1` | Use the lab server and the PayPal sandbox |
 
 ### Command line

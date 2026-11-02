@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { Metrics, Policy } from '@sandbox-city/core';
 import { PRESETS } from '@sandbox-city/core';
-import type { DaySummary, Policy as PolicyT, TunePoint, WorldSnapshot } from '@sandbox-city/core';
+import type { DaySummary, ForgeScore, Genomes, Policy as PolicyT, TunePoint, WorldSnapshot } from '@sandbox-city/core';
 
 export type CutInKind = 'attack' | 'blocked' | 'breach' | 'double' | 'sale' | 'falsepos' | 'replay' | 'escrow';
 export interface CutIn { id: number; kind: CutInKind; lane: number; title: string; kanji: string; line: string; sub?: string; amount?: number; who?: string }
@@ -13,8 +13,17 @@ export interface TuneState {
   open: boolean; running: boolean; mode: 'safe' | 'value';
   points: TunePoint[]; best: { policy: PolicyT; mean: DaySummary } | null;
   evals: number; total: number; generation: number; ms: number | null;
+  /** Safety floor actually used, when it differs from the mode's default. */
+  floor?: number; trainDays?: number;
 }
 export const emptyTune = (mode: TuneState['mode'] = 'safe'): TuneState => ({ open: false, running: false, mode, points: [], best: null, evals: 0, total: 0, generation: 0, ms: null });
+
+export interface ForgeState {
+  open: boolean; running: boolean; target: PolicyT | null;
+  curve: { evals: number; best: number; candidate: number }[];
+  best: ForgeScore | null; baseline: ForgeScore | null; evals: number; total: number; ms: number | null;
+}
+export const emptyForge = (): ForgeState => ({ open: false, running: false, target: null, curve: [], best: null, baseline: null, evals: 0, total: 0, ms: null });
 
 export interface TitleCard { id: number; kanji: string; act?: string; title: string; sub?: string; big?: boolean }
 export interface CinemaState { on: boolean; rolling: boolean; card: TitleCard | null; act: string }
@@ -39,6 +48,9 @@ interface State {
   inFlight: { method: string; path: string; at: number }[];
   tune: TuneState;
   cinema: CinemaState;
+  forge: ForgeState;
+  /** Attacker tactics in this city: null = the stock attackers, otherwise a forged set. */
+  genomes: Genomes | null;
   whatif: { mine: DaySummary[]; alternatives: DaySummary[] } | 'pending' | null;
   pushCall: (c: Omit<PayPalCall, 'id'>) => void;
   set: (p: Partial<State>) => void;
@@ -68,6 +80,8 @@ export const useStore = create<State>((set, get) => ({
   inFlight: [],
   whatif: null,
   tune: emptyTune(),
+  forge: emptyForge(),
+  genomes: null,
   cinema: { on: new URLSearchParams(typeof location === 'undefined' ? '' : location.search).get('cinema') === '1', rolling: false, card: null, act: '' },
   pushCall: (c) => set({ paypalCalls: [{ ...c, id: nid++ }, ...get().paypalCalls].slice(0, 40) }),
   set: (p) => set(p),
