@@ -4,6 +4,7 @@ import { startTune } from './AutoTune';
 import { useEffect, useState } from 'react';
 import { useStore } from '../store';
 import { WhatIf } from './WhatIf';
+import proof from '../data/paypal-proof.json';
 import { ATTACK_SHORT, LANE_NAMES, money, pct } from './meta';
 
 function findings(m: Metrics) {
@@ -49,6 +50,21 @@ function LiveReconcile() {
   );
 }
 
+/** On the twin nothing is reconciled, so show the last real sandbox run instead, labelled as such. */
+function SandboxProof() {
+  const when = new Date(proof.at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC', timeZoneName: 'short' });
+  return (
+    <div className={`recon proof ${proof.matched ? 'ok' : 'warn'}`}>
+      <b>{proof.matched ? '✓ LAST LIVE RUN RECONCILED WITH PAYPAL, TO THE CENT' : '✗ LAST LIVE RUN DID NOT MATCH'}</b>
+      <span>
+        {proof.rulebook} on the PayPal sandbox, {when}: {proof.orders} orders and {proof.refunds} refunds, {money(proof.net, 2)} net, all {proof.readBack} payments read back from PayPal by id · run {proof.runId}
+        {proof.sampleCaptures.length ? ` · captures ${proof.sampleCaptures.slice(0, 2).join(', ')}…` : ''}
+      </span>
+      <em>This day ran on the twin. Run the lab server with sandbox keys and open ?live=1 to reconcile your own.</em>
+    </div>
+  );
+}
+
 export function Report() {
   const show = useStore((s) => s.showReport);
   const lanes = useStore((s) => s.lanes);
@@ -85,7 +101,7 @@ export function Report() {
           ))}
         </div>
         <WhatIf />
-        <LiveReconcile />
+        {live ? <LiveReconcile /> : <SandboxProof />}
         <div className="report-foot">
           {!rolling && better && <button className="btn hot" onClick={() => race(better)}>⑂ RACE {better.name.toUpperCase()} AGAINST {policies[0]?.name.toUpperCase()}</button>}
           {!rolling && <button className="btn tune-btn" onClick={() => { close(); startTune('safe'); }}>✦ AUTO-TUNE A RULEBOOK</button>}

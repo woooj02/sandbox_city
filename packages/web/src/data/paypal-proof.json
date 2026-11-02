@@ -1,0 +1,23 @@
+{
+  "at": "2026-11-02T22:29:34.274Z",
+  "seed": "neo-osaka-7",
+  "rulebook": "Lab-Tuned",
+  "runId": "rmvztyxxz",
+  "orders": 15,
+  "refunds": 2,
+  "net": 689.23,
+  "simNet": 689.23,
+  "readBack": 17,
+  "matched": true,
+  "sampleCaptures": [
+    "06F27520H7463512Y",
+    "4UN5440894148450R",
+    "88F219480U3680509",
+    "61D5398673067494V"
+  ],
+  "debugIds": [
+    "f145489d02ca3",
+    "f69276449e513",
+    "f6585659a743d"
+  ]
+}

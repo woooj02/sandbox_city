@@ -501,3 +501,5 @@ i.leak { background: var(--rd); box-shadow: 0 0 6px var(--rd); }
   .app:not(.cinema) .ledger-tools { flex-wrap: wrap; }
   .cutin { transform: scale(.7); transform-origin: center; }
 }
+
+.recon.proof em { display: block; font-style: normal; font-size: 11px; color: var(--dim); margin-top: 4px; }
