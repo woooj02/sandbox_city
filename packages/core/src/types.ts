@@ -91,6 +91,8 @@ export interface Shopper extends Vec {
   clockSkew: number;
   joinedAt: number;
   hero?: boolean;
+  /** Reads instruction-bearing listings through a language model (see brain.ts). */
+  model?: boolean;
   /** Ground truth controller. undefined => honest human-owned agent. */
   controlledBy?: string;
 }
@@ -169,6 +171,8 @@ export type SimEvent =
   | { type: 'store_close'; t: number; merchant: string; reason: string }
   | { type: 'inject'; t: number; attacker: string; merchant: string; sku: string; text: string }
   | { type: 'hijack'; t: number; shopper: string; merchant: string; attacker: string; resisted: boolean; sanitized: boolean }
+  /** A model-driven shopper read a listing that tries to give instructions. recorded=false: no tape entry, the stock agent decided. */
+  | { type: 'brain'; t: number; shopper: string; merchant: string; injected: boolean; recorded: boolean; buy: boolean; qty: number; shipTo: string; followed: boolean; reason: string; listing: string }
   | { type: 'attack'; t: number; attacker: string; kind: AttackKind; note: string }
   | { type: 'chaos'; t: number; order: string; fault: string; recovered: boolean }
   | { type: 'metrics'; t: number; m: Metrics };

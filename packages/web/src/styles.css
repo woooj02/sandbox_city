@@ -523,3 +523,6 @@ i.leak { background: var(--rd); box-shadow: 0 0 6px var(--rd); }
 .ledger .tot-truth { color: #ff6f8a; }
 .lv-csv { border-style: dashed !important; }
 .rule-matrix .report-foot .btn.apply { flex: 0 0 auto; width: auto; padding: 10px 26px; }
+.rail-badge.model { cursor: pointer; font-family: var(--mono); white-space: nowrap; }
+.rail-badge.model.on { background: rgba(255,210,80,.08); color: var(--gold); border-color: rgba(255,210,80,.5); }
+.rail-badge.model.on i { background: var(--gold); box-shadow: 0 0 10px var(--gold); }

@@ -2,6 +2,7 @@
  * Tick runner shared by the in-browser Web Worker and the live server.
  * Same protocol either way, so the UI doesn't care whether money is moving in a twin or at PayPal.
  */
+import type { BrainConfig } from './brain';
 import { World, DEFAULT_CONFIG, WorldConfig } from './world';
 import type { Merchant, Shopper } from './types';
 import type { FromSim, MerchantLite, ShopperLite, ToSim } from './protocol';
@@ -14,7 +15,7 @@ import { PRESETS } from './policy';
 export const mLite = (m: Merchant): MerchantLite => ({
   id: m.id, name: m.name, x: m.x, y: m.y, district: m.district, honest: m.honest, verified: m.verified, owner: m.owner, category: m.catalog[0]?.category ?? 'home',
 });
-export const sLite = (s: Shopper): ShopperLite => ({ id: s.id, name: s.name, x: s.x, y: s.y, district: s.district, hero: !!s.hero, controlledBy: s.controlledBy, passport: !!s.passport });
+export const sLite = (s: Shopper): ShopperLite => ({ id: s.id, name: s.name, x: s.x, y: s.y, district: s.district, hero: !!s.hero, model: !!s.model, controlledBy: s.controlledBy, passport: !!s.passport });
 
 export interface RunnerOptions {
   mode: 'local' | 'server';
@@ -24,12 +25,23 @@ export interface RunnerOptions {
   liveSample?: number;
 }
 
+/** A tape arrives from the browser: keep well-formed entries only, and not too many of them. */
+function clampBrain(b: BrainConfig | undefined): BrainConfig | undefined {
+  if (!b || typeof b !== 'object' || !b.tape || typeof b.tape !== 'object') return undefined;
+  const tape: BrainConfig['tape'] = {};
+  for (const [k, c] of Object.entries(b.tape).slice(0, 20000)) {
+    if (!/^[0-9a-f]{16}$/.test(k) || !c || typeof c !== 'object') continue;
+    tape[k] = { buy: c.buy === true, qty: Math.max(0, Math.min(50, Math.round(Number(c.qty)) || 0)), shipTo: String(c.shipTo ?? '').slice(0, 120), reason: String(c.reason ?? '').slice(0, 140) };
+  }
+  return { shoppers: clampN(b.shoppers, 0, 1200) ?? 0, tape, model: String(b.model ?? '').slice(0, 80) };
+}
+
 const clampN = (v: number | undefined, lo: number, hi: number) => (v === undefined || !Number.isFinite(v) ? undefined : Math.max(lo, Math.min(hi, Math.round(v))));
 
 /** Requests can come from anyone on a public lab server: keep every size inside what the lab itself ever asks for. */
 function clampMsg(msg: ToSim): ToSim {
   switch (msg.cmd) {
-    case 'init': return { ...msg, lanes: msg.lanes.slice(0, 2), shoppers: clampN(msg.shoppers, 50, 1200), chaos: Math.max(0, Math.min(1, Number(msg.chaos) || 0)) };
+    case 'init': return { ...msg, lanes: msg.lanes.slice(0, 2), shoppers: clampN(msg.shoppers, 50, 1200), chaos: Math.max(0, Math.min(1, Number(msg.chaos) || 0)), brain: clampBrain(msg.brain) };
     case 'speed': return { ...msg, tps: clampN(msg.tps, 1, 2400) ?? 8 };
     case 'tune': return { ...msg, generations: clampN(msg.generations, 1, 8), children: clampN(msg.children, 1, 12), trainDays: clampN(msg.trainDays, 1, 5) };
     case 'forge': return { ...msg, generations: clampN(msg.generations, 1, 8), children: clampN(msg.children, 1, 10) };
@@ -65,6 +77,7 @@ export class SimRunner {
         liveRails: lane === 0 ? this.opts.liveRails?.() : undefined,
         liveSample: Math.min(this.opts.liveSample ?? 0, msg.liveSample ?? Infinity),
         genomes: msg.genomes,
+        brain: msg.brain,
       }));
       this.worlds.forEach((w, lane) => this.post({
         type: 'world',
@@ -98,7 +111,7 @@ export class SimRunner {
         trainSeeds: Array.from({ length: Math.max(1, Math.min(5, msg.trainDays ?? 2)) }, (_, i) => `${init.seed}~train-${i + 1}`), testSeeds: [], chaos: init.chaos,
         generations: msg.generations ?? 6, children: msg.children ?? 8, minSafety: msg.minSafety, minAccess: msg.minAccess,
         seed: `${init.seed}~search`, label: msg.minSafety ? `Tuned ≥${Math.round(msg.minSafety * 100)}%` : 'Tuned · max value',
-        world: { ...(init.shoppers ? { shoppers: init.shoppers } : {}), genomes: init.genomes },
+        world: { ...(init.shoppers ? { shoppers: init.shoppers } : {}), genomes: init.genomes, brain: init.brain },
       }, (e) => {
         if (tg !== this.tuneGen) throw new Error('tune cancelled');
         if (e.type !== 'eval') return;
@@ -131,7 +144,7 @@ export class SimRunner {
       const init = this.lastInit;
       if (!init) return;
       const g = this.gen;
-      whatIf({ seed: init.seed, chaos: init.chaos, shoppers: init.shoppers, mine: init.lanes.map((l) => l.policy) }, { genomes: init.genomes })
+      whatIf({ seed: init.seed, chaos: init.chaos, shoppers: init.shoppers, mine: init.lanes.map((l) => l.policy) }, { genomes: init.genomes, brain: init.brain })
         .then((r) => { if (g === this.gen) this.post({ type: 'whatif', ...r }); })
         .catch((e: Error) => this.post({ type: 'error', message: `what-if: ${e.message}` }));
     }

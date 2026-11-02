@@ -2,11 +2,12 @@ import type { AttackKind, SimEvent } from './types';
 import type { Policy } from './policy';
 import type { DaySummary } from './whatif';
 import type { ForgeScore, Genomes } from './forge';
+import type { BrainConfig } from './brain';
 
 export interface TunePoint { id: number; generation: number; safety: number; access: number; net: number; score: number; preset?: string }
 
 export interface MerchantLite { id: string; name: string; x: number; y: number; district: number; honest: boolean; category: string; verified: boolean; owner?: string }
-export interface ShopperLite { id: string; name: string; x: number; y: number; district: number; hero: boolean; controlledBy?: string; passport: boolean }
+export interface ShopperLite { id: string; name: string; x: number; y: number; district: number; hero: boolean; model?: boolean; controlledBy?: string; passport: boolean }
 export interface AttackerLite { id: string; name: string; kind: AttackKind; x: number; y: number; agents: string[] }
 
 export interface WorldSnapshot {
@@ -42,7 +43,9 @@ export type ToSim =
       /** Share of non-hero orders sent to the live sandbox lane; capped by the server's own setting. 0 = heroes only. */
       liveSample?: number;
       /** Attacker tactics for this city; defaults when omitted (see the attack forge). */
-      genomes?: Genomes }
+      genomes?: Genomes;
+      /** Model-driven shoppers replaying a recorded tape of decisions. */
+      brain?: BrainConfig }
   | { cmd: 'play' }
   | { cmd: 'pause' }
   | { cmd: 'speed'; tps: number }

@@ -1,4 +1,5 @@
 import { PRESETS } from '@sandbox-city/core';
+import brainTape from '../data/brain-tape.json';
 import { useStore } from '../store';
 import { client } from '../sim/client';
 import { clock } from './meta';
@@ -33,6 +34,7 @@ export function TopBar() {
           <i />☠ FORGED ATTACKERS
         </button>
       )}
+      <ModelBadge />
       <div className="clockbox">
         <div className="clock-big">DAY 1 · {clock(t)}</div>
         <div className="progress"><i style={{ width: `${(t / total) * 100}%` }} /></div>
@@ -47,5 +49,27 @@ export function TopBar() {
         <button className="btn" onClick={() => { client.start(useStore.getState().policies); setTimeout(() => client.send({ cmd: 'play' }), 300); }}>↺ RERUN</button>
       </div>
     </header>
+  );
+}
+
+/** Switches shoppers' agents to the recorded language model, and shows what it did with planted instructions. */
+function ModelBadge() {
+  const on = useStore((s) => s.brain);
+  const b = useStore((s) => s.lanes[0]?.brain);
+  const toggle = () => {
+    useStore.setState({ brain: !on });
+    client.start(useStore.getState().policies);
+    setTimeout(() => client.send({ cmd: 'play' }), 300);
+  };
+  const recorded = !!brainTape.model;
+  const title = on
+    ? recorded
+      ? `Shoppers' agents read listings that try to give instructions through ${brainTape.model} (recorded ${brainTape.recordedAt.slice(0, 10)}). Click to go back to the stock agents.`
+      : 'No model run recorded yet: run scripts/record-brain.ts with a model key. Until then the stock agents decide.'
+    : 'Let a language model read the listings for the shoppers (replays a recorded run)';
+  return (
+    <button className={`rail-badge model ${on ? 'on' : ''}`} title={title} onClick={toggle}>
+      <i />◈ {on ? (recorded ? `${brainTape.model.toUpperCase()} · ${b?.obeyed ?? 0} OBEYED · ${b?.ignored ?? 0} IGNORED` : 'MODEL · NOT RECORDED') : 'MODEL SHOPPERS'}
+    </button>
   );
 }

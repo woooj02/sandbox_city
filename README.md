@@ -57,6 +57,7 @@ Presets range from **Wild West** (no rules) through **Passport Theater**, **Know
 - **Auto-tune.** An evolutionary search over the rulebook. Candidates are trained on two other days, so the day on screen stays unseen and the replay is a fair test. You can require a safety floor, for example "at least 85% of fraud stopped", and it finds the most value above it.
 - **Attack forge.** The red team. Attack tactics evolve against your rulebook on two other days. Each attack family keeps whichever variant got the most money past the gate. Attack frequency is a fixed budget, so the forge finds smarter attacks, not more of them. You can unleash the forged attackers on the city, or re-tune the rulebook against them.
 - **Ledger.** Every order, refund and PayPal call, in AG Grid. Filter by view or grep, see totals for what is in view, and export it as CSV.
+- **Model shoppers.** Switch on ◈ MODEL SHOPPERS (or open `?brain=1`) and every shopper's agent hands listings that try to give instructions to a language model, which writes the order itself. The day replays a recorded run, so it stays deterministic and needs no key in the browser.
 - **Rule matrix.** Every rule against every preset in one grid. Edit your rulebook in place and replay the same day.
 - **Cinema mode.** A directed, letterboxed cut of the whole story for presenting:
   - the camera pushes in and locks a reticle on breaches, injections and double charges
@@ -157,6 +158,12 @@ npx tsx scripts/paypal-proof.ts
 ```
 
 With the lab server running on sandbox keys, plays one Lab-Tuned day on the live lane, reconciles it with PayPal and saves the receipt that the twin's end-of-day report shows.
+
+```bash
+GEMINI_API_KEY=... npx tsx scripts/record-brain.ts
+```
+
+Records how a language model shops on the default day: every case a shopper meets under every preset is sent to the model in batches, and the answers are saved to `packages/web/src/data/brain-tape.json` for the twin to replay. Gemini's free tier is the default; any provider with a chat-completions endpoint works through `LLM_BASE_URL`, `LLM_MODEL` and `LLM_API_KEY`. Behind a proxy, add `NODE_USE_ENV_PROXY=1`.
 
 ## Layout
 

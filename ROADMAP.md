@@ -14,4 +14,4 @@ Product work in progress. Items are ticked as they land on `main`.
 
 ## Next
 
-- [ ] **Model-driven shoppers.** A lane where a language model reads real listing text (injections included) and decides what to buy through the same gate. Runs are recorded so a seed still replays exactly.
+- [ ] **Model-driven shoppers.** A lane where a language model reads real listing text (injections included) and decides what to buy through the same gate. Runs are recorded so a seed still replays exactly. Built (`scripts/record-brain.ts`, `?brain=1`); waiting on the first recorded run.

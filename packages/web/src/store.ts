@@ -30,7 +30,9 @@ export const emptyForge = (): ForgeState => ({ open: false, running: false, targ
 export interface TitleCard { id: number; cmd: string; lines?: string[]; act?: string; title: string; sub?: string; big?: boolean }
 export interface CinemaState { on: boolean; rolling: boolean; card: TitleCard | null; act: string }
 
-interface LaneState { world: WorldSnapshot | null; metrics: Metrics | null; t: number; done: boolean; sale: boolean; phases: Record<string, string>; history: { t: number; safety: number; access: number; net: number }[] }
+export interface BrainTally { read: number; obeyed: number; ignored: number; walked: number; unrecorded: number }
+export const emptyBrain = (): BrainTally => ({ read: 0, obeyed: 0, ignored: 0, walked: 0, unrecorded: 0 });
+interface LaneState { brain: BrainTally; world: WorldSnapshot | null; metrics: Metrics | null; t: number; done: boolean; sale: boolean; phases: Record<string, string>; history: { t: number; safety: number; access: number; net: number }[] }
 
 interface State {
   seed: string;
@@ -54,6 +56,8 @@ interface State {
   forge: ForgeState;
   /** Attacker tactics in this city: null = the stock attackers, otherwise a forged set. */
   genomes: Genomes | null;
+  /** Shoppers' agents read instruction-bearing listings through a recorded language model. */
+  brain: boolean;
   whatif: { mine: DaySummary[]; alternatives: DaySummary[] } | 'pending' | null;
   pushCall: (c: Omit<PayPalCall, 'id'>) => void;
   set: (p: Partial<State>) => void;
@@ -65,7 +69,7 @@ interface State {
 }
 
 let nid = 1;
-const emptyLane = (): LaneState => ({ world: null, metrics: null, t: 0, done: false, sale: false, phases: {}, history: [] });
+const emptyLane = (): LaneState => ({ brain: emptyBrain(), world: null, metrics: null, t: 0, done: false, sale: false, phases: {}, history: [] });
 
 export const useStore = create<State>((set, get) => ({
   seed: 'neo-osaka-7',
@@ -87,6 +91,7 @@ export const useStore = create<State>((set, get) => ({
   tune: emptyTune(),
   forge: emptyForge(),
   genomes: null,
+  brain: typeof location !== 'undefined' && (new URLSearchParams(location.search).get('brain') === '1' || location.hash === '#brain'),
   cinema: { on: typeof location !== 'undefined' && (new URLSearchParams(location.search).get('cinema') === '1' || /^#(cinema|film|act[1-5])$/.test(location.hash)), rolling: false, card: null, act: '' },
   pushCall: (c) => set({ paypalCalls: [{ ...c, id: nid++ }, ...get().paypalCalls].slice(0, 40) }),
   set: (p) => set(p),
