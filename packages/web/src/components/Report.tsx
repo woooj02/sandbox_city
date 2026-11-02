@@ -1,4 +1,6 @@
-import { ATTACK_KINDS, Metrics } from '@sandbox-city/core';
+import { ATTACK_KINDS, Metrics, PRESETS, type Policy } from '@sandbox-city/core';
+import { client } from '../sim/client';
+import { startTune } from './AutoTune';
 import { useEffect, useState } from 'react';
 import { useStore } from '../store';
 import { WhatIf } from './WhatIf';
@@ -51,11 +53,20 @@ export function Report() {
   const show = useStore((s) => s.showReport);
   const lanes = useStore((s) => s.lanes);
   const policies = useStore((s) => s.policies);
+  const live = useStore((s) => s.paypal === 'sandbox');
+  const rolling = useStore((s) => s.cinema.rolling);
+  const w = useStore((s) => s.whatif);
   if (!show) return null;
+  const close = () => useStore.setState({ showReport: false });
+  // the best preset this day, if it beats the first lane: one click races it on the same seed
+  const mine = w && w !== 'pending' ? w.mine[0] : null;
+  const top = w && w !== 'pending' ? [...w.alternatives].sort((a, b) => b.net - a.net)[0] : null;
+  const better: Policy | null = mine && top && top.net > mine.net ? PRESETS[top.key] ?? null : null;
+  const race = (p: Policy) => { close(); client.start([policies[0], p]); setTimeout(() => client.send({ cmd: 'play' }), 300); };
   return (
     <div className="report-wrap" onClick={() => useStore.setState({ showReport: false })}>
       <div className="report panel" onClick={(e) => e.stopPropagation()}>
-        <div className="report-head"><span className="glyph">EOD</span><div><h2>END OF DAY REPORT</h2><p>24 simulated hours · every payment on PayPal-shaped rails · reconciled to the cent</p></div></div>
+        <div className="report-head"><span className="glyph">EOD</span><div><h2>END OF DAY REPORT</h2><p>{live ? '24 simulated hours · lane A paid on the PayPal sandbox, reconciled below' : '24 simulated hours · every payment on the PayPal twin, a contract-tested model of the Orders v2 API'}</p></div></div>
         <div className={`report-cols n${lanes.length}`}>
           {lanes.map((l, i) => l.metrics && (
             <div className="report-col" key={i}>
@@ -65,6 +76,8 @@ export function Report() {
                 <div><b className="gr">{pct(l.metrics.access)}</b><span>honest buys completed</span></div>
               </div>
               <div className="report-row"><span>Stolen</span><b className="bad">{money(l.metrics.fraud.leaked)}</b></div>
+              <div className="report-row"><span>Double charges</span><b className={l.metrics.chaos.duplicateValue > 0.5 ? 'warn' : ''}>{money(l.metrics.chaos.duplicateValue)}</b></div>
+              <div className="report-row"><span>Lost (stolen + double charges)</span><b className="bad">{money(l.metrics.fraud.leaked + l.metrics.chaos.duplicateValue)}</b></div>
               <div className="report-row"><span>Honest GMV</span><b>{money(l.metrics.honest.gmv)}</b></div>
               <div className="report-row"><span>Net value</span><b>{money(l.metrics.netValue)}</b></div>
               <ul>{findings(l.metrics).map((f, k) => <li key={k}>{f}</li>)}</ul>
@@ -73,7 +86,11 @@ export function Report() {
         </div>
         <WhatIf />
         <LiveReconcile />
-        <button className="btn" onClick={() => useStore.setState({ showReport: false })}>CLOSE</button>
+        <div className="report-foot">
+          {!rolling && better && <button className="btn hot" onClick={() => race(better)}>⑂ RACE {better.name.toUpperCase()} AGAINST {policies[0]?.name.toUpperCase()}</button>}
+          {!rolling && <button className="btn tune-btn" onClick={() => { close(); startTune('safe'); }}>✦ AUTO-TUNE A RULEBOOK</button>}
+          <button className="btn" onClick={close}>CLOSE</button>
+        </div>
       </div>
     </div>
   );
