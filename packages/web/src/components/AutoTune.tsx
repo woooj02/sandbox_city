@@ -1,4 +1,8 @@
-import { describePolicy, type Policy } from '@sandbox-city/core';
+import { useMemo } from 'react';
+import { describePolicy, type Policy, type TunePoint } from '@sandbox-city/core';
+import { AgGridReact } from 'ag-grid-react';
+import type { ColDef } from 'ag-grid-community';
+import { gridTheme } from './Ledger';
 import { emptyTune, useStore } from '../store';
 import { client } from '../sim/client';
 import { money, pct } from './meta';
@@ -51,6 +55,50 @@ function Scatter() {
   );
 }
 
+interface LRow extends TunePoint { rank: number; label: string; fresh: boolean; passes: boolean }
+
+const RULES = { 'lb-top': (p: { data?: LRow }) => p.data?.rank === 1, 'lb-fresh': (p: { data?: LRow }) => !!p.data?.fresh };
+
+/** The search's live top six: rows re-rank in place as each generation lands. */
+function Leaderboard() {
+  const { points, generation, mode, floor: used } = useStore((s) => s.tune);
+  const floor = used ?? MODES[mode].minSafety;
+  const rows = useMemo<LRow[]>(() => {
+    const ok = (p: TunePoint) => p.safety >= floor;
+    return [...points]
+      .sort((a, b) => Number(ok(b)) - Number(ok(a)) || b.score - a.score)
+      .slice(0, 6)
+      .map((p, i) => ({ ...p, rank: i + 1, label: p.preset ?? `gen ${p.generation} · #${String(p.id).padStart(3, '0')}`, fresh: !p.preset && p.generation === generation, passes: ok(p) }));
+  }, [points, generation, floor]);
+  const cols = useMemo<ColDef<LRow>[]>(() => [
+    { field: 'rank', headerName: '#', width: 52, valueFormatter: (p) => String(p.value).padStart(2, '0'), cellClass: 'lb-rank' },
+    { field: 'label', headerName: 'RULEBOOK', flex: 1.4, minWidth: 160, cellClass: (p) => (p.data?.preset ? 'lb-preset' : 'lb-name') },
+    { field: 'safety', headerName: 'FRAUD STOPPED', flex: 1, type: 'rightAligned', valueFormatter: (p) => pct(p.value), cellClass: (p) => `ag-right-aligned-cell ${p.data?.passes ? 'cy' : 'lb-fail'}` },
+    { field: 'access', headerName: 'HONEST THROUGH', flex: 1, type: 'rightAligned', valueFormatter: (p) => pct(p.value), cellClass: 'ag-right-aligned-cell gr' },
+    { field: 'net', headerName: 'NET VALUE / DAY', flex: 1.1, type: 'rightAligned', valueFormatter: (p) => money(p.value), cellClass: 'ag-right-aligned-cell gold' },
+  ], []);
+  if (!rows.length) return null;
+  return (
+    <div className="tune-board">
+      <div className="tb-head"><b>LEADERBOARD</b><em>/tune/top</em><span>ranked by the search's own score, rulebooks under the {Math.round(floor * 100)}% safety floor sink</span></div>
+      <AgGridReact<LRow>
+        theme={gridTheme}
+        rowData={rows}
+        columnDefs={cols}
+        getRowId={(p) => String(p.data.id)}
+        rowClassRules={RULES}
+        domLayout="autoHeight"
+        animateRows
+        suppressCellFocus
+        suppressMovableColumns
+        rowHeight={24}
+        headerHeight={26}
+        defaultColDef={{ sortable: false, resizable: false }}
+      />
+    </div>
+  );
+}
+
 export function AutoTune() {
   const tune = useStore((s) => s.tune);
   const policies = useStore((s) => s.policies);
@@ -99,6 +147,7 @@ export function AutoTune() {
             )}
           </div>
         </div>
+        <Leaderboard />
         <div className="tune-foot">
           {tune.running
             ? <button className="btn" onClick={() => { client.send({ cmd: 'tune_stop' }); useStore.setState({ tune: { ...tune, running: false } }); }}>■ STOP</button>

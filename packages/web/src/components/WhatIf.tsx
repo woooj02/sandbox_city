@@ -42,7 +42,7 @@ function WhatIfGrid({ rows, ctx, vs }: { rows: WRow[]; ctx: Record<string, numbe
     { field: 'duplicate', headerName: 'DOUBLE CHARGES', flex: 1, cellRenderer: Bar, cellRendererParams: { tone: 'warn', max: ctx.duplicate } },
     { field: 'honestLost', headerName: 'HONEST SALES LOST', flex: 1, cellRenderer: Bar, cellRendererParams: { tone: 'warn', max: ctx.honestLost } },
     { field: 'net', headerName: 'NET VALUE', flex: 1.2, sort: 'desc', cellRenderer: Bar, cellRendererParams: { tone: 'gold', max: ctx.net } },
-    { field: 'delta', headerName: vs, width: 120, type: 'rightAligned', valueFormatter: (p) => (p.value == null ? '—' : signed(p.value)), cellClass: (p) => (p.value == null ? 'dim' : p.value >= 0 ? 'good' : 'bad') },
+    { field: 'delta', headerName: vs, width: 120, type: 'rightAligned', valueFormatter: (p) => (p.value == null ? '—' : signed(p.value)), cellClass: (p) => `ag-right-aligned-cell ${p.value == null ? 'dim' : p.value >= 0 ? 'good' : 'bad'}` },
   ], [vs, ctx]);
   return (
     <div className="whatif-grid">
