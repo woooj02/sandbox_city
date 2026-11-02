@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Welcome } from './Welcome';
 import { useStore } from '../store';
 import { client, policiesFromUrl } from '../sim/client';
 import { TopBar } from './TopBar';
@@ -39,6 +40,7 @@ export function App() {
       <AutoTune />
       <Forge />
       <Cinema />
+      <Welcome />
     </div>
   );
 }

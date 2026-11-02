@@ -461,3 +461,17 @@ i.leak { background: var(--rd); box-shadow: 0 0 6px var(--rd); }
 .forge-grid .fg-gain small { margin-left: 6px; font-weight: 400; color: #ff8fa3; }
 .forge-grid { --ag-value-change-value-highlight-background-color: rgba(255,42,74,.45); }
 .forge .report-head .glyph, .tune .report-head .glyph { white-space: nowrap; }
+
+/* welcome */
+.welcome-wrap { z-index: 60; }
+.welcome { width: min(640px, 92vw); padding: 26px 30px 22px; display: flex; flex-direction: column; gap: 14px; }
+.wl-prompt { font: 400 12px var(--mono); color: var(--dim); } .wl-prompt span { color: var(--gr); }
+.welcome h2 { margin: 0; font-size: 30px; letter-spacing: 8px; color: #fff; text-shadow: 0 0 18px rgba(76,242,255,.5); }
+.wl-lede { margin: 0; color: #cfd8ff; font-size: 15px; line-height: 1.5; }
+.wl-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; color: #aab4dc; font-size: 13px; line-height: 1.5; }
+.wl-steps b { color: #fff; }
+.wl-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.wl-actions .btn { padding: 12px 18px; font-size: 13px; }
+.wl-actions .btn small { font-weight: 400; letter-spacing: .5px; opacity: .75; margin-left: 8px; font-size: 11px; }
+.wl-keys { margin: 0; font-size: 11px; color: var(--dim); }
+.wl-keys kbd { font: 700 10px var(--mono); border: 1px solid var(--line); padding: 1px 5px; color: var(--cy); }
