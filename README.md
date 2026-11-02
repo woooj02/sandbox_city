@@ -116,6 +116,7 @@ Open http://localhost:8787/?live=1. If the server is unreachable, the page falls
 | `?cinema=1` | Cinema mode. Press **R** to roll, **Esc** to cut, **C** to toggle |
 | `?cinema=1&roll=1` | Start rolling immediately |
 | `?cinema=1&roll=1&act=5` | Start the film at a given act (1 to 5) |
+| `#film`, `#act5` | Same as above, for hosts that drop query strings |
 | `?live=1` | Use the lab server and the PayPal sandbox |
 
 ### Command line

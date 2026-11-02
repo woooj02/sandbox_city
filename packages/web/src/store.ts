@@ -82,7 +82,7 @@ export const useStore = create<State>((set, get) => ({
   tune: emptyTune(),
   forge: emptyForge(),
   genomes: null,
-  cinema: { on: new URLSearchParams(typeof location === 'undefined' ? '' : location.search).get('cinema') === '1', rolling: false, card: null, act: '' },
+  cinema: { on: typeof location !== 'undefined' && (new URLSearchParams(location.search).get('cinema') === '1' || /^#(cinema|film|act[1-5])$/.test(location.hash)), rolling: false, card: null, act: '' },
   pushCall: (c) => set({ paypalCalls: [{ ...c, id: nid++ }, ...get().paypalCalls].slice(0, 40) }),
   set: (p) => set(p),
   setLane: (lane, p) => {

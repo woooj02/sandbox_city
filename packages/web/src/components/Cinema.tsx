@@ -92,7 +92,10 @@ export function Cinema() {
     };
     window.addEventListener('keydown', key);
     const q = new URLSearchParams(location.search);
+    // #film rolls from the top; #act5 and friends start at that act (hash links survive where query strings do not)
+    const h = /^#(?:film|act([1-5]))$/.exec(location.hash);
     if (q.get('roll') === '1') setTimeout(() => director.roll(Number(q.get('act') ?? 1)), 300);
+    else if (h) setTimeout(() => director.roll(Number(h[1] ?? 1)), 300);
     return () => window.removeEventListener('keydown', key);
   }, []);
 
