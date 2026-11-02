@@ -76,6 +76,7 @@ function TitleCardView() {
         <div className="cc-prompt"><span className="cc-host">root@sandbox-city</span><span className="cc-path">:~$</span> <Typed text={c.cmd} onDone={() => setTyped(true)} /><i className="cc-cursor" /></div>
         {typed && (
           <>
+            {c.lines?.map((l, i) => <div key={i} className={`cc-log ${l.startsWith('[warn]') ? 'warn' : ''}`} style={{ animationDelay: `${i * 0.14}s` }}>{l}</div>)}
             {c.act && <div className="cc-act">[ {c.act} ]</div>}
             <div className="cc-title" data-text={c.title}><Decode text={c.title} /></div>
             {c.sub && <div className="cc-sub">&gt; {c.sub}</div>}

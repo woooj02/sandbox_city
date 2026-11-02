@@ -27,7 +27,7 @@ export interface ForgeState {
 }
 export const emptyForge = (): ForgeState => ({ open: false, running: false, target: null, curve: [], best: null, baseline: null, evals: 0, total: 0, ms: null });
 
-export interface TitleCard { id: number; cmd: string; act?: string; title: string; sub?: string; big?: boolean }
+export interface TitleCard { id: number; cmd: string; lines?: string[]; act?: string; title: string; sub?: string; big?: boolean }
 export interface CinemaState { on: boolean; rolling: boolean; card: TitleCard | null; act: string }
 
 interface LaneState { world: WorldSnapshot | null; metrics: Metrics | null; t: number; done: boolean; sale: boolean; phases: Record<string, string>; history: { t: number; safety: number; access: number; net: number }[] }

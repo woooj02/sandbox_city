@@ -364,6 +364,9 @@ i.leak { background: var(--rd); box-shadow: 0 0 6px var(--rd); }
 .cc-host { color: var(--gr); text-shadow: 0 0 10px rgba(125,255,154,.5); } .cc-path { color: var(--cy); margin-right: .4em; }
 .cc-cursor { display: inline-block; width: .6em; height: 1.05em; margin-left: 2px; vertical-align: -.15em; background: #c8f9ff; box-shadow: 0 0 10px var(--cy); animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
+.cc-log { font-size: clamp(11px, .95vw, 15px); color: rgba(200,255,220,.72); white-space: pre; animation: ccIn .05s both; }
+.cc-log.warn { color: var(--am); }
+.cine-card.big .cc-log, .cine-card.big .cc-prompt { align-self: flex-start; margin-left: 8%; }
 .cc-act { color: var(--gold); letter-spacing: 6px; font-size: clamp(11px, 1vw, 15px); margin-top: 1.2vh; animation: ccIn .2s both; }
 .cc-title { position: relative; font-family: var(--mono); font-weight: 700; color: #fff; font-size: clamp(30px, 4.4vw, 76px); letter-spacing: 1px; line-height: 1.02; white-space: pre-wrap; text-shadow: 0 0 26px rgba(76,242,255,.45); }
 .cine-card.big .cc-title { font-size: clamp(40px, 7vw, 120px); letter-spacing: 6px; }

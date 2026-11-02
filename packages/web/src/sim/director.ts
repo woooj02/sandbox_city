@@ -97,7 +97,15 @@ class Director {
       this.speed(4);
       await sleep(400);
       client.send({ cmd: 'play' });
-      await this.card(take, { cmd: 'ssh gate@sandbox.city --rails=paypal', title: 'SANDBOX CITY', sub: 'AI shoppers, AI stores and AI attackers, all paying on PayPal rails', big: true }, 4200);
+      const w = this.st.lanes[0]?.world;
+      const live = this.st.paypal === 'sandbox';
+      const boot = w ? [
+        `[ ok ] city loaded · 6 districts · ${w.merchants.length} stores · ${w.shoppers.length} shopper agents`,
+        `[ ok ] ${w.attackers.length} attacker crews online · 6 attack families`,
+        `[ ok ] rails: ${live ? 'PayPal sandbox, live orders v2' : 'PayPal twin, orders v2 contract'}`,
+        '[warn] gate rulebook: none',
+      ] : undefined;
+      await this.card(take, { lines: boot, cmd: 'ssh gate@sandbox.city --rails=paypal', title: 'SANDBOX CITY', sub: 'AI shoppers, AI stores and AI attackers, all paying on PayPal rails', big: true }, 5600);
       this.patch({ act: 'I · WILD WEST' });
       await this.card(take, { cmd: 'gate --rules=none --day=1', act: 'ACT I', title: 'THE WILD WEST', sub: 'one day in the city with no rules at the gate' }, 3600);
       this.baseTps = FILM_TPS; this.speed(this.baseTps);
