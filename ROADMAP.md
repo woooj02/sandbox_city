@@ -10,7 +10,7 @@ Product work in progress. Items are ticked as they land on `main`.
 - [ ] **Server hardening.** Clamp request sizes, cancel searches on disconnect, cap concurrent live sessions, run heavy searches off the main thread.
 - [ ] **Small screens.** Fix 1366×768 (clock wrap, metrics panel); on phones, play the film full screen.
 - [ ] **AG Grid extras.** Editable rulebook grid, ledger CSV export, totals row for the filtered view.
-- [ ] **Quieter alerts when exploring.** Full-screen alerts only for large breaches outside the film.
+- [x] **Quieter alerts when exploring.** Full-screen alerts only for large breaches outside the film.
 
 ## Next
 

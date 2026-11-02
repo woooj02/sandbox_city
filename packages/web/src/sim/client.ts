@@ -33,7 +33,9 @@ function narrate(lane: number, events: SimEvent[], focusLane: number) {
   const st = useStore.getState();
   const feed: (Parameters<typeof st.pushFeed>[0][number] & { p?: number })[] = [];
   const now = performance.now();
-  const canCut = lane === focusLane && now - lastCut > 2600 && st.cutins.length < 2;
+  // the film wants every beat; exploring the lab only gets the big ones, and less often
+  const film = st.cinema.on;
+  const canCut = lane === focusLane && now - lastCut > (film ? 2600 : 9000) && st.cutins.length < (film ? 2 : 1);
   let best: { score: number; c: Parameters<typeof st.pushCutIn>[0] } | null = null;
   const consider = (score: number, c: Parameters<typeof st.pushCutIn>[0]) => { if (!best || score > best.score) best = { score, c }; };
   // the gate's own decisions, printed like a terminal: every attack line, plus a sample of honest traffic
@@ -118,7 +120,9 @@ function narrate(lane: number, events: SimEvent[], focusLane: number) {
     const lines = [...trace, ...(allow ? [allow] : [])].slice(0, Math.floor(traceBudget));
     if (lines.length) { traceBudget -= lines.length; st.pushTrace(lines.reverse()); }
   }
-  if (canCut && best) { lastCut = now; st.pushCutIn((best as { c: Parameters<typeof st.pushCutIn>[0] }).c); }
+  const pick = best as { score: number; c: Parameters<typeof st.pushCutIn>[0] } | null;
+  const big = !!pick && (pick.c.kind === 'sale' || (pick.c.amount ?? 0) >= 75 || pick.c.code === 'INJ');
+  if (canCut && pick && (film || big)) { lastCut = now; st.pushCutIn(pick.c); }
 }
 
 export interface SimSource { send(m: ToSim): void }
