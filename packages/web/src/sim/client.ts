@@ -15,6 +15,7 @@ const names = (lane: number) => {
 };
 const nameCache: Map<string, string>[] = [];
 const nm = (lane: number, id?: string) => (id ? nameCache[lane]?.get(id) ?? id : '');
+const ATTACK_CODE: Record<string, string> = { prompt_injection: 'INJ', fake_store: 'FAKE', refund_abuse: 'RFND', card_testing: 'CARD', impersonation: 'SPOOF', fraud_ring: 'RING' };
 const money = (n: number) => `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 const RULE_LABEL: Record<string, string> = {
   requirePassport: 'passport check', verifySignatures: 'signature check', enforceMandate: 'owner mandate', shipLock: 'ship-to lock',
@@ -27,6 +28,7 @@ let lastCut = 0;
 const seenAttackers = new Set<string>();
 
 let feedBudget = 0, feedClock = 0;
+let traceBudget = 0, traceClock = 0;
 function narrate(lane: number, events: SimEvent[], focusLane: number) {
   const st = useStore.getState();
   const feed: (Parameters<typeof st.pushFeed>[0][number] & { p?: number })[] = [];
@@ -34,16 +36,21 @@ function narrate(lane: number, events: SimEvent[], focusLane: number) {
   const canCut = lane === focusLane && now - lastCut > 2600 && st.cutins.length < 2;
   let best: { score: number; c: Parameters<typeof st.pushCutIn>[0] } | null = null;
   const consider = (score: number, c: Parameters<typeof st.pushCutIn>[0]) => { if (!best || score > best.score) best = { score, c }; };
+  // the gate's own decisions, printed like a terminal: every attack line, plus a sample of honest traffic
+  const trace: Parameters<typeof st.pushTrace>[0] = [];
+  let allow: Parameters<typeof st.pushTrace>[0][number] | null = null;
+  const cash = (n: number) => `$${n.toFixed(2)}`.padStart(8);
 
   for (const e of events) {
     switch (e.type) {
       case 'inject':
         feed.push({ t: e.t, lane, tone: 'attack', text: `${nm(lane, e.attacker)} planted agent instructions in a listing at ${nm(lane, e.merchant)}` });
-        if (!seenAttackers.has(`${lane}:${e.attacker}`)) { seenAttackers.add(`${lane}:${e.attacker}`); consider(5, { kind: 'attack', lane, kanji: '侵入', title: 'PROMPT INJECTION', who: nm(lane, e.attacker), line: `“${e.text.slice(0, 90)}${e.text.length > 90 ? '…' : ''}”`, sub: `hidden in a listing at ${nm(lane, e.merchant)}` }); }
+        trace.push({ t: e.t, lane, verdict: 'INJECT', text: `${nm(lane, e.attacker)} → ${nm(lane, e.merchant)}`, note: 'listing poisoned' });
+        if (!seenAttackers.has(`${lane}:${e.attacker}`)) { seenAttackers.add(`${lane}:${e.attacker}`); consider(5, { kind: 'attack', lane, tag: 'INTRUSION DETECTED', code: 'INJ', title: 'PROMPT INJECTION', who: nm(lane, e.attacker), line: `“${e.text.slice(0, 90)}${e.text.length > 90 ? '…' : ''}”`, sub: `hidden in a listing at ${nm(lane, e.merchant)}` }); }
         break;
       case 'attack':
         feed.push({ t: e.t, lane, tone: 'attack', text: `${nm(lane, e.attacker)} — ${e.note}` });
-        consider(4, { kind: 'attack', lane, kanji: '偽装', title: ATTACK_LABEL[e.kind].toUpperCase(), who: nm(lane, e.attacker), line: e.note });
+        consider(4, { kind: 'attack', lane, tag: 'INTRUSION DETECTED', code: ATTACK_CODE[e.kind], title: ATTACK_LABEL[e.kind].toUpperCase(), who: nm(lane, e.attacker), line: e.note });
         break;
       case 'store_open':
         if (!e.honest) feed.push({ t: e.t, lane, tone: 'attack', text: `A new store “${e.name}” opened in the city` });
@@ -58,29 +65,38 @@ function narrate(lane: number, events: SimEvent[], focusLane: number) {
       case 'order': {
         const tr = e.truth;
         const firstRule = e.hits.find((h) => h.action === e.decision)?.rule;
+        const who = tr.malicious ? nm(lane, tr.attacker ?? e.buyer) : nm(lane, e.buyer);
+        const path = `${cash(tr.malicious && tr.harm > 0 ? tr.harm : e.amount)}  ${who} → ${nm(lane, e.merchant)}`;
+        if (e.duplicateCharge) trace.push({ t: e.t, lane, verdict: 'DUP×2', text: path, note: 'no PayPal-Request-Id' });
+        else if (tr.malicious && e.outcome === 'completed') trace.push({ t: e.t, lane, verdict: 'GRANT', text: path, note: ATTACK_CODE[tr.attack!] });
+        else if (tr.malicious && (e.outcome === 'blocked' || e.outcome === 'abandoned')) trace.push({ t: e.t, lane, verdict: 'DENY', text: path, note: ruleName(firstRule) });
+        else if (e.outcome === 'escrowed') trace.push({ t: e.t, lane, verdict: 'HOLD', text: path, note: 'escrow' });
+        else if (!tr.malicious && e.outcome === 'blocked') trace.push({ t: e.t, lane, verdict: 'FALSE+', text: path, note: ruleName(firstRule) });
+        else if (e.outcome === 'completed') allow = { t: e.t, lane, verdict: 'ALLOW', text: path, note: 'captured' };
         if (e.duplicateCharge) {
           feed.push({ t: e.t, lane, tone: 'bad', text: `Double charge on ${nm(lane, e.buyer)}: retry without PayPal-Request-Id` });
-          consider(6, { kind: 'double', lane, kanji: '二重請求', title: 'DOUBLE CHARGE', amount: e.amount, line: `${nm(lane, e.buyer)} charged twice after a timeout`, sub: 'retried without a PayPal-Request-Id' });
+          consider(6, { kind: 'double', lane, tag: 'DUPLICATE TXN', code: '×2', title: 'DOUBLE CHARGE', amount: e.amount, line: `${nm(lane, e.buyer)} charged twice after a timeout`, sub: 'retried without a PayPal-Request-Id' });
         }
         if (tr.malicious && tr.harm > 0) {
           if (e.outcome === 'completed') {
             if (tr.harm >= 40) feed.push({ t: e.t, lane, tone: 'bad', text: `BREACH ${money(tr.harm)} — ${ATTACK_LABEL[tr.attack!]} by ${nm(lane, tr.attacker)} at ${nm(lane, e.merchant)}` });
-            consider(tr.harm > 120 ? 9 : 3, { kind: 'breach', lane, kanji: '突破', title: 'BREACH', amount: tr.harm, who: nm(lane, tr.attacker), line: `${ATTACK_LABEL[tr.attack!]} got through at ${nm(lane, e.merchant)}`, sub: tr.victim ? `victim: ${nm(lane, tr.victim)}` : undefined });
+            consider(tr.harm > 120 ? 9 : 3, { kind: 'breach', lane, tag: 'ACCESS GRANTED', code: '201', title: 'BREACH', amount: tr.harm, who: nm(lane, tr.attacker), line: `${ATTACK_LABEL[tr.attack!]} got through at ${nm(lane, e.merchant)}`, sub: tr.victim ? `victim: ${nm(lane, tr.victim)}` : undefined });
           } else if (e.outcome === 'blocked' || e.outcome === 'abandoned') {
             if (tr.harm >= 60) feed.push({ t: e.t, lane, tone: 'good', text: `Stopped ${money(tr.harm)} ${ATTACK_LABEL[tr.attack!]} — ${ruleName(firstRule)}` });
             if (tr.attack === 'impersonation' && e.hits.some((h) => h.reason.includes('replayed'))) {
-              consider(8, { kind: 'replay', lane, kanji: '再送', title: 'REPLAY CAUGHT', amount: tr.harm, who: nm(lane, tr.attacker), line: 'a stolen signed request was replayed', sub: 'Web Bot Auth nonce already used: rejected' });
-            } else consider(tr.harm > 150 ? 7 : 2, { kind: 'blocked', lane, kanji: '阻止', title: 'BLOCKED', amount: tr.harm, who: nm(lane, tr.attacker), line: `${ATTACK_LABEL[tr.attack!]} stopped by ${ruleName(firstRule)}`, sub: e.hits.find((h) => h.rule === firstRule)?.reason });
+              consider(8, { kind: 'replay', lane, tag: 'REPLAY REJECTED', code: '401', title: 'REPLAY CAUGHT', amount: tr.harm, who: nm(lane, tr.attacker), line: 'a stolen signed request was replayed', sub: 'Web Bot Auth nonce already used: rejected' });
+            } else consider(tr.harm > 150 ? 7 : 2, { kind: 'blocked', lane, tag: 'ACCESS DENIED', code: '403', title: 'BLOCKED', amount: tr.harm, who: nm(lane, tr.attacker), line: `${ATTACK_LABEL[tr.attack!]} stopped by ${ruleName(firstRule)}`, sub: e.hits.find((h) => h.rule === firstRule)?.reason });
           } else if (e.outcome === 'escrowed') {
-            consider(2, { kind: 'escrow', lane, kanji: '保留', title: 'FUNDS HELD', amount: e.amount, line: `payment to ${nm(lane, e.merchant)} authorised, not captured`, sub: 'captured only when a carrier scans the parcel' });
+            consider(2, { kind: 'escrow', lane, tag: 'FUNDS ON HOLD', code: '202', title: 'FUNDS HELD', amount: e.amount, line: `payment to ${nm(lane, e.merchant)} authorised, not captured`, sub: 'captured only when a carrier scans the parcel' });
           }
         } else if (!tr.malicious && e.outcome === 'blocked') {
           if (e.amount > 60) feed.push({ t: e.t, lane, tone: 'warn', text: `False positive: honest ${nm(lane, e.buyer)} blocked by ${ruleName(firstRule)} (${money(e.amount)})` });
-          consider(e.amount > 90 ? 6 : 1, { kind: 'falsepos', lane, kanji: '誤検知', title: 'FALSE POSITIVE', amount: e.amount, who: nm(lane, e.buyer), line: `an honest shopper was turned away by ${ruleName(firstRule)}`, sub: e.hits[0]?.reason });
+          consider(e.amount > 90 ? 6 : 1, { kind: 'falsepos', lane, tag: 'FALSE POSITIVE', code: '403', title: 'FALSE POSITIVE', amount: e.amount, who: nm(lane, e.buyer), line: `an honest shopper was turned away by ${ruleName(firstRule)}`, sub: e.hits[0]?.reason });
         }
         break;
       }
       case 'refund':
+        if (e.truth.malicious) trace.push({ t: e.t, lane, verdict: e.approved ? 'GRANT' : 'DENY', text: `${cash(e.amount)}  refund claim`, note: e.approved ? 'RFND paid out' : 'carrier says delivered' });
         if (e.truth.malicious) feed.push({ t: e.t, lane, tone: e.approved ? 'bad' : 'good', text: `${e.approved ? 'Paid out' : 'Denied'} a false refund claim of ${money(e.amount)} (${e.reason})` });
         break;
     }
@@ -94,6 +110,13 @@ function narrate(lane: number, events: SimEvent[], focusLane: number) {
     const pick = feed.slice(-take);
     feedBudget -= pick.length;
     st.pushFeed(pick);
+  }
+  if (st.cinema.on && lane === focusLane) {
+    const now3 = performance.now();
+    traceBudget = Math.min(4, traceBudget + (now3 - traceClock) / 260);
+    traceClock = now3;
+    const lines = [...trace, ...(allow ? [allow] : [])].slice(0, Math.floor(traceBudget));
+    if (lines.length) { traceBudget -= lines.length; st.pushTrace(lines.reverse()); }
   }
   if (canCut && best) { lastCut = now; st.pushCutIn((best as { c: Parameters<typeof st.pushCutIn>[0] }).c); }
 }
@@ -171,7 +194,7 @@ class Client {
         patch.history = [...hist, { t: m.t, safety: metrics.m.safety, access: metrics.m.access, net: metrics.m.netValue }];
       }
       st.setLane(m.lane, patch);
-      if (m.sale && !this.lastSale[m.lane] && m.lane === this.focusLane) st.pushCutIn({ kind: 'sale', lane: m.lane, kanji: 'タイムセール', title: 'FLASH SALE', line: 'every agent in the city starts buying at once', sub: 'velocity rules are about to be tested' });
+      if (m.sale && !this.lastSale[m.lane] && m.lane === this.focusLane) st.pushCutIn({ kind: 'sale', lane: m.lane, tag: 'FLASH SALE', code: '%', title: 'FLASH SALE', line: 'every agent in the city starts buying at once', sub: 'velocity rules are about to be tested' });
       this.lastSale[m.lane] = m.sale;
       narrate(m.lane, m.events, this.focusLane);
     } else if (m.type === 'done') {

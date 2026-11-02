@@ -97,9 +97,9 @@ class Director {
       this.speed(4);
       await sleep(400);
       client.send({ cmd: 'play' });
-      await this.card(take, { kanji: '砂箱都市', title: 'SANDBOX CITY', sub: 'AI shoppers, AI stores and AI attackers, all paying on PayPal rails', big: true }, 4200);
+      await this.card(take, { cmd: 'ssh gate@sandbox.city --rails=paypal', title: 'SANDBOX CITY', sub: 'AI shoppers, AI stores and AI attackers, all paying on PayPal rails', big: true }, 4200);
       this.patch({ act: 'I · WILD WEST' });
-      await this.card(take, { kanji: '無法地帯', act: 'ACT I', title: 'THE WILD WEST', sub: 'one day in the city with no rules at the gate' }, 2800);
+      await this.card(take, { cmd: 'gate --rules=none --day=1', act: 'ACT I', title: 'THE WILD WEST', sub: 'one day in the city with no rules at the gate' }, 3600);
       this.baseTps = FILM_TPS; this.speed(this.baseTps);
       await this.until(take, () => this.done());
       if (!this.alive(take)) return;
@@ -107,7 +107,7 @@ class Director {
       const m1 = this.st.lanes[0].metrics as Metrics;
       await sleep(600);
       await this.card(take, {
-        kanji: '被害', act: 'END OF DAY', title: `${money(m1.fraud.leaked + m1.chaos.duplicateValue)} LOST`,
+        cmd: 'ledger --audit --day=1', act: 'END OF DAY', title: `${money(m1.fraud.leaked + m1.chaos.duplicateValue)} LOST`,
         sub: `${money(m1.fraud.leaked)} stolen · ${m1.chaos.duplicateCharges} customers charged twice · ${(m1.safety * 100).toFixed(0)}% of fraud stopped`,
       }, 4200);
     } else if (from === 2) await this.silentDay(take, [PRESETS.open]);
@@ -115,7 +115,7 @@ class Director {
     if (from <= 2) {
       // ── act II
       this.patch({ act: 'II · AUTO-TUNE' });
-      await this.card(take, { kanji: '最適化', act: 'ACT II', title: 'THE MACHINE LEARNS', sub: 'rulebooks evolve on two days this city has never seen' }, 2800);
+      await this.card(take, { cmd: 'tune --search=evolve --holdout=today', act: 'ACT II', title: 'THE MACHINE LEARNS', sub: 'rulebooks evolve on two days this city has never seen' }, 3600);
       if (!this.alive(take)) return;
       startTune('safe', { generations: 4, children: 8 });
       await this.until(take, () => !this.st.tune.running);
@@ -134,7 +134,7 @@ class Director {
       this.speed(4);
       await sleep(400);
       client.send({ cmd: 'play' });
-      await this.card(take, { kanji: '決戦', act: 'ACT III', title: 'SAME DAY. TWO RULEBOOKS.', sub: `Wild West on the left · ${tuned.name} on the right` }, 2800);
+      await this.card(take, { cmd: 'fork --left=wild-west --right=lab-tuned', act: 'ACT III', title: 'SAME DAY. TWO RULEBOOKS.', sub: `Wild West on the left · ${tuned.name} on the right` }, 3600);
       this.baseTps = FILM_TPS; this.speed(this.baseTps);
       await this.until(take, () => this.done());
       if (!this.alive(take)) return;
@@ -146,7 +146,7 @@ class Director {
     if (!this.alive(take)) return;
     this.patch({ act: 'IV · THE RECKONING' });
     const [a, b] = this.st.lanes.map((l) => l.metrics as Metrics);
-    await this.card(take, { kanji: '清算', act: 'ACT IV', title: 'THE RECKONING', sub: `${money(b.netValue - a.netValue)} more value for honest people, on a day the rulebook never trained on` }, 3600);
+    await this.card(take, { cmd: 'reconcile --whatif --all-rulebooks', act: 'ACT IV', title: 'THE RECKONING', sub: `${money(b.netValue - a.netValue)} more value for honest people, on a day the rulebook never trained on` }, 3600);
     await this.report(take);
     await this.endCard(take);
   }
@@ -161,7 +161,7 @@ class Director {
     if (this.alive(take)) useStore.setState({ showReport: false });
   }
   private async endCard(take: number) {
-    await this.card(take, { kanji: '砂箱都市', title: 'SANDBOX CITY', sub: 'crash-test every rule before a single real cent moves', big: true }, 6000);
+    await this.card(take, { cmd: 'exit 0', title: 'SANDBOX CITY', sub: 'crash-test every rule before a single real cent moves', big: true }, 6000);
     if (this.alive(take)) this.patch({ rolling: false, act: '' });
   }
 
@@ -174,7 +174,7 @@ class Director {
     await sleep(400);
     client.send({ cmd: 'play' });
     this.patch({ act: 'V · THE ATTACKERS ADAPT' });
-    await this.card(take, { kanji: '反撃', act: 'ACT V', title: 'THE ATTACKERS ADAPT', sub: 'same number of attacks, tactics evolved against Lab-Tuned' }, 3000);
+    await this.card(take, { cmd: 'forge --target=lab-tuned --budget=fixed', act: 'ACT V', title: 'THE ATTACKERS ADAPT', sub: 'same number of attacks, tactics evolved against Lab-Tuned' }, 3800);
     if (!this.alive(take)) return;
     startForge(target, { generations: 4, children: 6 });
     await this.until(take, () => !this.st.forge.running);
@@ -183,7 +183,7 @@ class Director {
     useStore.setState({ forge: { ...f, open: false } });
     if (!this.alive(take) || !f.best || !f.baseline) return;
     await this.card(take, {
-      kanji: '危機', act: 'RED TEAM', title: `${money(f.best.stolen)} STOLEN A DAY`,
+      cmd: 'forge --report', act: 'RED TEAM', title: `${money(f.best.stolen)} STOLEN A DAY`,
       sub: `Lab-Tuned held stock attackers to ${money(f.baseline.stolen)}. The forged ones take ×${(f.best.stolen / Math.max(1, f.baseline.stolen)).toFixed(1)}.`,
     }, 4000);
 
@@ -191,7 +191,7 @@ class Director {
     useStore.setState({ genomes: f.best.genomes });
     client.start([target]);
     client.send({ cmd: 'play' });
-    await this.card(take, { kanji: '再調整', act: 'BLUE TEAM', title: 'RE-TUNE AGAINST THEM', sub: 'the rulebook search runs again, on three days full of forged attackers' }, 2800);
+    await this.card(take, { cmd: 'tune --against=forged --days=3', act: 'BLUE TEAM', title: 'RE-TUNE AGAINST THEM', sub: 'the rulebook search runs again, on three days full of forged attackers' }, 3600);
     if (!this.alive(take)) return;
     // three training days and an 80% floor: chosen on held-out days, where it beat Lab-Tuned on both value and theft
     startTune('safe', { generations: 4, children: 8, trainDays: 3, minSafety: 0.8 });
@@ -206,13 +206,13 @@ class Director {
     this.speed(4);
     await sleep(400);
     client.send({ cmd: 'play' });
-    await this.card(take, { kanji: '再戦', act: 'REMATCH', title: 'FORGED ATTACKERS. TWO RULEBOOKS.', sub: 'Lab-Tuned on the left · Hardened on the right' }, 2800);
+    await this.card(take, { cmd: 'fork --left=lab-tuned --right=hardened', act: 'REMATCH', title: 'FORGED ATTACKERS. TWO RULEBOOKS.', sub: 'Lab-Tuned on the left · Hardened on the right' }, 3600);
     this.baseTps = FILM_TPS; this.speed(this.baseTps);
     await this.until(take, () => this.done());
     if (!this.alive(take)) return;
     await sleep(800);
     const [a, b] = this.st.lanes.map((l) => l.metrics as Metrics);
-    await this.card(take, { kanji: '防御', act: 'RESULT', title: b.netValue >= a.netValue ? `${money(b.netValue - a.netValue)} WON BACK` : `${money(a.netValue - b.netValue)} SHORT`, sub: `stolen ${money(a.fraud.leaked)} → ${money(b.fraud.leaked)} on a day neither rulebook trained on` }, 4200);
+    await this.card(take, { cmd: 'diff lab-tuned hardened', act: 'RESULT', title: b.netValue >= a.netValue ? `${money(b.netValue - a.netValue)} WON BACK` : `${money(a.netValue - b.netValue)} SHORT`, sub: `stolen ${money(a.fraud.leaked)} → ${money(b.fraud.leaked)} on a day neither rulebook trained on` }, 4200);
     await this.report(take);
     await this.endCard(take);
   }

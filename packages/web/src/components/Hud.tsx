@@ -1,8 +1,8 @@
 import { ATTACK_KINDS, Metrics } from '@sandbox-city/core';
 import { useStore } from '../store';
-import { ATTACK_KANJI, ATTACK_SHORT, LANE_NAMES, money, pct } from './meta';
+import { ATTACK_CODE, ATTACK_SHORT, LANE_NAMES, money, pct } from './meta';
 
-function Gauge({ value, label, sub, color, jp }: { value: number; label: string; sub: string; color: string; jp: string }) {
+function Gauge({ value, label, sub, color, code }: { value: number; label: string; sub: string; color: string; code: string }) {
   const r = 46, c = 2 * Math.PI * r, v = Math.max(0, Math.min(1, value));
   return (
     <div className="gauge" style={{ ['--c' as string]: color }}>
@@ -13,7 +13,7 @@ function Gauge({ value, label, sub, color, jp }: { value: number; label: string;
       </svg>
       <div className="g-center">
         <div className="g-num">{(v * 100).toFixed(1)}<small>%</small></div>
-        <div className="g-jp">{jp}</div>
+        <div className="g-code">{code}</div>
       </div>
       <div className="g-label">{label}</div>
       <div className="g-sub">{sub}</div>
@@ -36,7 +36,7 @@ function AttackBoard({ m }: { m: Metrics }) {
         const leakedW = (Math.max(0, t.leaked) / max) * 100, prevW = (t.prevented / max) * 100;
         return (
           <div className="board-row" key={k}>
-            <span className="kanji">{ATTACK_KANJI[k]}</span>
+            <span className="glyph">{ATTACK_CODE[k]}</span>
             <span className="bname">{ATTACK_SHORT[k]}</span>
             <span className="bar"><i className="prev" style={{ width: `${prevW}%` }} /><i className="leak" style={{ width: `${leakedW}%` }} /></span>
             <span className={`bval ${t.leaked > 0.5 ? 'bad' : ''}`}>{t.attempted ? money(Math.max(0, t.leaked)) : '—'}</span>
@@ -58,8 +58,8 @@ function LaneHud({ lane }: { lane: number }) {
     <div className="hud-lane">
       {multi && <div className={`hud-lane-title lane-${lane}`}><b>{LANE_NAMES[lane]}</b> {policy?.name}</div>}
       <div className="gauges">
-        <Gauge value={m.safety} label="FRAUD STOPPED" sub={`${money(m.fraud.prevented)} of ${money(m.fraud.prevented + m.fraud.leaked)}`} color="#4cf2ff" jp="安全" />
-        <Gauge value={m.access} label="HONEST GET THROUGH" sub={`${m.honest.completed.toLocaleString()} of ${m.honest.attempts.toLocaleString()} buys`} color="#7dff9a" jp="通行" />
+        <Gauge value={m.safety} label="FRAUD STOPPED" sub={`${money(m.fraud.prevented)} of ${money(m.fraud.prevented + m.fraud.leaked)}`} color="#4cf2ff" code="SAFE" />
+        <Gauge value={m.access} label="HONEST GET THROUGH" sub={`${m.honest.completed.toLocaleString()} of ${m.honest.attempts.toLocaleString()} buys`} color="#7dff9a" code="PASS" />
       </div>
       <div className="sparks"><Spark data={L.history} k="safety" color="#4cf2ff" /><Spark data={L.history} k="access" color="#7dff9a" /></div>
       <div className="kpis">
@@ -92,7 +92,7 @@ export function Hud() {
   const n = useStore((s) => s.lanes.length);
   return (
     <aside className="hud panel">
-      <div className="panel-title"><span>METRICS</span><em>計測</em></div>
+      <div className="panel-title"><span>METRICS</span><em>/harm/metrics</em></div>
       {n > 1 && <Delta />}
       {Array.from({ length: n }, (_, i) => <LaneHud key={i} lane={i} />)}
     </aside>

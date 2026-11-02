@@ -65,7 +65,7 @@ export function AutoTune() {
     <div className="report-wrap" onClick={close}>
       <div className="tune panel" onClick={(e) => e.stopPropagation()}>
         <div className="report-head">
-          <span className="kanji">最適化</span>
+          <span className="glyph">./tune</span>
           <div>
             <h2>AUTO-TUNE</h2>
             <p>Evolving rulebooks on {['', 'one other day', 'two other days', 'three other days', 'four other days', 'five other days'][tune.trainDays ?? 2]}{forged ? ', against the forged attackers' : ''}. The day on screen stays unseen, so the replay is a fair test.</p>

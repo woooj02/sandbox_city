@@ -10,7 +10,7 @@ import { ATTACK_KINDS } from './types';
 import { CryptoMode, deriveKey, KeyPair, signRequest, SignatureVerifier } from './kya';
 import { ChaosRails, PayPalTwin, Rails, RailsError, CardRef } from './rails';
 import { Policy, evaluateOrder, evaluateRefund, AgentView, MerchantView } from './policy';
-import { CATEGORIES, DISTRICTS, DROPS, INJECTIONS, YOKAI, agentName, lookalike, makeMerchant, placeIn } from './gen';
+import { CATEGORIES, DISTRICTS, DROPS, HANDLES, INJECTIONS, agentName, lookalike, makeMerchant, placeIn } from './gen';
 import { defaultGenome } from './genome';
 
 export interface WorldConfig {
@@ -197,7 +197,7 @@ export class World {
     const genome = { ...defaultGenome(kind), ...(this.cfg.genomes?.[kind] ?? {}) };
     const d = r.pick([3, 5, 4]);
     const a: Attacker = {
-      id, name: `${YOKAI[n % YOKAI.length]}-${String(n).padStart(2, '0')}`, kind, genome, agents: [], phase: 'recon',
+      id, name: `${HANDLES[n % HANDLES.length]}-${String(n).padStart(2, '0')}`, kind, genome, agents: [], phase: 'recon',
       nextActAt: r.int(10, 180), stolenCards: kind === 'card_testing' ? 30 : kind === 'fraud_ring' ? 24 : 0, ...placeIn(r, d, 0.06),
     };
     const sock = (passport: boolean, hist = 0) => {

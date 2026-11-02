@@ -7,7 +7,7 @@ export function PayPalConsole() {
   if (!live) return null;
   return (
     <div className="ppc">
-      <div className="panel-title"><span>PAYPAL WIRE</span><em>通信</em></div>
+      <div className="panel-title"><span>PAYPAL WIRE</span><em>/paypal/api</em></div>
       <ul>
         {calls.slice(0, 4).map((c) => (
           <li key={c.id} className={c.status >= 500 ? 'err' : c.status >= 400 ? 'warn' : 'ok'}>

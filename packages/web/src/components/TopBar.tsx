@@ -22,7 +22,7 @@ export function TopBar() {
         <div className="logo-mark">⌬</div>
         <div>
           <div className="logo-title glitch" data-text="SANDBOX CITY">SANDBOX CITY</div>
-          <div className="logo-sub">サンドボックス・シティ · crash-test lab for AI commerce</div>
+          <div className="logo-sub">crash-test lab for AI commerce</div>
         </div>
       </div>
       <div className={`rail-badge ${paypal}`} title={paypal === 'sandbox' ? 'Lane A moves real money on the PayPal sandbox' : 'All payments run on the in-browser PayPal twin'}>

@@ -25,7 +25,9 @@ export interface RendererOptions {
 
 export interface Moment { kind: 'breach' | 'inject' | 'vanish' | 'double' | 'blocked' | 'hijack'; weight: number }
 
-interface Shot { x: number; y: number; z: number; until: number; weight: number }
+const LOCK_COLOR: Record<Moment['kind'], number> = { breach: 0xff2a4a, inject: 0xff2e88, hijack: 0xff2e88, vanish: 0xff2e88, double: 0xffb020, blocked: 0x4cf2ff };
+const LOCK_LABEL: Record<Moment['kind'], string> = { breach: 'BREACH', inject: 'INJECTION', hijack: 'HIJACKED AGENT', vanish: 'EXIT SCAM', double: 'DUPLICATE TXN', blocked: 'DENIED' };
+interface Shot { x: number; y: number; z: number; until: number; weight: number; kind?: Moment['kind']; at?: number }
 
 export class CityRenderer {
   app = new Application();
@@ -61,6 +63,9 @@ export class CityRenderer {
   private idleShot: Shot | null = null;
   private slowUntil = 0; private slowK = 1;
   private punch = 0;
+  // target lock: corner brackets that snap onto whatever the camera pushed in on
+  private lock = new Graphics();
+  private lockText = new Text({ text: '', style: new TextStyle({ fontFamily: 'JetBrains Mono', fontSize: 13, fontWeight: '700', fill: 0xffffff, letterSpacing: 2, stroke: { color: 0x05060f, width: 3 } }) });
 
   constructor(private host: HTMLElement, private opts: RendererOptions) {}
 
@@ -73,7 +78,7 @@ export class CityRenderer {
     this.app.stage.addChild(this.root);
     this.root.addChild(this.world);
     for (const l of Object.values(this.layers)) this.world.addChild(l);
-    this.world.addChild(this.night);
+    this.world.addChild(this.night, this.lock, this.lockText);
     this.layers.fx.blendMode = 'add';
     this.layers.people.blendMode = 'add';
 
@@ -107,7 +112,7 @@ export class CityRenderer {
     const busy = this.shot && T < this.shot.until;
     if (busy && weight <= this.shot!.weight) return false;
     if (!busy && T - this.lastShot < 2.4 && weight < 8) return false;
-    this.shot = { x, y, z, until: T + hold, weight };
+    this.shot = { x, y, z, until: T + hold, weight, kind, at: T };
     this.lastShot = T;
     this.punch = Math.min(0.06, 0.012 * weight);
     if (kind) this.opts.onMoment?.({ kind, weight });
@@ -163,10 +168,10 @@ export class CityRenderer {
       const label = new Text({ text: d.name.toUpperCase(), style: new TextStyle({ fontFamily: 'Chakra Petch', fontSize: 15, fontWeight: '700', fill: col, letterSpacing: 4 }) });
       label.alpha = 0.85;
       label.position.set(cx - rw * 0.52, cy - rh * 0.98);
-      const jp = new Text({ text: d.jp, style: new TextStyle({ fontFamily: 'Dela Gothic One', fontSize: 30, fill: col }) });
-      jp.alpha = 0.16;
-      jp.position.set(cx - rw * 0.55, cy - rh * 0.86);
-      this.layers.labels.addChild(label, jp);
+      const code = new Text({ text: `// ${d.code}`, style: new TextStyle({ fontFamily: 'JetBrains Mono', fontSize: 11, fontWeight: '700', fill: col, letterSpacing: 3 }) });
+      code.alpha = 0.4;
+      code.position.set(cx - rw * 0.52, cy - rh * 0.98 + 20);
+      this.layers.labels.addChild(label, code);
     });
   }
 
@@ -291,7 +296,7 @@ export class CityRenderer {
         a.flash = 1; b.infected = 1;
         this.bolt(a.x, a.y, b.x, b.y, C.injection);
         this.focus((a.x + b.x) / 2, (a.y + b.y) / 2, 1.55, 2.6, 5, 'inject');
-        this.floatText(b.x, b.y - 22, '注入', C.injection, 16, 'Dela Gothic One');
+        this.floatText(b.x, b.y - 22, 'INJECTED', C.injection, 14, 'JetBrains Mono');
         break;
       }
       case 'hijack': {
@@ -307,7 +312,7 @@ export class CityRenderer {
         b.dying = this.time;
         this.burst(b.x, b.y, C.attack, 0.8, 18);
         if (this.focus(b.x, b.y, 2.3, 2.8, 7, 'vanish')) this.slowmo(1.1, 0.3);
-        this.floatText(b.x, b.y - 24, '消失 VANISHED', C.attack, 13);
+        this.floatText(b.x, b.y - 24, 'STORE OFFLINE', C.attack, 13);
         break;
       }
       case 'attack': {
@@ -334,7 +339,7 @@ export class CityRenderer {
     const mal = e.truth.malicious && e.truth.harm > 0;
     const x = b.x, y = b.y;
     b.pulse = 1;
-    if (e.duplicateCharge) { this.ringFx(x, y, C.falsepos, 0.1, 0.8, 0.8); this.floatText(x, y - 26, '二重 ×2 CHARGE', C.falsepos, 13); this.kick(5); this.focus(x, y, 2.2, 2.2, 6, 'double'); }
+    if (e.duplicateCharge) { this.ringFx(x, y, C.falsepos, 0.1, 0.8, 0.8); this.floatText(x, y - 26, '×2 CHARGED', C.falsepos, 13); this.kick(5); this.focus(x, y, 2.2, 2.2, 6, 'double'); }
     switch (e.outcome) {
       case 'completed':
         if (mal) {
@@ -361,7 +366,7 @@ export class CityRenderer {
           this.layers.fx.addChild(hx);
           this.fx.push({ s: hx, age: 0, dur: 0.7, kind: 'flash', s0: 0.12, s1: 0.55, a0: 1, rot: 0.6 });
           this.ringFx(x, y, C.blocked, 0.08, 0.9, 0.6);
-          this.floatText(x, y - 20, e.outcome === 'abandoned' ? 'OWNER SAID NO' : '阻止 BLOCKED', C.blocked, e.truth.harm > 150 ? 15 : 11);
+          this.floatText(x, y - 20, e.outcome === 'abandoned' ? 'OWNER SAID NO' : 'ACCESS DENIED', C.blocked, e.truth.harm > 150 ? 15 : 11);
           if (e.truth.harm > 200) { this.kick(3); this.focus(x, y, 2.0, 1.8, 4, 'blocked'); }
         } else {
           const s = new Sprite(this.tex.cross); s.anchor.set(0.5); s.tint = e.outcome === 'blocked' ? C.falsepos : C.abandoned; s.position.set(x, y - 4);
@@ -491,11 +496,35 @@ export class CityRenderer {
     const cx = Math.max(hw, Math.min(W - hw, this.cam.x)), cy = Math.max(hh, Math.min(H - hh, this.cam.y));
     this.shake *= 0.86;
     const drift = this.cinema ? 0.5 : 1;
+    this.drawLock(z);
     this.world.scale.set(z);
     this.world.position.set(
       W / 2 - cx * z + Math.sin(T * 0.13) * 6 * drift + (Math.random() - 0.5) * this.shake,
       H / 2 - cy * z + Math.cos(T * 0.11) * 4 * drift + (Math.random() - 0.5) * this.shake,
     );
+  }
+
+  private drawLock(z: number) {
+    const g = this.lock, s = this.shot, T = this.time;
+    g.clear();
+    if (!this.cinema || !s?.kind || T > s.until) { this.lockText.visible = false; return; }
+    const col = LOCK_COLOR[s.kind];
+    const u = Math.min(1, (T - (s.at ?? T)) / 0.32), e = 1 - (1 - u) ** 3;
+    const out = Math.max(0, 1 - (s.until - T) / 0.3);
+    const r = (150 - 112 * e) / z, L = 12 / z, w = 2 / z;
+    const a = (u < 1 ? (Math.floor(T * 30) % 2 ? 1 : 0.35) : 1) * (1 - out);
+    for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      const x = s.x + dx * r, y = s.y + dy * r;
+      g.moveTo(x, y - dy * L).lineTo(x, y).lineTo(x - dx * L, y);
+    }
+    g.stroke({ width: w, color: col, alpha: a });
+    g.moveTo(s.x - 5 / z, s.y).lineTo(s.x + 5 / z, s.y).moveTo(s.x, s.y - 5 / z).lineTo(s.x, s.y + 5 / z).stroke({ width: w * 0.6, color: col, alpha: a * 0.8 });
+    this.lockText.visible = true;
+    this.lockText.text = `LOCK ${LOCK_LABEL[s.kind]}  ${s.x.toFixed(0).padStart(4, '0')}:${s.y.toFixed(0).padStart(4, '0')}`;
+    this.lockText.style.fill = col;
+    this.lockText.alpha = a;
+    this.lockText.scale.set(1 / z);
+    this.lockText.position.set(s.x - r, s.y + r + 4 / z);
   }
 
   // ─────────────── frame loop ───────────────

@@ -50,7 +50,7 @@ Presets range from **Wild West** (no rules) through **Passport Theater**, **Know
 
 ## Features
 
-- **Live city.** A WebGL map of six districts. Every payment flies as a comet from buyer to store. Breaches, blocks, double charges and vanishing stores trigger anime-style cut-ins.
+- **Live city.** A WebGL map of six districts. Every payment flies as a comet from buyer to store. Breaches, blocks, double charges and vanishing stores trigger terminal-style alerts: ACCESS GRANTED when an attack gets through, ACCESS DENIED when the gate stops it.
 - **X-ray.** Reveals which agents, stores and listings are malicious. The gate never sees this.
 - **Fork.** Runs the same day, with the same seed, under two rulebooks side by side.
 - **What-if.** At the end of the day, the same day is replayed under every other rulebook. You see what each would have saved, or cost.
@@ -58,7 +58,9 @@ Presets range from **Wild West** (no rules) through **Passport Theater**, **Know
 - **Attack forge.** The red team. Attack tactics evolve against your rulebook on two other days. Each attack family keeps whichever variant got the most money past the gate. Attack frequency is a fixed budget, so the forge finds smarter attacks, not more of them. You can unleash the forged attackers on the city, or re-tune the rulebook against them.
 - **Ledger.** Every order, refund and PayPal call, in AG Grid.
 - **Cinema mode.** A directed, letterboxed cut of the whole story for presenting:
-  - the camera pushes in on breaches, injections and double charges
+  - the camera pushes in and locks a reticle on breaches, injections and double charges
+  - every chapter opens with the command that runs it, typed out on a terminal
+  - a live `gate.trace` prints the gate's real decisions as they happen
   - the sim slows down on the biggest moments
   - chapter cards play between acts
   - five acts: the Wild West, auto-tune, the race, the reckoning, and the attackers adapting (forge, re-tune, rematch)

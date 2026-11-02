@@ -28,18 +28,80 @@ function Caption() {
   return <div className={`cine-caption tone-${line.tone}`} key={line.id}>{line.lane > 0 || useStore.getState().lanes.length > 1 ? <b className={`lane-${line.lane}`}>{LANE_NAMES[line.lane]}</b> : null}<span>{line.text}</span></div>;
 }
 
+/** Types a shell command out one keystroke at a time. */
+function Typed({ text, cps = 46, onDone }: { text: string; cps?: number; onDone?: () => void }) {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    setN(0);
+    const t0 = performance.now();
+    const iv = setInterval(() => {
+      const k = Math.min(text.length, Math.floor(((performance.now() - t0) / 1000) * cps));
+      setN(k);
+      if (k >= text.length) { clearInterval(iv); onDone?.(); }
+    }, 16);
+    return () => clearInterval(iv);
+  }, [text]);
+  return <>{text.slice(0, n)}</>;
+}
+
+const NOISE = 'ABCDEF0123456789#$%&@*+=/<>';
+/** Decrypts a line into place: scrambled glyphs settle left to right. */
+function Decode({ text, ms = 750 }: { text: string; ms?: number }) {
+  const [out, setOut] = useState(() => text.replace(/\S/g, '·'));
+  useEffect(() => {
+    const t0 = performance.now();
+    let raf = 0;
+    const step = () => {
+      const u = Math.min(1, (performance.now() - t0) / ms);
+      const fixed = Math.floor(u * text.length);
+      setOut(text.split('').map((ch, i) => (i < fixed || ch === ' ' ? ch : NOISE[(Math.random() * NOISE.length) | 0])).join(''));
+      if (u < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [text]);
+  return <>{out}</>;
+}
+
 function TitleCardView() {
   const c = useStore((s) => s.cinema.card);
+  const [typed, setTyped] = useState(false);
+  useEffect(() => setTyped(false), [c?.id]);
   if (!c) return null;
   return (
     <div className={`cine-card ${c.big ? 'big' : ''}`} key={c.id}>
-      <div className="cc-wipe" />
-      <div className="cc-kanji">{c.kanji.split('').map((ch, i) => <span key={i} style={{ animationDelay: `${0.08 + i * 0.11}s` }}>{ch}</span>)}</div>
-      <div className="cc-text">
-        {c.act && <div className="cc-act">{c.act}</div>}
-        <div className="cc-title">{c.title}</div>
-        {c.sub && <div className="cc-sub">{c.sub}</div>}
+      <div className="cc-grid" />
+      <div className="cc-sweep" />
+      <div className="cc-term">
+        <div className="cc-prompt"><span className="cc-host">root@sandbox-city</span><span className="cc-path">:~$</span> <Typed text={c.cmd} onDone={() => setTyped(true)} /><i className="cc-cursor" /></div>
+        {typed && (
+          <>
+            {c.act && <div className="cc-act">[ {c.act} ]</div>}
+            <div className="cc-title" data-text={c.title}><Decode text={c.title} /></div>
+            {c.sub && <div className="cc-sub">&gt; {c.sub}</div>}
+          </>
+        )}
       </div>
+    </div>
+  );
+}
+
+/** The gate's decision log, scrolling in the corner like a terminal in a heist film. */
+function Trace() {
+  const lines = useStore((s) => s.trace);
+  const card = useStore((s) => s.cinema.card);
+  const report = useStore((s) => s.showReport || s.tune.open || s.forge.open);
+  const multi = useStore((s) => s.lanes.length > 1);
+  // split screen has its own two-lane story; the trace belongs to single-lane shots
+  if (card || report || multi || !lines.length) return null;
+  return (
+    <div className="cine-trace">
+      <div className="ct-head">gate.trace · live decisions <i /></div>
+      {lines.slice(0, 7).reverse().map((l, i, all) => (
+        <div key={l.id} className={`ct-line v-${l.verdict.replace(/[^A-Z]/g, '')}`} style={{ opacity: 1 - (all.length - 1 - i) * 0.12 }}>
+          <span className="ct-t">{clock(l.t)}</span><b>{l.verdict.padEnd(6)}</b><span className="ct-x">{l.text}</span>{l.note && <em>{l.note}</em>}
+        </div>
+      ))}
     </div>
   );
 }
@@ -105,7 +167,7 @@ export function Cinema() {
       <div className="cine-vignette" />
       <div className="cine-grain" />
       <div className="cine-bar top">
-        <span className="cb-brand"><b>砂箱都市</b> SANDBOX CITY</span>
+        <span className="cb-brand"><i className="cb-rec" /><b>SANDBOX//CITY</b>gate.trace</span>
         <span className="cb-act">{act}</span>
         <span className="cb-right">
           <span className={`cb-rail ${paypal}`}><i />{paypal === 'sandbox' ? 'LIVE · PAYPAL SANDBOX' : 'PAYPAL TWIN'}</span>
@@ -113,6 +175,7 @@ export function Cinema() {
         </span>
       </div>
       <Caption />
+      <Trace />
       <TitleCardView />
       <div className="cine-bar bottom">
         <div className="cine-lanes">{Array.from({ length: lanes }, (_, i) => <LaneStrip key={i} lane={i} />)}</div>

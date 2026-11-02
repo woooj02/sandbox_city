@@ -24,7 +24,7 @@ export function Rulebook() {
 
   return (
     <aside className="rulebook panel">
-      <div className="panel-title"><span>RULEBOOK</span><em>規則</em></div>
+      <div className="panel-title"><span>RULEBOOK</span><em>/gate/rules</em></div>
       {multi && (
         <div className="seg lanes">
           {policies.map((p, i) => <button key={i} className={`${lane === i ? 'on' : ''} lane-${i}`} onClick={() => setEdit(i)}>{LANE_NAMES[i]} · {(draft ?? policies)[i].name}</button>)}

@@ -73,6 +73,7 @@ export function Ledger() {
   ], [multi]);
 
   useEffect(() => {
+    const CAP = 2500;
     let pending: Row[] = [];
     const seen = new Set<string>();
     const offW = bus.on('world', (w) => { for (const m of w.merchants) names.set(m.id, m.name); for (const s of w.shoppers) names.set(s.id, s.name); });
@@ -84,10 +85,12 @@ export function Ledger() {
     });
     const iv = setInterval(() => {
       if (!api.current || !pending.length) return;
-      const add = pending.reverse();
+      // a fast-forwarded day can queue more rows than the grid keeps: never add and remove the same row in one batch
+      const add = pending.reverse().slice(0, CAP);
       pending = [];
+      const keep = CAP - add.length;
+      const remove = rows.current.length > keep ? rows.current.splice(keep) : [];
       rows.current = [...add, ...rows.current];
-      const remove = rows.current.length > 2500 ? rows.current.splice(2500) : [];
       for (const r of remove) seen.delete(r.key);
       api.current.applyTransactionAsync({ add, addIndex: 0, remove });
     }, 250);
@@ -96,7 +99,7 @@ export function Ledger() {
 
   return (
     <section className="ledger panel">
-      <div className="panel-title"><span>LIVE LEDGER</span><em>台帳</em><small>every order and refund on the PayPal rails · what the gate decided · what was really going on</small></div>
+      <div className="panel-title"><span>LIVE LEDGER</span><em>/ledger/tx</em><small>every order and refund on the PayPal rails · what the gate decided · what was really going on</small></div>
       <div className="grid-wrap">
         <AgGridReact<Row>
           theme={theme}

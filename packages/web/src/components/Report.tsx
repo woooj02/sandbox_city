@@ -55,7 +55,7 @@ export function Report() {
   return (
     <div className="report-wrap" onClick={() => useStore.setState({ showReport: false })}>
       <div className="report panel" onClick={(e) => e.stopPropagation()}>
-        <div className="report-head"><span className="kanji">結果</span><div><h2>END OF DAY REPORT</h2><p>24 simulated hours · every payment on PayPal-shaped rails · reconciled to the cent</p></div></div>
+        <div className="report-head"><span className="glyph">EOD</span><div><h2>END OF DAY REPORT</h2><p>24 simulated hours · every payment on PayPal-shaped rails · reconciled to the cent</p></div></div>
         <div className={`report-cols n${lanes.length}`}>
           {lanes.map((l, i) => l.metrics && (
             <div className="report-col" key={i}>

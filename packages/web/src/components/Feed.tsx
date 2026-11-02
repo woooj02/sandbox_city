@@ -7,7 +7,7 @@ export function Feed() {
   const multi = useStore((s) => s.lanes.length > 1);
   return (
     <aside className="feed panel">
-      <div className="panel-title"><span>CITY WIRE</span><em>速報</em></div>
+      <div className="panel-title"><span>CITY WIRE</span><em>/wire/events</em></div>
       <ul>
         {feed.map((f) => (
           <li key={f.id} className={`tone-${f.tone}`}>

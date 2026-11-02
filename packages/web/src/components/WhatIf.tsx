@@ -23,13 +23,13 @@ export function WhatIf() {
   const w = useStore((s) => s.whatif);
   const live = useStore((s) => s.paypal === 'sandbox');
   if (!w) return null;
-  if (w === 'pending') return <div className="whatif"><div className="whatif-head"><b>WHAT IF</b><em>もしも</em><span>replaying this exact day under every other rulebook…</span></div><div className="whatif-loading"><i /></div></div>;
+  if (w === 'pending') return <div className="whatif"><div className="whatif-head"><b>WHAT IF</b><em>/replay</em><span>replaying this exact day under every other rulebook…</span></div><div className="whatif-loading"><i /></div></div>;
   const me = w.mine[0];
   const rows = [...w.mine.map((m, i) => ({ ...m, mine: true, label: w.mine.length > 1 ? `${LANE_NAMES[i]} · ${m.name}` : `${m.name} (yours)` })), ...[...w.alternatives].sort((a, b) => b.net - a.net).map((a) => ({ ...a, mine: false, label: a.name }))];
   const bestNet = Math.max(...rows.map((r) => r.net));
   return (
     <div className="whatif">
-      <div className="whatif-head"><b>WHAT IF</b><em>もしも</em><span>same city, same shoppers, same attackers — only the rules change{live ? ' · replayed on the PayPal twin' : ''}</span></div>
+      <div className="whatif-head"><b>WHAT IF</b><em>/replay</em><span>same city, same shoppers, same attackers — only the rules change{live ? ' · replayed on the PayPal twin' : ''}</span></div>
       <table>
         <thead><tr><th>Rulebook</th><th>Stolen</th><th>Double charges</th><th>Honest sales lost</th><th>Net value</th><th>vs {w.mine.length > 1 ? 'lane A' : 'yours'}</th></tr></thead>
         <tbody>

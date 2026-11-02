@@ -4,7 +4,9 @@ import { PRESETS } from '@sandbox-city/core';
 import type { DaySummary, ForgeScore, Genomes, Policy as PolicyT, TunePoint, WorldSnapshot } from '@sandbox-city/core';
 
 export type CutInKind = 'attack' | 'blocked' | 'breach' | 'double' | 'sale' | 'falsepos' | 'replay' | 'escrow';
-export interface CutIn { id: number; kind: CutInKind; lane: number; title: string; kanji: string; line: string; sub?: string; amount?: number; who?: string }
+export interface CutIn { id: number; kind: CutInKind; lane: number; title: string; tag: string; code: string; line: string; sub?: string; amount?: number; who?: string }
+/** One line of the gate's decision trace, as the cinema terminal prints it. */
+export interface TraceLine { id: number; t: number; lane: number; verdict: 'ALLOW' | 'GRANT' | 'DENY' | 'HOLD' | 'DUP×2' | 'FALSE+' | 'INJECT' | 'REFUND'; text: string; note?: string }
 export interface FeedItem { id: number; t: number; lane: number; tone: 'attack' | 'good' | 'bad' | 'warn' | 'info'; text: string }
 
 export interface PayPalCall { id: number; method: string; path: string; status: number; ms: number; debugId?: string; requestId?: string }
@@ -25,7 +27,7 @@ export interface ForgeState {
 }
 export const emptyForge = (): ForgeState => ({ open: false, running: false, target: null, curve: [], best: null, baseline: null, evals: 0, total: 0, ms: null });
 
-export interface TitleCard { id: number; kanji: string; act?: string; title: string; sub?: string; big?: boolean }
+export interface TitleCard { id: number; cmd: string; act?: string; title: string; sub?: string; big?: boolean }
 export interface CinemaState { on: boolean; rolling: boolean; card: TitleCard | null; act: string }
 
 interface LaneState { world: WorldSnapshot | null; metrics: Metrics | null; t: number; done: boolean; sale: boolean; phases: Record<string, string>; history: { t: number; safety: number; access: number; net: number }[] }
@@ -40,6 +42,7 @@ interface State {
   xray: boolean;
   cutins: CutIn[];
   feed: FeedItem[];
+  trace: TraceLine[];
   showReport: boolean;
   paypal: 'twin' | 'sandbox';
   runId: string | null;
@@ -58,6 +61,7 @@ interface State {
   pushCutIn: (c: Omit<CutIn, 'id'>) => void;
   popCutIn: () => void;
   pushFeed: (f: Omit<FeedItem, 'id'>[]) => void;
+  pushTrace: (t: Omit<TraceLine, 'id'>[]) => void;
 }
 
 let nid = 1;
@@ -73,6 +77,7 @@ export const useStore = create<State>((set, get) => ({
   xray: true,
   cutins: [],
   feed: [],
+  trace: [],
   showReport: false,
   paypal: 'twin',
   runId: null,
@@ -96,7 +101,8 @@ export const useStore = create<State>((set, get) => ({
     set({ cutins: [...q, { ...c, id: nid++ }] });
   },
   popCutIn: () => set({ cutins: get().cutins.slice(1) }),
+  pushTrace: (t) => set({ trace: [...t.map((x) => ({ ...x, id: nid++ })), ...get().trace].slice(0, 9) }),
   pushFeed: (f) => set({ feed: [...f.map((x) => ({ ...x, id: nid++ })), ...get().feed].slice(0, 60) }),
 }));
 
-export const resetLanes = (n: number) => useStore.setState({ lanes: Array.from({ length: n }, emptyLane), cutins: [], feed: [], showReport: false });
+export const resetLanes = (n: number) => useStore.setState({ lanes: Array.from({ length: n }, emptyLane), cutins: [], feed: [], trace: [], showReport: false });

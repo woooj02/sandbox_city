@@ -2,7 +2,7 @@ import { ATTACK_KINDS, describeGenome, type Policy } from '@sandbox-city/core';
 import { emptyForge, useStore } from '../store';
 import { client } from '../sim/client';
 import { startTune } from './AutoTune';
-import { ATTACK_KANJI, ATTACK_SHORT, money } from './meta';
+import { ATTACK_CODE, ATTACK_SHORT, money } from './meta';
 
 /** Red team: evolve attacker tactics against a rulebook (lane B's if forked, else lane A's). */
 export function startForge(target?: Policy, size?: { generations: number; children: number }) {
@@ -62,7 +62,7 @@ export function Forge() {
     <div className="report-wrap" onClick={close}>
       <div className="tune forge panel" onClick={(e) => e.stopPropagation()}>
         <div className="report-head">
-          <span className="kanji">鍛造</span>
+          <span className="glyph">./forge</span>
           <div>
             <h2>ATTACK FORGE</h2>
             <p>Attackers evolve against <b>{name}</b> on two other days. Each wave comes as often as before; only tactics change. Every generation keeps the variant of each attack that got the most money past the gate.</p>
@@ -93,7 +93,7 @@ export function Forge() {
               const tactics = describeGenome(k, b.genomes[k] ?? {});
               return (
                 <div key={k} className={`fk ${now > was + 1 ? 'up' : ''}`}>
-                  <span className="kanji">{ATTACK_KANJI[k]}</span>
+                  <span className="glyph">{ATTACK_CODE[k]}</span>
                   <div className="fk-main">
                     <div className="fk-head"><b>{ATTACK_SHORT[k]}</b><span>{money(was)} → <em>{money(now)}</em></span></div>
                     <ul>{tactics.length ? tactics.map((t) => <li key={t}>{t}</li>) : <li className="dim">no better tactic found</li>}</ul>

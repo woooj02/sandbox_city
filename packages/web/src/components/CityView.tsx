@@ -37,7 +37,7 @@ function Lane({ lane }: { lane: number }) {
           <b>{LANE_NAMES[lane]}</b><span>{policy?.name}</span>
         </div>
       )}
-      {sale && <div className="sale-banner">タイムセール · FLASH SALE</div>}
+      {sale && <div className="sale-banner">FLASH SALE · ALL AGENTS BUYING</div>}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import type { AttackKind } from '@sandbox-city/core';
-export const ATTACK_KANJI: Record<AttackKind, string> = {
-  prompt_injection: '注入', fake_store: '偽店', refund_abuse: '返金', card_testing: '盗卡', impersonation: '偽装', fraud_ring: '結託',
+/** Short monospace codes for each attack family, as they appear on the gate's trace. */
+export const ATTACK_CODE: Record<AttackKind, string> = {
+  prompt_injection: 'INJ', fake_store: 'FAKE', refund_abuse: 'RFND', card_testing: 'CARD', impersonation: 'SPOOF', fraud_ring: 'RING',
 };
 export const ATTACK_SHORT: Record<AttackKind, string> = {
   prompt_injection: 'Prompt injection', fake_store: 'Fake stores', refund_abuse: 'Refund abuse', card_testing: 'Stolen cards', impersonation: 'Impersonation', fraud_ring: 'Fraud ring',
