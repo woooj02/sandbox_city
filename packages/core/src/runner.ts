@@ -46,7 +46,8 @@ export class SimRunner {
       if (this.timer) clearTimeout(this.timer);
       this.worlds = msg.lanes.map((l, lane) => new World({
         ...DEFAULT_CONFIG, seed: msg.seed, chaos: msg.chaos, shoppers: msg.shoppers ?? DEFAULT_CONFIG.shoppers, crypto: this.opts.crypto ?? 'ed25519', policy: l.policy,
-        liveRails: lane === 0 ? this.opts.liveRails?.() : undefined, liveSample: this.opts.liveSample,
+        liveRails: lane === 0 ? this.opts.liveRails?.() : undefined,
+        liveSample: Math.min(this.opts.liveSample ?? 0, msg.liveSample ?? Infinity),
       }));
       this.worlds.forEach((w, lane) => this.post({
         type: 'world',

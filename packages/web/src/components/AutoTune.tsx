@@ -8,10 +8,10 @@ const MODES = {
   value: { label: 'MAX VALUE', sub: 'most value for honest people, any fraud rate', minSafety: 0, minAccess: 0.85 },
 } as const;
 
-export function startTune(mode: keyof typeof MODES) {
+export function startTune(mode: keyof typeof MODES, size?: { generations: number; children: number }) {
   const m = MODES[mode];
   useStore.setState({ tune: { ...emptyTune(mode), open: true, running: true } });
-  client.send({ cmd: 'tune', minSafety: m.minSafety, minAccess: m.minAccess });
+  client.send({ cmd: 'tune', minSafety: m.minSafety, minAccess: m.minAccess, ...size });
 }
 
 const W = 560, H = 330, PADL = 64, PADR = 16, PADT = 16, PADB = 40;

@@ -33,6 +33,8 @@ export class SandboxRails implements Rails {
   /** Namespaces idempotency keys and invoice ids per run, so replaying a seed never collides at PayPal. */
   runId = `r${Date.now().toString(36)}`;
   onCall?: (c: CallLog) => void;
+  /** Fired as a request leaves for PayPal, so a UI can show the call in flight. */
+  onStart?: (c: { method: string; path: string; requestId?: string }) => void;
   /** Every capture and refund PayPal reported back to this adapter, keyed by PayPal id, so idempotent replays count once.
    *  Includes responses the sim never saw (e.g. a timeout after PayPal had already committed). */
   readonly moves = new Map<string, { kind: 'capture' | 'refund'; id: string; amount: number }>();
@@ -79,6 +81,7 @@ export class SandboxRails implements Rails {
       if (body !== undefined) headers['Content-Type'] = 'application/json';
       if (requestId) headers['PayPal-Request-Id'] = `${this.runId}-${requestId}`;
       let res: Response;
+      this.onStart?.({ method, path: path.split('?')[0], requestId });
       try {
         res = await this.f(`${this.base}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(20_000) });
       } catch (e) {

@@ -74,11 +74,13 @@ export function Ledger() {
 
   useEffect(() => {
     let pending: Row[] = [];
+    const seen = new Set<string>();
     const offW = bus.on('world', (w) => { for (const m of w.merchants) names.set(m.id, m.name); for (const s of w.shoppers) names.set(s.id, s.name); });
-    const offR = bus.on('reset', () => { rows.current = []; api.current?.setGridOption('rowData', []); });
+    // a new run reuses order ids (same seed), so drop anything still queued from the old one
+    const offR = bus.on('reset', () => { pending = []; seen.clear(); rows.current = []; api.current?.flushAsyncTransactions(); api.current?.setGridOption('rowData', []); });
     const offT = bus.on('tick', (m) => {
       for (const s of m.spawn) names.set(s.id, s.name);
-      for (const e of m.events) { const r = toRow(m.lane, e); if (r) pending.push(r); }
+      for (const e of m.events) { const r = toRow(m.lane, e); if (r && !seen.has(r.key)) { seen.add(r.key); pending.push(r); } }
     });
     const iv = setInterval(() => {
       if (!api.current || !pending.length) return;
@@ -86,6 +88,7 @@ export function Ledger() {
       pending = [];
       rows.current = [...add, ...rows.current];
       const remove = rows.current.length > 2500 ? rows.current.splice(2500) : [];
+      for (const r of remove) seen.delete(r.key);
       api.current.applyTransactionAsync({ add, addIndex: 0, remove });
     }, 250);
     return () => { offW(); offR(); offT(); clearInterval(iv); };

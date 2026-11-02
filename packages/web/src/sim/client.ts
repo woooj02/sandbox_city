@@ -147,9 +147,10 @@ class Client {
     resetLanes(policies.length);
     seenAttackers.clear();
     worlds.length = 0;
-    useStore.setState({ policies, paypalCalls: [], runId: null, whatif: null });
+    useStore.setState({ policies, paypalCalls: [], inFlight: [], runId: null, whatif: null });
     bus.emit('reset');
-    this.send({ cmd: 'init', seed: st.seed, lanes: policies.map((policy) => ({ policy })), chaos: st.chaos });
+    // while the film rolls only hero shoppers pay on the live sandbox, so real PayPal latency never stalls the shot
+    this.send({ cmd: 'init', seed: st.seed, lanes: policies.map((policy) => ({ policy })), chaos: st.chaos, ...(st.cinema.rolling ? { liveSample: 0 } : {}) });
   }
 
   private receive(m: FromSim) {
@@ -175,9 +176,12 @@ class Client {
       narrate(m.lane, m.events, this.focusLane);
     } else if (m.type === 'done') {
       st.setLane(m.lane, { done: true });
-      if (useStore.getState().lanes.every((l) => l.done)) {
-        useStore.setState({ showReport: true, whatif: 'pending' });
-        this.send({ cmd: 'whatif' });
+      const now = useStore.getState();
+      if (now.lanes.every((l) => l.done)) {
+        // while the film is rolling the director decides when the report appears
+        const rolling = now.cinema.rolling;
+        if (!rolling || now.lanes.length > 1) { useStore.setState({ whatif: 'pending' }); this.send({ cmd: 'whatif' }); }
+        if (!rolling) useStore.setState({ showReport: true });
       }
     } else if (m.type === 'status') {
       useStore.setState({ running: m.running, tps: m.tps, paypal: m.paypal ?? 'twin' });
@@ -190,6 +194,10 @@ class Client {
     } else if (m.type === 'run') {
       useStore.setState({ runId: m.runId });
     } else if (m.type === 'paypal_call') {
+      const fl = useStore.getState().inFlight;
+      if (m.status === 0) { useStore.setState({ inFlight: [...fl, { method: m.method, path: m.path, at: performance.now() }].slice(-8) }); return; }
+      const i = fl.findIndex((f) => f.method === m.method && f.path === m.path);
+      if (i >= 0) useStore.setState({ inFlight: fl.filter((_, k) => k !== i) });
       st.pushCall({ method: m.method, path: m.path, status: m.status, ms: m.ms, debugId: m.debugId, requestId: m.requestId });
     } else if (m.type === 'error') {
       st.pushFeed([{ t: st.lanes[0]?.t ?? 0, lane: 0, tone: 'warn', text: `Sim error: ${m.message}` }]);

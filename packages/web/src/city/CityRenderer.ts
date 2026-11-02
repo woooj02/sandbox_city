@@ -15,7 +15,17 @@ interface Comet {
 }
 interface Fx { s: Sprite | Text; age: number; dur: number; kind: 'ring' | 'spark' | 'text' | 'flash'; vx?: number; vy?: number; s0: number; s1: number; a0: number; rot?: number }
 
-export interface RendererOptions { xray: () => boolean; lane: number; compact?: boolean }
+export interface RendererOptions {
+  xray: () => boolean; lane: number; compact?: boolean;
+  /** Directed camera: push in on big moments, drift between districts otherwise. */
+  cinema?: () => boolean;
+  /** Called when the camera cuts to a dramatic moment (the director can slow the sim down). */
+  onMoment?: (m: Moment) => void;
+}
+
+export interface Moment { kind: 'breach' | 'inject' | 'vanish' | 'double' | 'blocked' | 'hijack'; weight: number }
+
+interface Shot { x: number; y: number; z: number; until: number; weight: number }
 
 export class CityRenderer {
   app = new Application();
@@ -44,12 +54,19 @@ export class CityRenderer {
   private textCount = 0;
   private ready = false;
   private snapshot: WorldSnapshot | null = null;
+  // camera: current pose eases toward the active shot; drift + shake are layered on top
+  private cam = { x: 0, y: 0, z: 1 };
+  private shot: Shot | null = null;
+  private lastShot = -99;
+  private idleShot: Shot | null = null;
+  private slowUntil = 0; private slowK = 1;
+  private punch = 0;
 
   constructor(private host: HTMLElement, private opts: RendererOptions) {}
 
   async init() {
     const aspect = (this.host.clientWidth || 16) / (this.host.clientHeight || 10);
-    this.VW = Math.round(Math.max(820, Math.min(1750, VH * aspect)));
+    this.VW = Math.round(Math.max(820, Math.min(2200, VH * aspect)));
     await this.app.init({ resizeTo: this.host, background: '#03030a', antialias: true, resolution: Math.min(2, window.devicePixelRatio || 1), autoDensity: true, preference: 'webgl' });
     this.host.appendChild(this.app.canvas);
     this.tex = makeTextures();
@@ -66,6 +83,7 @@ export class CityRenderer {
     this.root.filters = [this.bloom];
 
     this.drawStatic();
+    this.cam = { x: this.VW / 2, y: VH / 2, z: 1 };
     this.resize();
     this.app.renderer.on('resize', () => this.resize());
     this.app.ticker.add((tk) => this.frame(tk.deltaMS));
@@ -76,6 +94,27 @@ export class CityRenderer {
   destroy() { try { this.app.destroy(true, { children: true }); } catch { /* noop */ } }
 
   setSpeed(tps: number) { this.tps = tps; }
+
+  private get cinema() { return this.opts.cinema?.() ?? false; }
+
+  /**
+   * Push the camera in on a point for a moment. Heavier moments can interrupt lighter ones;
+   * otherwise there is a cooldown so the edit never feels frantic.
+   */
+  focus(x: number, y: number, z: number, hold: number, weight: number, kind?: Moment['kind']) {
+    if (!this.cinema) return false;
+    const T = this.time;
+    const busy = this.shot && T < this.shot.until;
+    if (busy && weight <= this.shot!.weight) return false;
+    if (!busy && T - this.lastShot < 2.4 && weight < 8) return false;
+    this.shot = { x, y, z, until: T + hold, weight };
+    this.lastShot = T;
+    this.punch = Math.min(0.06, 0.012 * weight);
+    if (kind) this.opts.onMoment?.({ kind, weight });
+    return true;
+  }
+  /** Bullet time for the visuals only (comets, sparks, text): the sim keeps its own clock. */
+  slowmo(sec: number, k: number) { if (this.cinema) { this.slowUntil = this.time + sec; this.slowK = k; } }
 
   private resize() {
     const w = this.app.renderer.width / this.app.renderer.resolution, h = this.app.renderer.height / this.app.renderer.resolution;
@@ -231,6 +270,7 @@ export class CityRenderer {
         const atk = e.truth.attacker ? this.attackers.get(e.truth.attacker) : undefined;
         if (atk && !e.truth.hijacked && e.truth.attack !== 'fake_store') atk.flash = 1;
         this.comet(from[0], from[1], b.x, b.y, color, () => this.arrive(e, b));
+        if (mal && e.outcome === 'completed' && e.truth.harm > 150) this.focus((from[0] + b.x * 2) / 3, (from[1] + b.y * 2) / 3, 1.9, 2.4, 6);
         const p = this.people.get(e.buyer);
         if (p) p.flash = 1;
         break;
@@ -250,6 +290,7 @@ export class CityRenderer {
         if (!a || !b) return;
         a.flash = 1; b.infected = 1;
         this.bolt(a.x, a.y, b.x, b.y, C.injection);
+        this.focus((a.x + b.x) / 2, (a.y + b.y) / 2, 1.55, 2.6, 5, 'inject');
         this.floatText(b.x, b.y - 22, '注入', C.injection, 16, 'Dela Gothic One');
         break;
       }
@@ -257,7 +298,7 @@ export class CityRenderer {
         const b = this.buildings.get(e.merchant), p = this.people.get(e.shopper);
         if (!b || !p) return;
         if (e.sanitized) { this.ringFx(b.x, b.y, C.blocked, 0.05, 0.5, 0.7); this.floatText(b.x, b.y - 20, 'QUARANTINED', C.blocked, 10); b.infected = 0; }
-        else if (!e.resisted) { this.bolt(b.x, b.y, p.s.x, p.s.y, C.injection); p.flash = 2; this.floatText(p.s.x, p.s.y - 12, 'HIJACKED', C.injection, 11); }
+        else if (!e.resisted) { this.bolt(b.x, b.y, p.s.x, p.s.y, C.injection); p.flash = 2; this.floatText(p.s.x, p.s.y - 12, 'HIJACKED', C.injection, 11); this.focus(p.s.x, p.s.y, 2.1, 2.2, 6, 'hijack'); }
         break;
       }
       case 'store_close': {
@@ -265,6 +306,7 @@ export class CityRenderer {
         if (!b) return;
         b.dying = this.time;
         this.burst(b.x, b.y, C.attack, 0.8, 18);
+        if (this.focus(b.x, b.y, 2.3, 2.8, 7, 'vanish')) this.slowmo(1.1, 0.3);
         this.floatText(b.x, b.y - 24, '消失 VANISHED', C.attack, 13);
         break;
       }
@@ -292,14 +334,17 @@ export class CityRenderer {
     const mal = e.truth.malicious && e.truth.harm > 0;
     const x = b.x, y = b.y;
     b.pulse = 1;
-    if (e.duplicateCharge) { this.ringFx(x, y, C.falsepos, 0.1, 0.8, 0.8); this.floatText(x, y - 26, '二重 ×2 CHARGE', C.falsepos, 13); this.kick(5); }
+    if (e.duplicateCharge) { this.ringFx(x, y, C.falsepos, 0.1, 0.8, 0.8); this.floatText(x, y - 26, '二重 ×2 CHARGE', C.falsepos, 13); this.kick(5); this.focus(x, y, 2.2, 2.2, 6, 'double'); }
     switch (e.outcome) {
       case 'completed':
         if (mal) {
           this.burst(x, y, C.breach, 1, 16);
           this.ringFx(x, y, C.breach, 0.1, 1.1, 0.75);
           this.floatText(x, y - 18, `-$${Math.round(e.truth.harm)}`, C.breach, e.truth.harm > 150 ? 20 : 14);
-          if (e.truth.harm > 150) { this.shockAt(x, y); this.glitchFor(0.22); this.kick(10); }
+          if (e.truth.harm > 150) {
+            this.shockAt(x, y); this.glitchFor(0.22); this.kick(10);
+            if (this.focus(x, y, 2.6, 2.6, e.truth.harm > 300 ? 9 : 7, 'breach')) this.slowmo(0.9, 0.25);
+          }
         } else this.ringFx(x, y, C.refund, 0.04, 0.28, 0.45);
         break;
       case 'escrowed': {
@@ -317,7 +362,7 @@ export class CityRenderer {
           this.fx.push({ s: hx, age: 0, dur: 0.7, kind: 'flash', s0: 0.12, s1: 0.55, a0: 1, rot: 0.6 });
           this.ringFx(x, y, C.blocked, 0.08, 0.9, 0.6);
           this.floatText(x, y - 20, e.outcome === 'abandoned' ? 'OWNER SAID NO' : '阻止 BLOCKED', C.blocked, e.truth.harm > 150 ? 15 : 11);
-          if (e.truth.harm > 200) this.kick(3);
+          if (e.truth.harm > 200) { this.kick(3); this.focus(x, y, 2.0, 1.8, 4, 'blocked'); }
         } else {
           const s = new Sprite(this.tex.cross); s.anchor.set(0.5); s.tint = e.outcome === 'blocked' ? C.falsepos : C.abandoned; s.position.set(x, y - 4);
           this.layers.fx.addChild(s);
@@ -419,15 +464,50 @@ export class CityRenderer {
     this.root.filters = f;
   }
 
+  // ─────────────── camera ───────────────
+  private camera(dt: number) {
+    const T = this.time;
+    const W = this.VW, H = VH;
+    let target: { x: number; y: number; z: number } = { x: W / 2, y: H / 2, z: 1 };
+    if (this.shot && T < this.shot.until) target = this.shot;
+    else if (this.cinema) {
+      // between moments: slow dolly across the city, alternating wide and medium shots
+      if (!this.idleShot || T > this.idleShot.until) {
+        const wide = !this.idleShot || this.idleShot.z > 1.2;
+        const d = DISTRICTS[Math.floor(Math.random() * DISTRICTS.length)];
+        this.idleShot = wide ? { x: W / 2, y: H / 2, z: 1.04, until: T + 5, weight: 0 } : { x: this.px(d.x), y: this.py(d.y), z: 1.35, until: T + 6, weight: 0 };
+      }
+      target = this.idleShot;
+    }
+    const pushing = this.shot && T < this.shot.until;
+    const k = 1 - Math.exp(-dt * (pushing ? 3.6 : 0.9));
+    this.cam.z += (target.z - this.cam.z) * k;
+    this.cam.x += (target.x - this.cam.x) * k;
+    this.cam.y += (target.y - this.cam.y) * k;
+    this.punch *= 0.9;
+    const z = this.cam.z * (1 + this.punch);
+    // keep the frame inside the city
+    const hw = W / (2 * z), hh = H / (2 * z);
+    const cx = Math.max(hw, Math.min(W - hw, this.cam.x)), cy = Math.max(hh, Math.min(H - hh, this.cam.y));
+    this.shake *= 0.86;
+    const drift = this.cinema ? 0.5 : 1;
+    this.world.scale.set(z);
+    this.world.position.set(
+      W / 2 - cx * z + Math.sin(T * 0.13) * 6 * drift + (Math.random() - 0.5) * this.shake,
+      H / 2 - cy * z + Math.cos(T * 0.11) * 4 * drift + (Math.random() - 0.5) * this.shake,
+    );
+  }
+
   // ─────────────── frame loop ───────────────
   private frame(dms: number) {
-    const dt = Math.min(0.05, dms / 1000);
-    this.time += dt;
+    const real = Math.min(0.05, dms / 1000);
+    this.time += real;
     const T = this.time;
+    // bullet time eases back to normal speed instead of snapping
+    const slow = T < this.slowUntil ? this.slowK + (1 - this.slowK) * Math.max(0, 1 - (this.slowUntil - T) / 0.25) ** 3 : 1;
+    const dt = real * slow;
 
-    // camera shake + gentle drift
-    this.shake *= 0.86;
-    this.world.position.set(Math.sin(T * 0.13) * 6 + (Math.random() - 0.5) * this.shake, Math.cos(T * 0.11) * 4 + (Math.random() - 0.5) * this.shake);
+    this.camera(real);
 
     // night tint
     const h = this.hour;

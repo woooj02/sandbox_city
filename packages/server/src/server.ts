@@ -108,9 +108,12 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
         runs.set(rails.runId, current);
         rails.onCall = (c) => {
           recentCalls.push(c);
+          // Transaction Search is an optional extra in reconciliation; keep it off the live ticker
+          if (c.path.startsWith('/v1/reporting')) return;
           if (recentCalls.length > 1000) recentCalls.splice(0, recentCalls.length - 1000);
           send({ type: 'paypal_call', lane: 0, method: c.method, path: c.path.split('?')[0], status: c.status, ms: c.ms, debugId: c.debugId, requestId: c.requestId });
         };
+        rails.onStart = (c) => { if (!c.path.startsWith('/v1/')) send({ type: 'paypal_call', lane: 0, method: c.method, path: c.path, status: 0, ms: 0, requestId: c.requestId }); };
         return rails;
       },
     });

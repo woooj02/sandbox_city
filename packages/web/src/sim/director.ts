@@ -1,0 +1,157 @@
+/**
+ * Cinema director: plays the whole story as one continuous, recordable take.
+ *   I    Wild West: a day with no rules
+ *   II   Auto-tune: rulebooks evolve on days the city has not seen
+ *   III  The race: Wild West vs the tuned rulebook on the same day, split screen
+ *   IV   The reckoning: end-of-day report, what-if replays, PayPal reconciliation
+ * The camera work lives in the renderer; this file decides pacing, chapter cards and bullet time.
+ */
+import { PRESETS, type Metrics, type Policy } from '@sandbox-city/core';
+import type { Moment } from '../city/CityRenderer';
+import { useStore, type TitleCard } from '../store';
+import { client } from './client';
+import { startTune } from '../components/AutoTune';
+
+const FILM_TPS = 22;
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
+
+let cardId = 1;
+class Director {
+  private take = 0;
+  private slowUntil = 0;
+  private baseTps = FILM_TPS;
+
+  private get st() { return useStore.getState(); }
+  private alive(take: number) { return take === this.take && this.st.cinema.rolling; }
+  private patch(p: Partial<ReturnType<typeof useStore.getState>['cinema']>) { useStore.setState({ cinema: { ...this.st.cinema, ...p } }); }
+
+  private async card(take: number, c: Omit<TitleCard, 'id'>, ms: number) {
+    if (!this.alive(take)) return;
+    this.patch({ card: { ...c, id: cardId++ } });
+    await sleep(ms);
+    if (this.alive(take)) this.patch({ card: null });
+    await sleep(500);
+  }
+  private async until(take: number, pred: () => boolean, maxMs = Infinity) {
+    const end = performance.now() + maxMs;
+    while (this.alive(take) && !pred() && performance.now() < end) await sleep(120);
+  }
+  /** Slow, eased scroll through a panel, so the whole report reads on camera. */
+  private pan(take: number, sel: string, ms: number) {
+    const el = document.querySelector<HTMLElement>(sel);
+    if (!el) return Promise.resolve();
+    const from = el.scrollTop, to = el.scrollHeight - el.clientHeight;
+    if (to <= from) return Promise.resolve();
+    const t0 = performance.now();
+    return new Promise<void>((done) => {
+      const step = () => {
+        const u = Math.min(1, (performance.now() - t0) / ms);
+        el.scrollTop = from + (to - from) * (u < 0.5 ? 4 * u ** 3 : 1 - (-2 * u + 2) ** 3 / 2);
+        if (u < 1 && this.alive(take)) requestAnimationFrame(step); else done();
+      };
+      requestAnimationFrame(step);
+    });
+  }
+  private speed(tps: number) { client.send({ cmd: 'speed', tps }); }
+
+  /** Bullet time: the sim itself slows down for a beat when the camera cuts to something big. */
+  moment(lane: number, m: Moment) {
+    if (!this.st.cinema.rolling || lane !== 0 || m.weight < 7) return;
+    const now = performance.now();
+    if (now < this.slowUntil + 2500) return;
+    this.slowUntil = now + 1400;
+    this.speed(Math.max(3, Math.round(this.baseTps * 0.18)));
+    setTimeout(() => { if (this.st.cinema.rolling) this.speed(this.baseTps); }, 1400);
+  }
+
+  stop() {
+    this.take++;
+    this.patch({ rolling: false, card: null, act: '' });
+  }
+
+  /** Plays a day at full speed off camera, so a later act can start from the same state. */
+  private async silentDay(take: number, lanes: Policy[]) {
+    client.start(lanes);
+    this.speed(100000);
+    client.send({ cmd: 'play' });
+    await this.until(take, () => this.done());
+  }
+  private done() { return this.st.lanes.length > 0 && this.st.lanes.every((l) => l.done); }
+
+  /** Roll the film; `from` starts at a later act so a single scene can be re-shot. */
+  async roll(from = 1) {
+    const take = ++this.take;
+    this.patch({ rolling: true, card: null, act: '' });
+    useStore.setState({ showReport: false, tune: { ...this.st.tune, open: false } });
+    let best: Policy = PRESETS.tuned;
+
+    if (from <= 1) {
+      // ── cold open, then act I
+      client.start([PRESETS.open]);
+      this.speed(4);
+      await sleep(400);
+      client.send({ cmd: 'play' });
+      await this.card(take, { kanji: '砂箱都市', title: 'SANDBOX CITY', sub: 'AI shoppers, AI stores and AI attackers, all paying on PayPal rails', big: true }, 4200);
+      this.patch({ act: 'I · WILD WEST' });
+      await this.card(take, { kanji: '無法地帯', act: 'ACT I', title: 'THE WILD WEST', sub: 'one day in the city with no rules at the gate' }, 2800);
+      this.baseTps = FILM_TPS; this.speed(this.baseTps);
+      await this.until(take, () => this.done());
+      if (!this.alive(take)) return;
+      useStore.setState({ showReport: false });
+      const m1 = this.st.lanes[0].metrics as Metrics;
+      await sleep(600);
+      await this.card(take, {
+        kanji: '被害', act: 'END OF DAY', title: `${money(m1.fraud.leaked + m1.chaos.duplicateValue)} LOST`,
+        sub: `${money(m1.fraud.leaked)} stolen · ${m1.chaos.duplicateCharges} customers charged twice · ${(m1.safety * 100).toFixed(0)}% of fraud stopped`,
+      }, 4200);
+    } else if (from === 2) await this.silentDay(take, [PRESETS.open]);
+
+    if (from <= 2) {
+      // ── act II
+      this.patch({ act: 'II · AUTO-TUNE' });
+      await this.card(take, { kanji: '最適化', act: 'ACT II', title: 'THE MACHINE LEARNS', sub: 'rulebooks evolve on two days this city has never seen' }, 2800);
+      if (!this.alive(take)) return;
+      startTune('safe', { generations: 4, children: 8 });
+      await this.until(take, () => !this.st.tune.running);
+      await sleep(3500);
+      best = this.st.tune.best?.policy ?? best;
+      useStore.setState({ tune: { ...this.st.tune, open: false } });
+      if (!this.alive(take)) return;
+    }
+
+    const tuned = { ...best, name: 'Lab-Tuned' };
+    if (from <= 3) {
+      // ── act III
+      this.patch({ act: 'III · THE RACE' });
+      client.start([PRESETS.open, tuned]);
+      this.speed(4);
+      await sleep(400);
+      client.send({ cmd: 'play' });
+      await this.card(take, { kanji: '決戦', act: 'ACT III', title: 'SAME DAY. TWO RULEBOOKS.', sub: `Wild West on the left · ${tuned.name} on the right` }, 2800);
+      this.baseTps = FILM_TPS; this.speed(this.baseTps);
+      await this.until(take, () => this.done());
+      if (!this.alive(take)) return;
+      useStore.setState({ showReport: false });
+      await sleep(800);
+    } else await this.silentDay(take, [PRESETS.open, tuned]);
+
+    // ── act IV
+    if (!this.alive(take)) return;
+    this.patch({ act: 'IV · THE RECKONING' });
+    const [a, b] = this.st.lanes.map((l) => l.metrics as Metrics);
+    await this.card(take, { kanji: '清算', act: 'ACT IV', title: 'THE RECKONING', sub: `${money(b.netValue - a.netValue)} more value for honest people, on a day the rulebook never trained on` }, 3600);
+    if (!this.alive(take)) return;
+    useStore.setState({ showReport: true });
+    await this.until(take, () => this.st.whatif !== 'pending', 30_000);
+    await sleep(3500);
+    await this.pan(take, '.report', 7000);
+    await sleep(6000);
+    if (!this.alive(take)) return;
+    useStore.setState({ showReport: false });
+    await this.card(take, { kanji: '砂箱都市', title: 'SANDBOX CITY', sub: 'crash-test every rule before a single real cent moves', big: true }, 6000);
+    if (this.alive(take)) this.patch({ rolling: false, act: '' });
+  }
+}
+
+export const director = new Director();

@@ -16,6 +16,9 @@ export interface TuneState {
 }
 export const emptyTune = (mode: TuneState['mode'] = 'safe'): TuneState => ({ open: false, running: false, mode, points: [], best: null, evals: 0, total: 0, generation: 0, ms: null });
 
+export interface TitleCard { id: number; kanji: string; act?: string; title: string; sub?: string; big?: boolean }
+export interface CinemaState { on: boolean; rolling: boolean; card: TitleCard | null; act: string }
+
 interface LaneState { world: WorldSnapshot | null; metrics: Metrics | null; t: number; done: boolean; sale: boolean; phases: Record<string, string>; history: { t: number; safety: number; access: number; net: number }[] }
 
 interface State {
@@ -32,7 +35,10 @@ interface State {
   paypal: 'twin' | 'sandbox';
   runId: string | null;
   paypalCalls: PayPalCall[];
+  /** Requests to the real PayPal sandbox that have not answered yet. */
+  inFlight: { method: string; path: string; at: number }[];
   tune: TuneState;
+  cinema: CinemaState;
   whatif: { mine: DaySummary[]; alternatives: DaySummary[] } | 'pending' | null;
   pushCall: (c: Omit<PayPalCall, 'id'>) => void;
   set: (p: Partial<State>) => void;
@@ -59,8 +65,10 @@ export const useStore = create<State>((set, get) => ({
   paypal: 'twin',
   runId: null,
   paypalCalls: [],
+  inFlight: [],
   whatif: null,
   tune: emptyTune(),
+  cinema: { on: new URLSearchParams(typeof location === 'undefined' ? '' : location.search).get('cinema') === '1', rolling: false, card: null, act: '' },
   pushCall: (c) => set({ paypalCalls: [{ ...c, id: nid++ }, ...get().paypalCalls].slice(0, 40) }),
   set: (p) => set(p),
   setLane: (lane, p) => {

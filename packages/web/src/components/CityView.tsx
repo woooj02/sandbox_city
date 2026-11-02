@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { CityRenderer } from '../city/CityRenderer';
+import { director } from '../sim/director';
 import { bus } from '../sim/bus';
 import { useStore } from '../store';
 import { LANE_NAMES, clock } from './meta';
@@ -10,7 +11,11 @@ function Lane({ lane }: { lane: number }) {
   const sale = useStore((s) => s.lanes[lane]?.sale);
   const multi = useStore((s) => s.lanes.length > 1);
   useEffect(() => {
-    const r = new CityRenderer(host.current!, { lane, xray: () => useStore.getState().xray });
+    const r = new CityRenderer(host.current!, {
+      lane, xray: () => useStore.getState().xray,
+      cinema: () => useStore.getState().cinema.on,
+      onMoment: (m) => director.moment(lane, m),
+    });
     let alive = true;
     r.init().then(() => {
       if (!alive) return;

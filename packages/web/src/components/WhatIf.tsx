@@ -21,6 +21,7 @@ function verdict(me: DaySummary, alts: DaySummary[]): string {
 /** Same city, same attackers, same day — only the rulebook changes. */
 export function WhatIf() {
   const w = useStore((s) => s.whatif);
+  const live = useStore((s) => s.paypal === 'sandbox');
   if (!w) return null;
   if (w === 'pending') return <div className="whatif"><div className="whatif-head"><b>WHAT IF</b><em>もしも</em><span>replaying this exact day under every other rulebook…</span></div><div className="whatif-loading"><i /></div></div>;
   const me = w.mine[0];
@@ -28,7 +29,7 @@ export function WhatIf() {
   const bestNet = Math.max(...rows.map((r) => r.net));
   return (
     <div className="whatif">
-      <div className="whatif-head"><b>WHAT IF</b><em>もしも</em><span>same city, same shoppers, same attackers — only the rules change</span></div>
+      <div className="whatif-head"><b>WHAT IF</b><em>もしも</em><span>same city, same shoppers, same attackers — only the rules change{live ? ' · replayed on the PayPal twin' : ''}</span></div>
       <table>
         <thead><tr><th>Rulebook</th><th>Stolen</th><th>Double charges</th><th>Honest sales lost</th><th>Net value</th><th>vs {w.mine.length > 1 ? 'lane A' : 'yours'}</th></tr></thead>
         <tbody>

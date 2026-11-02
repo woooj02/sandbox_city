@@ -10,9 +10,11 @@ import { CutIns } from './CutIn';
 import { Feed } from './Feed';
 import { Report } from './Report';
 import { AutoTune } from './AutoTune';
+import { Cinema } from './Cinema';
 
 export function App() {
   const lanes = useStore((s) => s.lanes.length);
+  const cinema = useStore((s) => s.cinema.on);
   useEffect(() => {
     const p = policiesFromUrl(useStore.getState().policies);
     client.start(p);
@@ -21,7 +23,7 @@ export function App() {
     if (auto !== '0') setTimeout(() => client.send({ cmd: 'play' }), 600);
   }, []);
   return (
-    <div className={`app lanes-${lanes}`}>
+    <div className={`app lanes-${lanes} ${cinema ? 'cinema' : ''}`}>
       <div className="scanlines" />
       <TopBar />
       <Rulebook />
@@ -34,6 +36,7 @@ export function App() {
       <Feed />
       <Report />
       <AutoTune />
+      <Cinema />
     </div>
   );
 }

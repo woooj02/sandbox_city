@@ -24,6 +24,7 @@ export type FromSim =
   | TickMsg
   | { type: 'done'; lane: number }
   | { type: 'status'; running: boolean; tps: number; mode: 'local' | 'server'; paypal?: 'sandbox' | 'twin' }
+  /** status 0 = request in flight; anything else = PayPal answered. */
   | { type: 'paypal_call'; lane: number; method: string; path: string; status: number; ms: number; debugId?: string; requestId?: string }
   | { type: 'run'; runId: string }
   | { type: 'whatif'; mine: DaySummary[]; alternatives: DaySummary[] }
@@ -34,7 +35,9 @@ export type FromSim =
 export interface LaneSpec { policy: Policy }
 
 export type ToSim =
-  | { cmd: 'init'; seed: string; lanes: LaneSpec[]; chaos: number; shoppers?: number }
+  | { cmd: 'init'; seed: string; lanes: LaneSpec[]; chaos: number; shoppers?: number;
+      /** Share of non-hero orders sent to the live sandbox lane; capped by the server's own setting. 0 = heroes only. */
+      liveSample?: number }
   | { cmd: 'play' }
   | { cmd: 'pause' }
   | { cmd: 'speed'; tps: number }
