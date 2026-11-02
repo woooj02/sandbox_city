@@ -478,3 +478,26 @@ i.leak { background: var(--rd); box-shadow: 0 0 6px var(--rd); }
 
 .report-foot { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
 .report-row b.warn { color: var(--am); }
+
+/* laptops: narrower side columns, a one-line clock, and a visible scrollbar where panels overflow */
+@media (max-width: 1500px) {
+  .app:not(.cinema) { grid-template-columns: 250px 1fr 300px; grid-template-rows: 60px 1fr 220px; }
+  .clockbox { min-width: 0; } .clock-big { white-space: nowrap; font-size: 17px; letter-spacing: 2px; }
+  .topbar { gap: 14px; }
+  .rule-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .rule-actions .btn { padding: 8px 4px; letter-spacing: 1px; font-size: 11px; min-width: 0; }
+}
+@media (max-height: 860px) { .hud { scrollbar-width: thin; scrollbar-color: rgba(110,130,255,.35) transparent; } }
+
+/* phones and small tablets: one column, city first */
+@media (max-width: 900px) {
+  .app:not(.cinema) { height: auto; min-height: 100vh; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 58vh auto 440px 280px auto;
+    grid-template-areas: 'top' 'stage' 'hud' 'ledger' 'feed' 'rules'; }
+  .app:not(.cinema) .topbar { flex-wrap: wrap; gap: 8px 12px; padding: 8px 12px 10px; clip-path: none; }
+  .app:not(.cinema) .clockbox { flex: 1 1 100%; max-width: none; order: 3; }
+  .app:not(.cinema) .topbar .controls { flex-wrap: wrap; gap: 6px; }
+  .app:not(.cinema) .rulebook { max-height: 640px; }
+  .app:not(.cinema) .ledger .panel-title small { display: none; }
+  .app:not(.cinema) .ledger-tools { flex-wrap: wrap; }
+  .cutin { transform: scale(.7); transform-origin: center; }
+}
