@@ -2,6 +2,8 @@ import type { AttackKind, SimEvent } from './types';
 import type { Policy } from './policy';
 import type { DaySummary } from './whatif';
 
+export interface TunePoint { id: number; generation: number; safety: number; access: number; net: number; score: number; preset?: string }
+
 export interface MerchantLite { id: string; name: string; x: number; y: number; district: number; honest: boolean; category: string; verified: boolean; owner?: string }
 export interface ShopperLite { id: string; name: string; x: number; y: number; district: number; hero: boolean; controlledBy?: string; passport: boolean }
 export interface AttackerLite { id: string; name: string; kind: AttackKind; x: number; y: number; agents: string[] }
@@ -25,6 +27,8 @@ export type FromSim =
   | { type: 'paypal_call'; lane: number; method: string; path: string; status: number; ms: number; debugId?: string; requestId?: string }
   | { type: 'run'; runId: string }
   | { type: 'whatif'; mine: DaySummary[]; alternatives: DaySummary[] }
+  | { type: 'tune'; phase: 'eval'; point: TunePoint; best: { policy: Policy; mean: DaySummary }; evals: number; total: number; generation: number }
+  | { type: 'tune'; phase: 'done'; best: { policy: Policy; mean: DaySummary }; evals: number; ms: number }
   | { type: 'error'; message: string };
 
 export interface LaneSpec { policy: Policy }
@@ -35,4 +39,7 @@ export type ToSim =
   | { cmd: 'pause' }
   | { cmd: 'speed'; tps: number }
   /** Replay the last initialised day under every preset (counterfactual savings). */
-  | { cmd: 'whatif' };
+  | { cmd: 'whatif' }
+  /** Search for a better rulebook on days other than the one on screen. */
+  | { cmd: 'tune'; minSafety: number; minAccess: number; generations?: number; children?: number }
+  | { cmd: 'tune_stop' };

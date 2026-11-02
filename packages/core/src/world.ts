@@ -104,7 +104,7 @@ export class World {
     for (const k of ATTACK_KINDS) byKind[k] = emptyTally();
     return {
       t: 0, orders: 0,
-      honest: { attempts: 0, completed: 0, blocked: 0, abandoned: 0, challenged: 0, declined: 0, gmv: 0, blockedValue: 0 },
+      honest: { attempts: 0, completed: 0, blocked: 0, abandoned: 0, challenged: 0, declined: 0, gmv: 0, blockedValue: 0, abandonedValue: 0 },
       fraud: { attempts: 0, attempted: 0, prevented: 0, leaked: 0, byKind },
       refunds: { legitApproved: 0, legitDenied: 0, abuseApproved: 0, abuseDenied: 0 },
       chaos: { faults: 0, recovered: 0, duplicateCharges: 0, duplicateValue: 0 },
@@ -543,9 +543,12 @@ export class World {
     const honest = !truth.malicious;
     const r = this.r(`ord:${o.buyer}:${o.t}:${o.sku}:${o.truth.attacker ?? ''}`);
 
-    if (honest) this.m.honest.attempts++;
+    // an honest shopper paying a scam store is a victim, not a customer: that order is scored as
+    // an attack (stopping it is a save, not a false positive), never as honest access or GMV
+    const legit = honest && m.honest;
+    if (legit) this.m.honest.attempts++;
     else if (truth.harm > 0) this.tallyAttempt(truth.attack!, truth.harm);
-    if (gate.decision === 'challenge' && honest) this.m.honest.challenged++;
+    if (gate.decision === 'challenge' && legit) this.m.honest.challenged++;
 
     // remember genuinely signed requests that leak through compromised store plugins
     if (honest && o.request && r.chance(0.03)) {
@@ -600,19 +603,18 @@ export class World {
     }
 
     // accounting
-    if (honest) {
+    if (legit) {
       if (outcome === 'completed' || outcome === 'escrowed') { this.m.honest.completed++; this.m.honest.gmv = round2(this.m.honest.gmv + o.amount); }
       else if (outcome === 'blocked') { this.m.honest.blocked++; this.m.honest.blockedValue = round2(this.m.honest.blockedValue + o.amount); }
-      else if (outcome === 'abandoned') this.m.honest.abandoned++;
+      else if (outcome === 'abandoned') { this.m.honest.abandoned++; this.m.honest.abandonedValue = round2(this.m.honest.abandonedValue + o.amount); }
       else this.m.honest.declined++;
+    } else if (honest) {
       // honest money headed into a fake / ring store is the attack, whatever the rules did
-      if (!m.honest) {
-        const kind: AttackKind = m.owner && this.attackers.get(m.owner)?.kind === 'fraud_ring' ? 'fraud_ring' : 'fake_store';
-        o.truth = { malicious: true, attack: kind, attacker: m.owner, victim: o.buyer, harm: o.amount };
-        this.tallyAttempt(kind, o.amount);
-        if (outcome === 'completed') this.leak(o.id, kind, o.amount);
-        else if (outcome !== 'escrowed') this.prevent(kind, o.amount);
-      }
+      const kind: AttackKind = m.owner && this.attackers.get(m.owner)?.kind === 'fraud_ring' ? 'fraud_ring' : 'fake_store';
+      o.truth = { malicious: true, attack: kind, attacker: m.owner, victim: o.buyer, harm: o.amount };
+      this.tallyAttempt(kind, o.amount);
+      if (outcome === 'completed') this.leak(o.id, kind, o.amount);
+      else if (outcome !== 'escrowed') this.prevent(kind, o.amount);
     } else if (truth.harm > 0) {
       if (outcome === 'completed') this.leak(o.id, truth.attack!, truth.harm);
       else if (outcome !== 'escrowed') this.prevent(truth.attack!, truth.harm);

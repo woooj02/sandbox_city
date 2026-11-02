@@ -64,6 +64,11 @@ export const PRESETS: Record<string, Policy> = {
     escrowNewMerchants: 720, sanitizer: 0.6, shipLock: true, refundTrackingCheck: true, refundRatioCap: 0.5, ringDetection: 0.7,
     idempotencyKeys: true, softMode: true,
   },
+  /** Found by scripts/tune.ts (most net value with >= 85% of fraud stopped), validated on held-out days. */
+  tuned: {
+    ...OPEN, name: 'Lab-Tuned', requirePassport: true, velocity: 8, newAgentCap: 90, escrowNewMerchants: 840, shipLock: true,
+    refundTrackingCheck: true, idempotencyKeys: true,
+  },
 };
 
 export interface AgentView { age: number; orders: number; recent: number; refunds: number; rep: number }

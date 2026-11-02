@@ -6,6 +6,7 @@
 import { World, DEFAULT_CONFIG, type WorldConfig } from './world';
 import { PRESETS, type Policy } from './policy';
 import type { Metrics } from './types';
+import { round2 } from './rng';
 
 export interface DaySummary {
   key: string;
@@ -21,7 +22,7 @@ export interface DaySummary {
 }
 
 export const summarize = (key: string, name: string, m: Metrics): DaySummary => ({
-  key, name, stolen: m.fraud.leaked, duplicate: m.chaos.duplicateValue, honestLost: m.honest.blockedValue,
+  key, name, stolen: m.fraud.leaked, duplicate: m.chaos.duplicateValue, honestLost: round2(m.honest.blockedValue + m.honest.abandonedValue),
   gmv: m.honest.gmv, net: m.netValue, safety: m.safety, access: m.access, fraudAttempted: m.fraud.prevented + m.fraud.leaked,
 });
 

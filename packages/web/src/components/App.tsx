@@ -9,6 +9,7 @@ import { Rulebook } from './Rulebook';
 import { CutIns } from './CutIn';
 import { Feed } from './Feed';
 import { Report } from './Report';
+import { AutoTune } from './AutoTune';
 
 export function App() {
   const lanes = useStore((s) => s.lanes.length);
@@ -32,6 +33,7 @@ export function App() {
       <Ledger />
       <Feed />
       <Report />
+      <AutoTune />
     </div>
   );
 }

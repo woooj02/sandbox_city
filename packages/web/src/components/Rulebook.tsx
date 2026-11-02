@@ -3,6 +3,7 @@ import { Policy, PRESETS, RULES } from '@sandbox-city/core';
 import { useStore } from '../store';
 import { client } from '../sim/client';
 import { LANE_NAMES } from './meta';
+import { startTune } from './AutoTune';
 
 export function Rulebook() {
   const policies = useStore((s) => s.policies);
@@ -57,7 +58,10 @@ export function Rulebook() {
         })}
       </div>
       <div className="rule-foot">
-        <button className={`btn apply ${dirty ? 'hot' : ''}`} onClick={apply}>{dirty ? '⟳ REPLAY THE DAY WITH THESE RULES' : '⟳ REPLAY'}</button>
+        <div className="rule-actions">
+          <button className={`btn apply ${dirty ? 'hot' : ''}`} onClick={apply}>{dirty ? '⟳ REPLAY WITH THESE RULES' : '⟳ REPLAY'}</button>
+          <button className="btn tune-btn" title="Search for a better rulebook automatically" onClick={() => startTune('safe')}>✦ AUTO-TUNE</button>
+        </div>
         <p>Same seed: same city, same shoppers, same attackers. Only the rules change.</p>
       </div>
     </aside>

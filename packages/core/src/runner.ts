@@ -7,6 +7,8 @@ import type { Merchant, Shopper } from './types';
 import type { FromSim, MerchantLite, ShopperLite, ToSim } from './protocol';
 import type { Rails } from './rails';
 import { whatIf } from './whatif';
+import { searchRulebook } from './search';
+import { PRESETS } from './policy';
 
 export const mLite = (m: Merchant): MerchantLite => ({
   id: m.id, name: m.name, x: m.x, y: m.y, district: m.district, honest: m.honest, verified: m.verified, owner: m.owner, category: m.catalog[0]?.category ?? 'home',
@@ -27,6 +29,7 @@ export class SimRunner {
   tps = 8;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private gen = 0;
+  private tuneGen = 0;
   private lastInit: Extract<ToSim, { cmd: 'init' }> | null = null;
 
   constructor(private post: (m: FromSim) => void, private opts: RunnerOptions) {}
@@ -64,6 +67,32 @@ export class SimRunner {
     } else if (msg.cmd === 'speed') {
       this.tps = msg.tps;
       this.status();
+    } else if (msg.cmd === 'tune_stop') {
+      this.tuneGen++;
+    } else if (msg.cmd === 'tune') {
+      const init = this.lastInit;
+      if (!init) return;
+      const tg = ++this.tuneGen, t0 = Date.now();
+      const presetOf = (name: string) => Object.values(PRESETS).find((p) => p.name === name)?.name;
+      let id = 0;
+      // trained on other days; the day on screen stays held out for the replay
+      searchRulebook({
+        trainSeeds: [`${init.seed}~train-1`, `${init.seed}~train-2`], testSeeds: [], chaos: init.chaos,
+        generations: msg.generations ?? 6, children: msg.children ?? 8, minSafety: msg.minSafety, minAccess: msg.minAccess,
+        seed: `${init.seed}~search`, label: msg.minSafety ? `Tuned ≥${Math.round(msg.minSafety * 100)}%` : 'Tuned · max value',
+        world: init.shoppers ? { shoppers: init.shoppers } : undefined,
+      }, (e) => {
+        if (tg !== this.tuneGen) throw new Error('tune cancelled');
+        if (e.type !== 'eval') return;
+        const c = e.candidate;
+        this.post({
+          type: 'tune', phase: 'eval', evals: e.evals, total: e.total, generation: e.generation,
+          point: { id: id++, generation: e.generation, safety: c.mean.safety, access: c.mean.access, net: c.mean.net, score: c.score, preset: e.generation === 0 ? presetOf(c.policy.name) : undefined },
+          best: { policy: e.best.policy, mean: e.best.mean },
+        });
+      }).then((r) => {
+        if (tg === this.tuneGen) this.post({ type: 'tune', phase: 'done', best: { policy: r.best.policy, mean: r.best.mean }, evals: r.evals, ms: Date.now() - t0 });
+      }).catch((e: Error) => { if (e.message !== 'tune cancelled') this.post({ type: 'error', message: `tune: ${e.message}` }); });
     } else if (msg.cmd === 'whatif') {
       const init = this.lastInit;
       if (!init) return;

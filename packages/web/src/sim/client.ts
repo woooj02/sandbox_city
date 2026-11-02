@@ -181,6 +181,10 @@ class Client {
       }
     } else if (m.type === 'status') {
       useStore.setState({ running: m.running, tps: m.tps, paypal: m.paypal ?? 'twin' });
+    } else if (m.type === 'tune') {
+      const tune = useStore.getState().tune;
+      if (m.phase === 'eval') useStore.setState({ tune: { ...tune, points: [...tune.points, m.point], best: m.best, evals: m.evals, total: m.total, generation: m.generation } });
+      else useStore.setState({ tune: { ...tune, running: false, best: m.best, evals: m.evals, total: m.evals, ms: m.ms } });
     } else if (m.type === 'whatif') {
       useStore.setState({ whatif: { mine: m.mine, alternatives: m.alternatives } });
     } else if (m.type === 'run') {

@@ -177,7 +177,9 @@ export interface KindTally { attempts: number; attempted: number; prevented: num
 
 export interface Metrics {
   t: number;
-  honest: { attempts: number; completed: number; blocked: number; abandoned: number; challenged: number; declined: number; gmv: number; blockedValue: number };
+  honest: { attempts: number; completed: number; blocked: number; abandoned: number; challenged: number; declined: number; gmv: number; blockedValue: number;
+    /** Honest orders challenged to the owner and never approved. */
+    abandonedValue: number };
   fraud: { attempts: number; attempted: number; prevented: number; leaked: number; byKind: Record<AttackKind, KindTally> };
   refunds: { legitApproved: number; legitDenied: number; abuseApproved: number; abuseDenied: number };
   chaos: { faults: number; recovered: number; duplicateCharges: number; duplicateValue: number };

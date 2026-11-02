@@ -13,7 +13,7 @@ function findings(m: Metrics) {
   if (m.chaos.duplicateCharges) out.push(`${m.chaos.duplicateCharges} customers were charged twice when PayPal timed out and the agent retried without an idempotency key.`);
   else if (m.chaos.faults) out.push(`${m.chaos.faults} PayPal faults injected; zero double charges.`);
   const turned = m.honest.blocked + m.honest.abandoned;
-  out.push(`${turned} honest purchases were turned away (${money(m.honest.blockedValue)} of good business lost).`);
+  out.push(`${turned} honest purchases were turned away (${money(m.honest.blockedValue + (m.honest.abandonedValue ?? 0))} of good business lost).`);
   return out;
 }
 
