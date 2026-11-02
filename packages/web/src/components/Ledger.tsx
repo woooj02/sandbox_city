@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
-import { AllCommunityModule, ModuleRegistry, themeQuartz, colorSchemeDark, ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
+import { AllCommunityModule, ModuleRegistry, themeQuartz, colorSchemeDark, ColDef, GridApi, ICellRendererParams, IRowNode } from 'ag-grid-community';
 import { SimEvent } from '@sandbox-city/core';
 import { ATTACK_SHORT } from './meta';
 import { bus } from '../sim/bus';
@@ -51,6 +51,16 @@ function toRow(lane: number, e: SimEvent): Row | null {
   return null;
 }
 
+/** Ledger views: each one is an AG Grid external filter over the tone and ground truth of a row. */
+const VIEWS = {
+  all: { label: 'ALL', test: () => true },
+  attacks: { label: 'ATTACKS', test: (r: Row) => r.truth !== 'honest' },
+  breach: { label: 'GOT THROUGH', test: (r: Row) => r.tone === 'breach' },
+  stopped: { label: 'STOPPED', test: (r: Row) => r.tone === 'stopped' || r.tone === 'held' },
+  hurt: { label: 'HONEST HURT', test: (r: Row) => r.tone === 'falsepos' || r.tone === 'double' },
+} as const;
+type View = keyof typeof VIEWS;
+
 const Badge = (p: ICellRendererParams<Row>) => <span className={`badge b-${String(p.value).replace(/[^a-z×0-9]/gi, '')}`}>{p.value}</span>;
 const Truth = (p: ICellRendererParams<Row>) => <span className={`truth ${p.value === 'honest' ? 'h' : 'a'}`}>{p.value === 'honest' ? '● honest' : `◆ ${p.value}`}</span>;
 
@@ -58,6 +68,12 @@ export function Ledger() {
   const api = useRef<GridApi<Row> | null>(null);
   const rows = useRef<Row[]>([]);
   const multi = useStore((s) => s.lanes.length > 1);
+  const [view, setView] = useState<View>('all');
+  const [q, setQ] = useState('');
+  const viewRef = useRef<View>('all');
+  const pick = (v: View) => { viewRef.current = v; setView(v); api.current?.onFilterChanged(); };
+  const isExternalFilterPresent = useCallback(() => viewRef.current !== 'all', []);
+  const doesExternalFilterPass = useCallback((n: IRowNode<Row>) => !!n.data && VIEWS[viewRef.current].test(n.data), []);
   const cols = useMemo<ColDef<Row>[]>(() => [
     ...(multi ? [{ field: 'lane' as const, headerName: '', width: 44, cellClass: (p: { value: string }) => `lanecell lane-${p.value === 'A' ? 0 : 1}` }] : []),
     { field: 't', headerName: 'TIME', width: 70, valueFormatter: (p) => clock(p.value) },
@@ -99,7 +115,13 @@ export function Ledger() {
 
   return (
     <section className="ledger panel">
-      <div className="panel-title"><span>LIVE LEDGER</span><em>/ledger/tx</em><small>every order and refund on the PayPal rails · what the gate decided · what was really going on</small></div>
+      <div className="panel-title">
+        <span>LIVE LEDGER</span><em>/ledger/tx</em><small>every order and refund on the PayPal rails · what the gate decided · what was really going on</small>
+        <div className="ledger-tools">
+          {(Object.keys(VIEWS) as View[]).map((v) => <button key={v} className={`lv lv-${v} ${view === v ? 'on' : ''}`} onClick={() => pick(v)}>{VIEWS[v].label}</button>)}
+          <label className="lq"><span>grep</span><input value={q} spellCheck={false} placeholder="agent, store, id…" onChange={(e) => setQ(e.target.value)} /></label>
+        </div>
+      </div>
       <div className="grid-wrap">
         <AgGridReact<Row>
           theme={gridTheme}
@@ -110,6 +132,9 @@ export function Ledger() {
           onGridReady={(e) => (api.current = e.api)}
           animateRows={false}
           suppressCellFocus
+          quickFilterText={q}
+          isExternalFilterPresent={isExternalFilterPresent}
+          doesExternalFilterPass={doesExternalFilterPass}
           defaultColDef={{ sortable: true, resizable: true, filter: true }}
         />
       </div>
