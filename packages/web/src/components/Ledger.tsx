@@ -22,6 +22,8 @@ interface Row {
 }
 
 const names = new Map<string, string>();
+/** Rows arrive by transaction; a stable empty array keeps re-renders from wiping the grid. */
+const NO_ROWS: Row[] = [];
 
 function toRow(lane: number, e: SimEvent): Row | null {
   if (e.type === 'order') {
@@ -61,8 +63,8 @@ const VIEWS = {
 } as const;
 type View = keyof typeof VIEWS;
 
-const Badge = (p: ICellRendererParams<Row>) => <span className={`badge b-${String(p.value).replace(/[^a-z×0-9]/gi, '')}`}>{p.value}</span>;
-const Truth = (p: ICellRendererParams<Row>) => <span className={`truth ${p.value === 'honest' ? 'h' : 'a'}`}>{p.value === 'honest' ? '● honest' : `◆ ${p.value}`}</span>;
+const Badge = (p: ICellRendererParams<Row>) => p.node.rowPinned ? null : <span className={`badge b-${String(p.value).replace(/[^a-z×0-9]/gi, '')}`}>{p.value}</span>;
+const Truth = (p: ICellRendererParams<Row>) => p.node.rowPinned ? <span className="tot-truth">{p.value}</span> : <span className={`truth ${p.value === 'honest' ? 'h' : 'a'}`}>{p.value === 'honest' ? '● honest' : `◆ ${p.value}`}</span>;
 
 export function Ledger() {
   const api = useRef<GridApi<Row> | null>(null);
@@ -70,18 +72,47 @@ export function Ledger() {
   const multi = useStore((s) => s.lanes.length > 1);
   const [view, setView] = useState<View>('all');
   const [q, setQ] = useState('');
+  const [total, setTotal] = useState<Row[]>([]);
+  const lastTotal = useRef('');
+  /** One pinned row that sums whatever the current view and grep leave visible. */
+  const sum = useCallback(() => {
+    const a = api.current;
+    if (!a) return;
+    let n = 0, amt = 0, stolen = 0, stopped = 0, hurt = 0;
+    a.forEachNodeAfterFilter((node) => {
+      const r = node.data;
+      if (!r) return;
+      n++; amt += r.amount;
+      if (r.tone === 'breach') stolen += r.harm;
+      else if (r.tone === 'stopped' || r.tone === 'held') stopped += r.amount;
+      else if (r.tone === 'falsepos' || r.tone === 'double') hurt += r.amount;
+    });
+    const usd = (v: number) => `$${Math.round(v).toLocaleString('en-US')}`;
+    const sig = `${n}|${amt.toFixed(2)}|${stolen}|${stopped}|${hurt}`;
+    if (sig === lastTotal.current) return;
+    lastTotal.current = sig;
+    setTotal(n ? [{
+      key: 'total', lane: '', t: 0, kind: 'TOTAL' as Row['kind'], id: '', paypal: `${n.toLocaleString('en-US')} rows`, rail: '', buyer: '', store: '',
+      amount: amt, gate: '', outcome: '', rules: `stopped ${usd(stopped)} · honest hurt ${usd(hurt)}`,
+      truth: `stolen ${usd(stolen)}`, harm: 0, tone: 'total',
+    }] : []);
+  }, []);
+  const exportCsv = () => api.current?.exportDataAsCsv({
+    fileName: `sandbox-city-ledger-${view}.csv`, skipPinnedBottom: true,
+    processCellCallback: (p) => p.column.getColId() === 't' ? clock(p.value) : p.value,
+  });
   const viewRef = useRef<View>('all');
   const pick = (v: View) => { viewRef.current = v; setView(v); api.current?.onFilterChanged(); };
   const isExternalFilterPresent = useCallback(() => viewRef.current !== 'all', []);
   const doesExternalFilterPass = useCallback((n: IRowNode<Row>) => !!n.data && VIEWS[viewRef.current].test(n.data), []);
   const cols = useMemo<ColDef<Row>[]>(() => [
     ...(multi ? [{ field: 'lane' as const, headerName: '', width: 44, cellClass: (p: { value: string }) => `lanecell lane-${p.value === 'A' ? 0 : 1}` }] : []),
-    { field: 't', headerName: 'TIME', width: 70, valueFormatter: (p) => clock(p.value) },
+    { field: 't', headerName: 'TIME', width: 70, valueFormatter: (p) => (p.node?.rowPinned ? 'Σ' : clock(p.value)) },
     { field: 'kind', headerName: 'TYPE', width: 78 },
     { field: 'paypal', headerName: 'PAYPAL ID', width: 170, cellClass: 'mono-dim' },
     { field: 'buyer', headerName: 'AGENT', width: 110 },
     { field: 'store', headerName: 'STORE', flex: 1, minWidth: 150 },
-    { field: 'amount', headerName: 'AMOUNT', width: 96, type: 'rightAligned', valueFormatter: (p) => `$${p.value.toFixed(2)}` },
+    { field: 'amount', headerName: 'AMOUNT', width: 96, type: 'rightAligned', valueFormatter: (p) => `$${p.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
     { field: 'gate', headerName: 'GATE', width: 92, cellRenderer: Badge },
     { field: 'outcome', headerName: 'OUTCOME', width: 110, cellRenderer: Badge },
     { field: 'truth', headerName: 'GROUND TRUTH', width: 170, cellRenderer: Truth },
@@ -119,6 +150,7 @@ export function Ledger() {
         <span>LIVE LEDGER</span><em>/ledger/tx</em><small>every order and refund on the PayPal rails · what the gate decided · what was really going on</small>
         <div className="ledger-tools">
           {(Object.keys(VIEWS) as View[]).map((v) => <button key={v} className={`lv lv-${v} ${view === v ? 'on' : ''}`} onClick={() => pick(v)}>{VIEWS[v].label}</button>)}
+          <button className="lv lv-csv" title="Download the rows in this view as CSV" onClick={exportCsv}>⇣ CSV</button>
           <label className="lq"><span>grep</span><input value={q} spellCheck={false} placeholder="agent, store, id…" onChange={(e) => setQ(e.target.value)} /></label>
         </div>
       </div>
@@ -126,13 +158,15 @@ export function Ledger() {
         <AgGridReact<Row>
           theme={gridTheme}
           columnDefs={cols}
-          rowData={[]}
+          rowData={NO_ROWS}
           getRowId={(p) => p.data.key}
           getRowClass={(p) => `tone-${p.data?.tone}`}
           onGridReady={(e) => (api.current = e.api)}
           animateRows={false}
           suppressCellFocus
           quickFilterText={q}
+          pinnedBottomRowData={total}
+          onModelUpdated={sum}
           isExternalFilterPresent={isExternalFilterPresent}
           doesExternalFilterPass={doesExternalFilterPass}
           defaultColDef={{ sortable: true, resizable: true, filter: true }}

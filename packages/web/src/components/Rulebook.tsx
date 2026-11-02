@@ -5,6 +5,7 @@ import { client } from '../sim/client';
 import { LANE_NAMES } from './meta';
 import { startTune } from './AutoTune';
 import { startForge } from './Forge';
+import { RuleMatrix } from './RuleMatrix';
 
 export function Rulebook() {
   const policies = useStore((s) => s.policies);
@@ -14,6 +15,7 @@ export function Rulebook() {
   const [draft, setDraft] = useState<Policy[] | null>(null);
   const cur = (draft ?? policies)[lane];
   const dirty = draft !== null;
+  const [matrix, setMatrix] = useState(false);
 
   const update = (p: Partial<Policy>) => {
     const next = (draft ?? policies).slice();
@@ -24,7 +26,7 @@ export function Rulebook() {
 
   return (
     <aside className="rulebook panel">
-      <div className="panel-title"><span>RULEBOOK</span><em>/gate/rules</em></div>
+      <div className="panel-title"><span>RULEBOOK</span><em>/gate/rules</em><button className="rm-open" title="Compare and edit every rule against every preset" onClick={() => setMatrix(true)}>⊞ MATRIX</button></div>
       {multi && (
         <div className="seg lanes">
           {policies.map((p, i) => <button key={i} className={`${lane === i ? 'on' : ''} lane-${i}`} onClick={() => setEdit(i)}>{LANE_NAMES[i]} · {(draft ?? policies)[i].name}</button>)}
@@ -66,6 +68,7 @@ export function Rulebook() {
         </div>
         <p>Same seed: same city, same shoppers, same attackers. Only the rules change.</p>
       </div>
+      {matrix && <RuleMatrix policy={cur} dirty={dirty} onChange={update} onApply={apply} onClose={() => setMatrix(false)} />}
     </aside>
   );
 }

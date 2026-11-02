@@ -56,7 +56,8 @@ Presets range from **Wild West** (no rules) through **Passport Theater**, **Know
 - **What-if.** At the end of the day, the same day is replayed under every other rulebook. You see what each would have saved, or cost.
 - **Auto-tune.** An evolutionary search over the rulebook. Candidates are trained on two other days, so the day on screen stays unseen and the replay is a fair test. You can require a safety floor, for example "at least 85% of fraud stopped", and it finds the most value above it.
 - **Attack forge.** The red team. Attack tactics evolve against your rulebook on two other days. Each attack family keeps whichever variant got the most money past the gate. Attack frequency is a fixed budget, so the forge finds smarter attacks, not more of them. You can unleash the forged attackers on the city, or re-tune the rulebook against them.
-- **Ledger.** Every order, refund and PayPal call, in AG Grid.
+- **Ledger.** Every order, refund and PayPal call, in AG Grid. Filter by view or grep, see totals for what is in view, and export it as CSV.
+- **Rule matrix.** Every rule against every preset in one grid. Edit your rulebook in place and replay the same day.
 - **Cinema mode.** A directed, letterboxed cut of the whole story for presenting:
   - the camera pushes in and locks a reticle on breaches, injections and double charges
   - every chapter opens with the command that runs it, typed out on a terminal
@@ -150,6 +151,12 @@ npx tsx scripts/compare.ts
 ```
 
 Plays the default day under every preset and prints the scores.
+
+```bash
+npx tsx scripts/paypal-proof.ts
+```
+
+With the lab server running on sandbox keys, plays one Lab-Tuned day on the live lane, reconciles it with PayPal and saves the receipt that the twin's end-of-day report shows.
 
 ## Layout
 
