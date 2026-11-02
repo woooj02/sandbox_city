@@ -163,7 +163,7 @@ With the lab server running on sandbox keys, plays one Lab-Tuned day on the live
 GEMINI_API_KEY=... npx tsx scripts/record-brain.ts
 ```
 
-Records how a language model shops on the default day: every case a shopper meets under every preset is sent to the model in batches, and the answers are saved to `packages/web/src/data/brain-tape.json` for the twin to replay. Gemini's free tier is the default; any provider with a chat-completions endpoint works through `LLM_BASE_URL`, `LLM_MODEL` and `LLM_API_KEY`. Behind a proxy, add `NODE_USE_ENV_PROXY=1`.
+Records how a language model shops on the default day: every case a shopper meets under every preset is sent to the model in batches, and the answers are saved to `packages/web/src/data/brain-tape.json` for the twin to replay. The default is Gemma 4 26B (`gemma-4-26b-a4b-it`) on Google's Gemini API, an open-weight model with no paid tier; any provider with a chat-completions endpoint works through `LLM_BASE_URL`, `LLM_MODEL` and `LLM_API_KEY`. Behind a proxy, add `NODE_USE_ENV_PROXY=1`.
 
 ## Layout
 

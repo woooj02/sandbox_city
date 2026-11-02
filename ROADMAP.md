@@ -14,4 +14,4 @@ Product work in progress. Items are ticked as they land on `main`.
 
 ## Next
 
-- [ ] **Model-driven shoppers.** A lane where a language model reads real listing text (injections included) and decides what to buy through the same gate. Runs are recorded so a seed still replays exactly. Built (`scripts/record-brain.ts`, `?brain=1`); waiting on the first recorded run.
+- [x] **Model-driven shoppers.** A lane where a language model reads real listing text (injections included) and decides what to buy through the same gate. Runs are recorded so a seed still replays exactly. Recorded with Gemma 4 26B (open weights, no paid tier): 288 cases on the default day. The model followed the planted instructions in every poisoned listing it read (42 of 42 under Wild West); the gate is what limits the damage. Try `?brain=1`.
