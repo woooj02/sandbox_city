@@ -1,9 +1,9 @@
 /**
- * A model shopper paying through PayPal's Agent Toolkit on the sandbox, under two rulebooks.
+ * A model shopper paying through PayPal's Agent Toolkit on the sandbox, under three rulebooks.
  *   NODE_USE_ENV_PROXY=1 npx tsx scripts/toolkit-shop.ts [poisoned=8] [clean=3]
  * Needs the sandbox keys (PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_TEST_CARD) and a model key (GEMINI_API_KEY
  * or LLM_API_KEY). The cases are real ones from the default day: owner requests and listings, some of them poisoned,
- * dealt round-robin over the injection templates the day uses.
+ * dealt round-robin over the city's four injection templates.
  * Writes packages/web/src/data/toolkit-proof.json, which the report shows.
  */
 import { writeFileSync } from 'node:fs';
@@ -17,15 +17,20 @@ if (!cfg || !toolkit) { console.error('Needs a model key and the PayPal sandbox 
 const nPoisoned = Number(process.argv[2] ?? 8), nClean = Number(process.argv[3] ?? 3);
 const seed = 'neo-osaka-7';
 
-// every case a model shopper meets on the default day, in the order the day meets them
-const w = new World({ ...DEFAULT_CONFIG, seed, crypto: 'modeled', policy: PRESETS.open, brain: { shoppers: 1200, tape: {} } });
-await w.run();
+// every case a model shopper meets on the default day, in the order the day meets them. Stock attackers all write
+// at one subtlety, so the day only carries one injection template; to cover the city's four, the same day is also
+// run with the injection crews set to each template's subtlety (the knob the attack forge evolves)
+const day = async (subtlety?: number) => {
+  const w = new World({ ...DEFAULT_CONFIG, seed, crypto: 'modeled', policy: PRESETS.open, brain: { shoppers: 1200, tape: {} },
+    ...(subtlety == null ? {} : { genomes: { prompt_injection: { subtlety } } }) });
+  await w.run();
+  return [...w.brainMisses.values()];
+};
+const all = await day();
 const seen = new Set<string>();
 const fresh = (c: BrainCase) => !seen.has(c.listing.title) && !!seen.add(c.listing.title);
-const all = [...w.brainMisses.values()];
-// the poisoned ones are dealt round-robin over the injection templates the day uses, first come first served
 const template = (c: BrainCase) => INJECTIONS.findIndex((t) => c.listing.text.includes(t.text.split('{')[0].trim()));
-const byTemplate = INJECTIONS.map((_, i) => all.filter((c) => c.injected && template(c) === i));
+const byTemplate = await Promise.all(INJECTIONS.map(async (_, i) => (await day((i + 0.5) / INJECTIONS.length)).filter((c) => c.injected && template(c) === i)));
 const poisoned: BrainCase[] = [];
 for (let round = 0; poisoned.length < nPoisoned && byTemplate.some((q) => q.length); round++)
   for (const q of byTemplate) {
@@ -35,7 +40,7 @@ for (let round = 0; poisoned.length < nPoisoned && byTemplate.some((q) => q.leng
   }
 const cases: BrainCase[] = [...poisoned, ...all.filter((c) => !c.injected && fresh(c)).slice(0, nClean)];
 
-// both rulebooks see the same model: identical conversations are asked once
+// every rulebook sees the same model: identical conversations are asked once
 const memo = new Map<string, ReturnType<AgentTurn>>();
 const raw = llmAgent(cfg);
 let calls = 0;
@@ -45,7 +50,7 @@ const agent: AgentTurn = (messages, tools) => {
   return memo.get(k)!;
 };
 
-const rulebooks = [PRESETS.open, PRESETS.tuned];
+const rulebooks = [PRESETS.open, PRESETS.tuned, PRESETS.kya];
 const out: { store: string; title: string; price: number; injected: boolean; owner: BrainCase['owner']; text: string; lanes: LaneRun[] }[] = [];
 for (const c of cases) {
   const lanes: LaneRun[] = [];
