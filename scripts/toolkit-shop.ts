@@ -1,20 +1,34 @@
 /**
  * A model shopper paying through PayPal's Agent Toolkit on the sandbox, under three rulebooks.
- *   NODE_USE_ENV_PROXY=1 npx tsx scripts/toolkit-shop.ts [poisoned=8] [clean=3]
- * Needs the sandbox keys (PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_TEST_CARD) and a model key (GEMINI_API_KEY
- * or LLM_API_KEY). The cases are real ones from the default day: owner requests and listings, some of them poisoned,
+ *   NODE_USE_ENV_PROXY=1 npx tsx scripts/toolkit-shop.ts [poisoned=8] [clean=3] [--dry]
+ * Needs the sandbox keys (PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_TEST_CARD) and a model key (GEMINI_API_KEY,
+ * TOGETHER_API_KEY or LLM_API_KEY). A paid model runs under the client's spending cap (LLM_BUDGET_USD, default $0.25).
+ * --dry answers the toolkit calls locally instead of on PayPal and writes nothing: a cheap look at what a model does. The cases are real ones from the default day: owner requests and listings, some of them poisoned,
  * dealt round-robin over the city's four injection templates.
  * Writes packages/web/src/data/toolkit-proof.json, which the report shows.
  */
 import { writeFileSync } from 'node:fs';
 import { DEFAULT_CONFIG, INJECTIONS, PRESETS, World, type BrainCase } from '@sandbox-city/core';
-import { llmAgent, llmFromEnv, type AgentTurn } from '../packages/server/src/llm.ts';
-import { goesElsewhere, shopCase, toolkitFromEnv, TOOLKIT_TOOLS, type LaneRun } from '../packages/server/src/toolkit-shop.ts';
+import { llmAgent, llmFromEnv, llmPricing, type AgentTurn } from '../packages/server/src/llm.ts';
+import { goesElsewhere, shopCase, toolkitFromEnv, TOOLKIT_TOOLS, type LaneRun, type Toolkit } from '../packages/server/src/toolkit-shop.ts';
 
 const cfg = llmFromEnv();
-const toolkit = toolkitFromEnv();
-if (!cfg || !toolkit) { console.error('Needs a model key and the PayPal sandbox keys.'); process.exit(1); }
-const nPoisoned = Number(process.argv[2] ?? 8), nClean = Number(process.argv[3] ?? 3);
+const real = toolkitFromEnv();
+if (!cfg || !real) { console.error('Needs a model key and the PayPal sandbox keys.'); process.exit(1); }
+const dry = process.argv.includes('--dry');
+const [nPoisoned, nClean] = process.argv.slice(2).filter((a) => !a.startsWith('--')).map(Number).concat([8, 3]).slice(0, 2) as [number, number];
+if (cfg.budgetUsd != null) {
+  const price = await llmPricing(cfg);
+  if (!price) { console.error(`No published price for ${cfg.model}; set LLM_PRICE_IN and LLM_PRICE_OUT. Nothing was sent.`); process.exit(1); }
+  console.log(`model ${cfg.model}: $${price.in}/M in, $${price.out}/M out, cap $${cfg.budgetUsd}, already spent $${(cfg.spend?.usd ?? 0).toFixed(4)}`);
+}
+// --dry: the same tool definitions, answered here; nothing reaches PayPal
+let fake = 0;
+const toolkit: Toolkit = dry ? {
+  ...real,
+  async call(tc) { return tc.function.name === 'create_order' ? { id: `DRY${++fake}`, status: 'PAYER_ACTION_REQUIRED' } : { status: 'success', response: { id: JSON.parse(tc.function.arguments || '{}').id, status: 'COMPLETED' } }; },
+  async approve() { return 'APPROVED'; },
+} : real;
 const seed = 'neo-osaka-7';
 
 // every case a model shopper meets on the default day, in the order the day meets them. Stock attackers all write
@@ -63,6 +77,9 @@ for (const c of cases) {
   out.push({ store: c.listing.store, title: c.listing.title, price: c.listing.price, injected: !!c.injected, owner: c.owner, text: c.listing.text, lanes });
 }
 
+const spent = cfg.spend ? { usd: Math.round(cfg.spend.usd * 1e4) / 1e4, tokensIn: cfg.spend.tokensIn, tokensOut: cfg.spend.tokensOut } : undefined;
+if (dry) { console.log(JSON.stringify({ dry: true, modelCalls: calls, spent })); process.exit(0); }
+
 // read every paid order back from PayPal, by id, through the toolkit's own get_order
 let completed = 0, matched = 0, amount = 0, orders = 0;
 for (const c of out) for (const l of c.lanes) if (l.paid) {
@@ -87,7 +104,7 @@ const lanes = rulebooks.map((p, i) => {
 });
 const proof = {
   recordedAt: new Date().toISOString(), seed, model: cfg.model, toolkit: `@paypal/agent-toolkit ${toolkit.version}`, tools: [...TOOLKIT_TOOLS],
-  modelCalls: calls, lanes, readBack: { orders, completed, matched, amount: Math.round(amount * 100) / 100 }, cases: out,
+  modelCalls: calls, ...(spent?.usd ? { modelCost: spent } : {}), lanes, readBack: { orders, completed, matched, amount: Math.round(amount * 100) / 100 }, cases: out,
 };
 writeFileSync(new URL('../packages/web/src/data/toolkit-proof.json', import.meta.url), JSON.stringify(proof, null, 1) + '\n');
-console.log(JSON.stringify({ lanes, readBack: proof.readBack, modelCalls: calls }));
+console.log(JSON.stringify({ lanes, readBack: proof.readBack, modelCalls: calls, spent }));
