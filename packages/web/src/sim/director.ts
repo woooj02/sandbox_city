@@ -4,6 +4,8 @@
  *   II   Auto-tune: rulebooks evolve on days the city has not seen
  *   III  The race: Wild West vs the tuned rulebook on the same day, split screen
  *   IV   The reckoning: end-of-day report, what-if replays, PayPal reconciliation
+ *   V    The attackers adapt: forged attackers, a re-tuned rulebook, a rematch
+ *   VI   The agents think: the shoppers' agents become a real language model, plain prompt then careful prompt
  * The camera work lives in the renderer; this file decides pacing, chapter cards and bullet time.
  */
 import { PRESETS, type Metrics, type Policy } from '@sandbox-city/core';
@@ -12,6 +14,7 @@ import { useStore, type TitleCard } from '../store';
 import { client } from './client';
 import { startTune } from '../components/AutoTune';
 import { startForge } from '../components/Forge';
+import { TAPES, modelLabel } from './brain';
 
 const FILM_TPS = 22;
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -87,6 +90,7 @@ class Director {
     const take = ++this.take;
     this.patch({ rolling: true, card: null, act: '' });
     useStore.setState({ showReport: false, tune: { ...this.st.tune, open: false }, forge: { ...this.st.forge, open: false } });
+    if (from >= 6) { await this.agents(take); return this.endCard(take); }
     if (from >= 5) return this.adapt(take);
     useStore.setState({ genomes: null });
     let best: Policy = PRESETS.tuned;
@@ -222,7 +226,59 @@ class Director {
     const [a, b] = this.st.lanes.map((l) => l.metrics as Metrics);
     await this.card(take, { cmd: 'diff lab-tuned hardened', act: 'RESULT', title: b.netValue >= a.netValue ? `${money(b.netValue - a.netValue)} WON BACK` : `${money(a.netValue - b.netValue)} SHORT`, sub: `stolen ${money(a.fraud.leaked)} → ${money(b.fraud.leaked)} on a day neither rulebook trained on` }, 4200);
     await this.report(take);
+    await this.agents(take);
     await this.endCard(take);
+  }
+
+  /** Races Wild West against the tuned rulebook with every honest shopper's agent run by the recorded model. */
+  private async modelRace(take: number, tuned: Policy, prompt: 'plain' | 'guarded', card: Omit<TitleCard, 'id'>, tps: number) {
+    useStore.setState({ genomes: null, brain: true, brainPrompt: prompt });
+    client.start([PRESETS.open, tuned]);
+    this.speed(4);
+    await sleep(400);
+    client.send({ cmd: 'play' });
+    await this.card(take, card, 3800);
+    this.baseTps = tps; this.speed(tps);
+    await this.until(take, () => this.done());
+    await sleep(800);
+    return this.st.lanes.map((l) => ({ m: l.metrics as Metrics, b: l.brain }));
+  }
+
+  /** Act VI: a real language model reads the listings for every honest shopper; then the same model with a careful prompt. */
+  private async agents(take: number) {
+    if (!this.alive(take) || !TAPES.plain.model) return;
+    const tuned: Policy = { ...(this.lastBest ?? PRESETS.tuned), name: 'Lab-Tuned' };
+    const model = modelLabel(TAPES.plain.model);
+    this.patch({ act: 'VI · THE AGENTS THINK' });
+    const [pa, pb] = await this.modelRace(take, tuned, 'plain', {
+      cmd: `agents --model=${TAPES.plain.model} --prompt=plain`, act: 'ACT VI', title: 'THE SHOPPERS GET A REAL MODEL',
+      sub: `every honest shopper's agent now reads the listings with ${model}, an open language model`,
+    }, FILM_TPS);
+    if (!this.alive(take) || !pa?.m || !pb?.m) return;
+    const injA = pa.m.fraud.byKind.prompt_injection, injB = pb.m.fraud.byKind.prompt_injection;
+    await this.card(take, {
+      cmd: 'grep MODEL /wire/events --count', act: 'RESULT', title: `${pa.b.obeyed} OF ${pa.b.poisoned} POISONED LISTINGS OBEYED`,
+      sub: `Wild West shipped ${money(injA.leaked)} of hijacked orders to attackers · Lab-Tuned let ${money(injB.leaked)} of ${money(injB.attempted)} through`,
+    }, 4800);
+    if (!this.alive(take) || !TAPES.guarded.model) return;
+
+    this.patch({ act: 'VI · A CAREFUL AGENT' });
+    const [ga, gb] = await this.modelRace(take, tuned, 'guarded', {
+      cmd: 'agents --prompt=careful', act: 'BLUE TEAM', title: 'A MORE CAREFUL AGENT',
+      sub: 'same model, now told that page text is untrusted and only the owner gives orders',
+    }, 44);
+    if (!this.alive(take) || !ga?.m || !gb?.m) return;
+    await this.card(take, {
+      cmd: 'diff --prompt plain careful', act: 'RESULT', title: `${ga.b.obeyed} OBEYED. ${money(ga.m.fraud.leaked)} STILL STOLEN.`,
+      sub: `the careful prompt ${ga.b.obeyed ? 'cut' : 'stopped every'} injection${ga.b.obeyed ? 's' : ''} · Wild West still lost ${money(ga.m.fraud.leaked)} to stolen cards, fake stores and the rest`,
+    }, 4800);
+    const gate = pb.m.netValue >= ga.m.netValue;
+    await this.card(take, {
+      cmd: 'rank --by=net-value', act: 'VERDICT', title: gate ? 'THE GATE OUTRANKS THE PROMPT' : 'THE PROMPT OUTRANKS THE GATE',
+      sub: `Lab-Tuned with a fooled agent ${money(pb.m.netValue)} · Wild West with a careful agent ${money(ga.m.netValue)} · both together ${money(gb.m.netValue)}`,
+    }, 5400);
+    await this.report(take);
+    useStore.setState({ brain: false, brainPrompt: 'plain' });
   }
 }
 

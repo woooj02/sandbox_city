@@ -379,7 +379,7 @@ export class World {
       const choice = this.cfg.brain.tape[key];
       const inj = product.injected;
       if (!choice) {
-        this.brainMisses.set(key, { key, shopper: s.id, owner, listing });
+        this.brainMisses.set(key, { key, shopper: s.id, owner, listing, injected: !!inj });
         this.emit({ type: 'brain', t: this.t, shopper: s.id, merchant: m.id, injected: !!inj, recorded: false, buy: true, qty, shipTo, followed: false, reason: '', listing: product.description });
       } else {
         const buy = choice.buy && choice.qty >= 1;

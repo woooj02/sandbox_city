@@ -23,9 +23,17 @@ export function llmFromEnv(env = process.env): LlmConfig | null {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export function llmClient(cfg: LlmConfig, fetchImpl: typeof fetch = fetch) {
+export interface ToolCall { id: string; type: 'function'; function: { name: string; arguments: string } }
+export interface AgentMessage { role: 'system' | 'user' | 'assistant' | 'tool'; content: string; tool_calls?: ToolCall[]; tool_call_id?: string; [extra: string]: unknown }
+/** One turn of a tool-using agent: the model either calls tools or answers in text. */
+export type AgentTurn = (messages: AgentMessage[], tools: unknown[]) => Promise<AgentMessage>;
+
+// some models think out loud first; only the answer after the thought block is the reply
+const dropThoughts = (s: string) => s.replace(/<thought>[\s\S]*?<\/thought>/g, '').trim();
+
+function poster(cfg: LlmConfig, fetchImpl: typeof fetch) {
   let last = 0;
-  return async function chat(system: string, user: string): Promise<string> {
+  return async function post(body: Record<string, unknown>): Promise<AgentMessage> {
     for (let attempt = 0; ; attempt++) {
       const wait = last + cfg.minGapMs - Date.now();
       if (wait > 0) await sleep(wait);
@@ -33,16 +41,27 @@ export function llmClient(cfg: LlmConfig, fetchImpl: typeof fetch = fetch) {
       const res = await fetchImpl(`${cfg.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${cfg.apiKey}` },
-        body: JSON.stringify({ model: cfg.model, temperature: 0, messages: [{ role: 'system', content: system }, { role: 'user', content: user }] }),
+        body: JSON.stringify({ model: cfg.model, temperature: 0, ...body }),
       });
       if (res.ok) {
-        const data = await res.json() as { choices?: { message?: { content?: string } }[] };
-        // some models think out loud first; only the answer after the thought block is the reply
-        return (data.choices?.[0]?.message?.content ?? '').replace(/<thought>[\s\S]*?<\/thought>/g, '').trim();
+        const data = await res.json() as { choices?: { message?: AgentMessage }[] };
+        const m = data.choices?.[0]?.message ?? { role: 'assistant', content: '' };
+        return { ...m, role: 'assistant', content: dropThoughts(m.content ?? '') };
       }
       // rate limits and overloads are normal on free tiers: back off and try again
       if ((res.status === 429 || res.status >= 500) && attempt < 5) { await sleep(Math.min(60000, 4000 * 2 ** attempt)); continue; }
       throw new Error(`model API answered ${res.status}: ${(await res.text()).slice(0, 300)}`);
     }
   };
+}
+
+export function llmClient(cfg: LlmConfig, fetchImpl: typeof fetch = fetch) {
+  const post = poster(cfg, fetchImpl);
+  return async (system: string, user: string): Promise<string> =>
+    (await post({ messages: [{ role: 'system', content: system }, { role: 'user', content: user }] })).content;
+}
+
+export function llmAgent(cfg: LlmConfig, fetchImpl: typeof fetch = fetch): AgentTurn {
+  const post = poster(cfg, fetchImpl);
+  return (messages, tools) => post({ messages, tools });
 }

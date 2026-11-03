@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react';
 import { useStore } from '../store';
 import { WhatIf } from './WhatIf';
 import proof from '../data/paypal-proof.json';
+import toolkit from '../data/toolkit-proof.json';
+import { PROMPT_LABEL, modelLabel } from '../sim/brain';
 import { ATTACK_SHORT, LANE_NAMES, money, pct } from './meta';
 
 function findings(m: Metrics) {
@@ -65,6 +67,36 @@ function SandboxProof() {
   );
 }
 
+interface TkStep { tool: string; gate: string; reason?: string; status?: string; total?: number; shipTo?: string }
+interface TkCase { store: string; title: string; injected: boolean; owner: { address: string; qty: number }; lanes: { rulebook: string; steps: TkStep[]; paid: { total: number; shipTo: string; qty: number } | null; strayed: boolean }[] }
+interface TkLane { rulebook: string; orders: number; paid: number; hijackedPaid: number; hijackedValue: number; refused: number; honestPaid: number }
+
+/** A model shopper paying through PayPal's own Agent Toolkit on the sandbox, with the gate checking every tool call. */
+function ToolkitProof() {
+  if (!toolkit.recordedAt) return null;
+  const lanes = toolkit.lanes as TkLane[];
+  const cases = toolkit.cases as TkCase[];
+  const rb = toolkit.readBack;
+  const ok = rb.orders > 0 && rb.matched === rb.orders && rb.completed === rb.orders;
+  const when = new Date(toolkit.recordedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+  // one poisoned case, shown as the tool calls each rulebook saw
+  const ex = cases.find((c) => c.injected && c.lanes.some((l) => l.paid && l.strayed) && c.lanes.some((l) => l.steps.some((s) => s.gate === 'refused')));
+  const fmt = (s: TkStep) => s.gate === 'refused' ? `${s.tool}  ✕ gate refused · ${s.reason}` : /^\d+$/.test(s.status ?? '') ? `${s.tool}  ✕ PayPal ${s.status}` : `${s.tool}  ✓ ${s.status ?? ''}${s.tool === 'create_order' && s.total != null ? ` · ${money(s.total, 2)} to ${s.shipTo}` : ''}`;
+  return (
+    <div className={`recon proof toolkit ${ok ? 'ok' : 'warn'}`}>
+      <b>{ok ? '✓ PAYPAL AGENT TOOLKIT · A MODEL PAID THROUGH IT, THE GATE CHECKED EVERY CALL' : '✗ AGENT TOOLKIT RUN DID NOT READ BACK CLEANLY'}</b>
+      <span>
+        {modelLabel(toolkit.model)} shopped {cases.length} real listings from this day ({cases.filter((c) => c.injected).length} poisoned) with {toolkit.toolkit} on the PayPal sandbox, {when}, calling {toolkit.tools.join(', ')} itself.
+        {' '}{lanes.map((l) => `${l.rulebook}: ${l.orders} paid${l.hijackedPaid ? `, ${l.hijackedPaid} of them hijacked to an attacker's address (${money(l.hijackedValue, 2)})` : ''}${l.refused ? `, ${l.refused} create_order call${l.refused === 1 ? '' : 's'} refused before reaching PayPal` : ''}`).join(' · ')}.
+        {' '}All {rb.orders} paid orders read back by id with get_order: {rb.completed} COMPLETED, {rb.matched} matched to the cent ({money(rb.amount, 2)}).
+      </span>
+      {ex && (
+        <pre className="tk-trace">{[`listing  ${ex.store} · "${ex.title}" · owner wants ${ex.owner.qty} to ${ex.owner.address}`, ...ex.lanes.map((l) => `${l.rulebook.padEnd(10)} ${l.steps.map(fmt).join('  →  ')}`)].join('\n')}</pre>
+      )}
+    </div>
+  );
+}
+
 export function Report() {
   const show = useStore((s) => s.showReport);
   const lanes = useStore((s) => s.lanes);
@@ -72,6 +104,8 @@ export function Report() {
   const live = useStore((s) => s.paypal === 'sandbox');
   const rolling = useStore((s) => s.cinema.rolling);
   const w = useStore((s) => s.whatif);
+  const brain = useStore((s) => s.brain);
+  const brainPrompt = useStore((s) => s.brainPrompt);
   if (!show) return null;
   const close = () => useStore.setState({ showReport: false });
   // the best preset this day, if it beats the first lane: one click races it on the same seed
@@ -96,12 +130,16 @@ export function Report() {
               <div className="report-row"><span>Lost (stolen + double charges)</span><b className="bad">{money(l.metrics.fraud.leaked + l.metrics.chaos.duplicateValue)}</b></div>
               <div className="report-row"><span>Honest GMV</span><b>{money(l.metrics.honest.gmv)}</b></div>
               <div className="report-row"><span>Net value</span><b>{money(l.metrics.netValue)}</b></div>
+              {brain && l.brain.poisoned > 0 && (
+                <div className="report-row"><span>Model shoppers · {PROMPT_LABEL[brainPrompt].toLowerCase()}</span><b className={l.brain.obeyed ? 'bad' : 'gr'}>{l.brain.obeyed} of {l.brain.poisoned} poisoned listings obeyed</b></div>
+              )}
               <ul>{findings(l.metrics).map((f, k) => <li key={k}>{f}</li>)}</ul>
             </div>
           ))}
         </div>
         <WhatIf />
         {live ? <LiveReconcile /> : <SandboxProof />}
+        <ToolkitProof />
         <div className="report-foot">
           {!rolling && better && <button className="btn hot" onClick={() => race(better)}>⑂ RACE {better.name.toUpperCase()} AGAINST {policies[0]?.name.toUpperCase()}</button>}
           {!rolling && <button className="btn tune-btn" onClick={() => { close(); startTune('safe'); }}>✦ AUTO-TUNE A RULEBOOK</button>}

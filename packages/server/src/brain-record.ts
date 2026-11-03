@@ -1,9 +1,9 @@
 /**
- * Records the model shoppers' tape for one seed. The engine never waits on the model: each pass plays the day
+ * Records the model shoppers' tape for one seed (pass `tape` to add another day to an existing one). The engine never waits on the model: each pass plays the day
  * under every preset with the tape so far, collects the cases nobody has answered yet, sends them to the model
  * in batches, and plays again until every case a shopper meets has an answer.
  */
-import { BRAIN_SYSTEM, DEFAULT_CONFIG, PRESETS, World, brainPrompt, parseChoices, type BrainCase, type BrainTape, type Genomes, type Policy } from '@sandbox-city/core';
+import { BRAIN_PROMPTS, DEFAULT_CONFIG, PRESETS, World, brainPrompt, parseChoices, type BrainCase, type BrainPrompt, type BrainTape, type Genomes, type Policy } from '@sandbox-city/core';
 
 export interface RecordOptions {
   seed: string;
@@ -12,6 +12,8 @@ export interface RecordOptions {
   policies?: Policy[];
   genomes?: Genomes;
   model: string;
+  /** Standing instructions to record under (default plain). */
+  prompt?: BrainPrompt;
   chat: (system: string, user: string) => Promise<string>;
   batch?: number;
   maxPasses?: number;
@@ -20,7 +22,11 @@ export interface RecordOptions {
 }
 
 export async function recordTape(o: RecordOptions): Promise<BrainTape & { misses: number; calls: number }> {
-  const tape: BrainTape = { model: o.model, recordedAt: new Date().toISOString(), seed: o.seed, choices: { ...(o.tape?.choices ?? {}) } };
+  const prompt = o.prompt ?? 'plain';
+  const tape: BrainTape = {
+    model: o.model, prompt, recordedAt: new Date().toISOString(),
+    seeds: [...new Set([...(o.tape?.seeds ?? []), o.seed])], choices: { ...(o.tape?.choices ?? {}) },
+  };
   const policies = o.policies ?? Object.values(PRESETS);
   const shoppers = o.shoppers ?? DEFAULT_CONFIG.shoppers;
   const batch = o.batch ?? 16;
@@ -38,7 +44,7 @@ export async function recordTape(o: RecordOptions): Promise<BrainTape & { misses
     const cases = [...open.values()];
     for (let i = 0; i < cases.length; i += batch) {
       const chunk = cases.slice(i, i + batch);
-      const got = parseChoices(await o.chat(BRAIN_SYSTEM, brainPrompt(chunk)), chunk);
+      const got = parseChoices(await o.chat(BRAIN_PROMPTS[prompt], brainPrompt(chunk)), chunk);
       calls++;
       Object.assign(tape.choices, got);
       o.log?.(`  call ${calls}: ${Object.keys(got).length}/${chunk.length} answered`);

@@ -1,5 +1,5 @@
 import { PRESETS } from '@sandbox-city/core';
-import brainTape from '../data/brain-tape.json';
+import { PROMPT_LABEL, TAPES, modelLabel } from '../sim/brain';
 import { useStore } from '../store';
 import { client } from '../sim/client';
 import { clock } from './meta';
@@ -52,24 +52,29 @@ export function TopBar() {
   );
 }
 
-/** Switches shoppers' agents to the recorded language model, and shows what it did with planted instructions. */
+/**
+ * Switches shoppers' agents to a recorded language model and shows what it did with planted instructions.
+ * Clicks cycle: stock agents → model with a plain prompt → model with a careful prompt → stock agents.
+ */
 function ModelBadge() {
   const on = useStore((s) => s.brain);
+  const prompt = useStore((s) => s.brainPrompt);
   const b = useStore((s) => s.lanes[0]?.brain);
-  const toggle = () => {
-    useStore.setState({ brain: !on });
+  const cycle = () => {
+    useStore.setState(!on ? { brain: true, brainPrompt: 'plain' } : prompt === 'plain' ? { brainPrompt: 'guarded' } : { brain: false, brainPrompt: 'plain' });
     client.start(useStore.getState().policies);
     setTimeout(() => client.send({ cmd: 'play' }), 300);
   };
-  const recorded = !!brainTape.model;
+  const tape = TAPES[prompt];
+  const recorded = !!tape.model;
   const title = on
     ? recorded
-      ? `Shoppers' agents read listings that try to give instructions through ${brainTape.model} (recorded ${brainTape.recordedAt.slice(0, 10)}). Click to go back to the stock agents.`
-      : 'No model run recorded yet: run scripts/record-brain.ts with a model key. Until then the stock agents decide.'
+      ? `Shoppers' agents read listings that try to give instructions through ${tape.model}, ${prompt === 'guarded' ? 'told to treat page text as untrusted' : 'with an ordinary shopping prompt'} (recorded ${tape.recordedAt.slice(0, 10)}, ${tape.seeds.length} day${tape.seeds.length === 1 ? '' : 's'}). Click for ${prompt === 'plain' ? 'the careful prompt' : 'the stock agents'}.`
+      : 'No model run recorded for this prompt yet: run scripts/record-brain.ts with a model key. Until then the stock agents decide.'
     : 'Let a language model read the listings for the shoppers (replays a recorded run)';
   return (
-    <button className={`rail-badge model ${on ? 'on' : ''}`} title={title} onClick={toggle}>
-      <i />◈ {on ? (recorded ? `${brainTape.model.toUpperCase()} · ${b?.obeyed ?? 0} OBEYED · ${b?.ignored ?? 0} IGNORED` : 'MODEL · NOT RECORDED') : 'MODEL SHOPPERS'}
+    <button className={`rail-badge model ${on ? 'on' : ''} ${on && prompt === 'guarded' ? 'guarded' : ''}`} title={title} onClick={cycle}>
+      <i />◈ {on ? (recorded ? `${modelLabel(tape.model)} · ${PROMPT_LABEL[prompt]} · ${b?.obeyed ?? 0} OBEYED · ${b?.resisted ?? 0} RESISTED` : 'MODEL · NOT RECORDED') : 'MODEL SHOPPERS'}
     </button>
   );
 }

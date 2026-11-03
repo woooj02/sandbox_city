@@ -1,7 +1,7 @@
 import { ATTACK_LABEL, Policy, PRESETS, SimEvent } from '@sandbox-city/core';
 import { bus } from './bus';
 import type { FromSim, ToSim, WorldSnapshot } from '@sandbox-city/core';
-import brainTape from '../data/brain-tape.json';
+import { brainInit } from './brain';
 import { emptyBrain, resetLanes, useStore } from '../store';
 
 const worlds: WorldSnapshot[] = [];
@@ -67,14 +67,14 @@ function narrate(lane: number, events: SimEvent[], focusLane: number) {
         if (!e.recorded) tally.unrecorded++;
         else {
           tally.read++;
+          if (e.injected) { tally.poisoned++; if (e.followed) tally.obeyed++; else tally.resisted++; }
           if (!e.buy) tally.walked++;
-          else if (e.followed) tally.obeyed++;
-          else if (e.injected) tally.ignored++;
+          else if (e.injected && !e.followed) tally.ignored++;
           const why = e.reason ? ` (“${e.reason}”)` : '';
           if (e.injected && e.followed) {
             feed.push({ t: e.t, lane, tone: 'bad', text: `MODEL agent ${nm(lane, e.shopper)} obeyed a poisoned listing at ${nm(lane, e.merchant)}: ${e.qty} units to ${e.shipTo}${why}` });
             consider(7, { kind: 'attack', lane, tag: 'MODEL HIJACKED', code: 'LLM', title: 'MODEL OBEYED', who: nm(lane, e.shopper), line: `ordered ${e.qty} units to ${e.shipTo}`, sub: e.reason || undefined });
-          } else if (e.injected) feed.push({ t: e.t, lane, tone: 'good', text: `MODEL agent ${nm(lane, e.shopper)} ignored planted instructions at ${nm(lane, e.merchant)}${why}` });
+          } else if (e.injected) feed.push({ t: e.t, lane, tone: 'good', text: `MODEL agent ${nm(lane, e.shopper)} ${e.buy ? 'ignored planted instructions' : 'refused a poisoned listing'} at ${nm(lane, e.merchant)}${why}` });
           else if (!e.buy) feed.push({ t: e.t, lane, tone: 'warn', text: `MODEL agent ${nm(lane, e.shopper)} walked away from an honest listing at ${nm(lane, e.merchant)}${why}` });
         }
         st.setLane(lane, { brain: tally });
@@ -196,7 +196,7 @@ class Client {
     useStore.setState({ policies, paypalCalls: [], inFlight: [], runId: null, whatif: null });
     bus.emit('reset');
     // while the film rolls only hero shoppers pay on the live sandbox, so real PayPal latency never stalls the shot
-    this.send({ cmd: 'init', seed: st.seed, lanes: policies.map((policy) => ({ policy })), chaos: st.chaos, ...(st.cinema.rolling ? { liveSample: 0 } : {}), ...(st.genomes ? { genomes: st.genomes } : {}), ...(st.brain ? { brain: { shoppers: 1200, tape: brainTape.choices, model: brainTape.model } } : {}) });
+    this.send({ cmd: 'init', seed: st.seed, lanes: policies.map((policy) => ({ policy })), chaos: st.chaos, ...(st.cinema.rolling ? { liveSample: 0 } : {}), ...(st.genomes ? { genomes: st.genomes } : {}), ...(st.brain ? { brain: brainInit(st.brainPrompt) } : {}) });
   }
 
   private receive(m: FromSim) {

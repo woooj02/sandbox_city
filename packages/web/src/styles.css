@@ -526,3 +526,6 @@ i.leak { background: var(--rd); box-shadow: 0 0 6px var(--rd); }
 .rail-badge.model { cursor: pointer; font-family: var(--mono); white-space: nowrap; }
 .rail-badge.model.on { background: rgba(255,210,80,.08); color: var(--gold); border-color: rgba(255,210,80,.5); }
 .rail-badge.model.on i { background: var(--gold); box-shadow: 0 0 10px var(--gold); }
+.rail-badge.model.on.guarded { background: rgba(125,255,154,.07); color: var(--gr); border-color: rgba(125,255,154,.45); }
+.rail-badge.model.on.guarded i { background: var(--gr); box-shadow: 0 0 10px var(--gr); }
+.recon.toolkit .tk-trace { margin: 8px 0 0; padding: 8px 10px; background: rgba(0,0,0,.35); border: 1px solid var(--line); font: 11px/1.6 var(--mono); color: var(--text); white-space: pre-wrap; overflow-x: auto; }
