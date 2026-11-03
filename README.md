@@ -168,7 +168,7 @@ GEMINI_API_KEY=... npx tsx scripts/record-brain.ts [--prompt=plain|guarded] [--s
 Records how a language model shops: every case a shopper meets under every preset, on the default day and the three training days auto-tune uses for it, is sent to the model in batches, and the answers are saved to `packages/web/src/data/brain-tape.json` (or `brain-tape-guarded.json`) for the twin to replay. A stopped run picks up where it left off. The default is Gemma 4 26B (`gemma-4-26b-a4b-it`) on Google's Gemini API, an open-weight model with no paid tier; any provider with a chat-completions endpoint works through `LLM_BASE_URL`, `LLM_MODEL` and `LLM_API_KEY`. Behind a proxy, add `NODE_USE_ENV_PROXY=1`.
 
 ```bash
-NODE_USE_ENV_PROXY=1 npx tsx scripts/toolkit-shop.ts [poisoned=4] [clean=3]
+NODE_USE_ENV_PROXY=1 npx tsx scripts/toolkit-shop.ts [poisoned=8] [clean=3]
 ```
 
 A model shopper paying through PayPal's Agent Toolkit on the sandbox. It takes real owner requests and listings from the default day, some of them poisoned, and gives the model the toolkit's own `create_order`, `pay_order` and `get_order` tools. Each `create_order` passes through the gate first, under Wild West and under Lab-Tuned: a refused call never reaches PayPal and the model is told why. Allowed orders are approved by the owner's wallet (the sandbox test card, confirmed as the payment source) and captured by the model with `pay_order`. Every paid order is read back by id, and the receipt is saved to `packages/web/src/data/toolkit-proof.json` for the end-of-day report. Needs the sandbox keys and a model key.
