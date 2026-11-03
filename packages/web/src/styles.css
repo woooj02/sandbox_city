@@ -612,19 +612,21 @@ button.rail-badge { background: transparent; cursor: pointer; }
 
 /* ledger: the long subtitle only where it fits */
 @media (max-width: 1700px) { .ledger .panel-title small { display: none; } }
-.hj-grid .ag-layout-auto-height .ag-center-cols-viewport, .hj-grid .ag-layout-auto-height .ag-center-cols-container { min-height: 0 !important; }
+.hj-grid .ag-grid-scrolling-rows.ag-layout-auto-height, .hj-grid .ag-layout-auto-height .ag-center-cols-viewport, .hj-grid .ag-layout-auto-height .ag-center-cols-container { min-height: 0 !important; }
 .hj-slot { font-weight: 400; color: #ffd166; border: 1px dashed rgba(255,209,102,.5); padding: 0 4px; margin: 0 1px; font-size: .92em; }
 /* laptops: the rail badges give up some room so the clock keeps its own; the hijack badge shrinks to its mark */
 @media (max-width: 1500px) and (min-width: 901px) {
   .rail-badge { letter-spacing: 1px; padding: 5px 8px; gap: 6px; }
   .topbar { gap: 10px; }
   .clock-big { letter-spacing: 1px; }
-  .rail-badge.hijack { font-size: 0; gap: 0; padding: 5px 9px; }
-  .rail-badge.hijack::after { content: '◆'; font-size: 12px; }
+  .rail-badge.hijack { font-size: 0; gap: 0; }
+  .rail-badge.hijack::after { content: '◆ HIJACK'; font-size: 10px; }
   .rail-badge.hijack i { display: none; }
+  .clock-big { font-size: 15px; }
 }
 @media (max-width: 1500px) and (min-width: 901px) {
-  .logo { min-width: 0; } .logo-title { font-size: 21px; letter-spacing: 4px; } .clockbox { min-width: 150px; }
+  .logo { min-width: 0; } .logo-title { font-size: 18px; letter-spacing: 2.5px; } .logo-sub { display: none; } .clockbox { min-width: 140px; }
+  .topbar .controls { flex: none; } .topbar .controls .btn { white-space: nowrap; }
 }
 @media (max-width: 1320px) and (min-width: 901px) { .logo-text { display: none; } .logo { flex: none; } }
 @media (max-width: 1100px) and (min-width: 901px) {
@@ -634,3 +636,6 @@ button.rail-badge { background: transparent; cursor: pointer; }
   .topbar .seg button { padding: 6px 7px; font-size: 11px; }
   .clockbox { min-width: 128px; } .clock-big { font-size: 15px; }
 }
+.hj-part { color: var(--gold); }
+.hj-note { margin: 8px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--dim); max-width: 1100px; }
+.hj-grid .hj-honest-row { border-top: 1px solid var(--line); }

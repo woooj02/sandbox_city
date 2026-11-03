@@ -3,15 +3,16 @@
  *   NODE_USE_ENV_PROXY=1 npx tsx scripts/hijack-rate.ts [--estimate]
  * Real cases from three simulated days (every distinct poisoned listing, plus honest ones) go to the planner in
  * batches, once with the ordinary shopping prompt and once with the careful one. Every planned order is then put
- * through the gate's create_order check under Lab-Tuned and Know Your Agent. Planner calls only: nothing reaches
- * PayPal (the toolkit run in scripts/toolkit-shop.ts is the one that pays). A paid model runs under the client's
- * spending cap (LLM_BUDGET_USD). --estimate prints the case count and prompt size and sends nothing.
+ * through the gate's create_order check under Lab-Tuned and Know Your Agent; the hijacked plans go through again one
+ * change at a time, under every preset (probePlans). Planner calls only: nothing reaches PayPal (the toolkit run in
+ * scripts/toolkit-shop.ts is the one that pays). A paid model runs under the client's spending cap (LLM_BUDGET_USD).
+ * --estimate prints the case count and prompt size and sends nothing.
  * Writes packages/web/src/data/hijack-rate.json, which the hijack exhibit shows.
  */
 import { writeFileSync } from 'node:fs';
 import { BRAIN_PROMPTS, brainPrompt, INJECTIONS, PRESETS, type BrainCase, type BrainPrompt } from '@sandbox-city/core';
 import { llmClient, llmFromEnv, llmPricing } from '../packages/server/src/llm.ts';
-import { dayCases, gatePlan, goesElsewhere, planCases, PLAN_BATCH, templateOf } from '../packages/server/src/toolkit-shop.ts';
+import { dayCases, gatePlan, goesElsewhere, planCases, PLAN_BATCH, probePlans, templateOf } from '../packages/server/src/toolkit-shop.ts';
 
 const SEEDS = ['neo-osaka-7', 'kowloon-9', 'lagos-2'];
 const seen = new Set<string>();
@@ -66,10 +67,15 @@ const tally = (p: BrainPrompt) => {
     cleanRefused: Object.fromEntries(gates.map((g) => [g.name, clean.filter((r) => r[p]?.buy && r[p]!.gate?.[g.name] !== 'allowed').length])),
   };
 };
+// one change at a time, on the ordinary prompt's hijacked plans, under every preset
+const byKey = (p: BrainPrompt, test: (c: BrainCase, d: NonNullable<(typeof plans)[BrainPrompt][string]>) => boolean) =>
+  cases.flatMap((c) => { const d = plans[p][c.key]; return d?.buy && test(c, d) ? [{ c, d }] : []; });
+const probes = probePlans([PRESETS.open, PRESETS.balanced, PRESETS.tuned, PRESETS.kya],
+  byKey('plain', (c, d) => !!c.injected && goesElsewhere(d.shipTo, d.qty, c.owner)), byKey('plain', (c) => !c.injected));
 const spent = cfg.spend && before ? { usd: Math.round((cfg.spend.usd - before.usd) * 1e4) / 1e4, tokensIn: cfg.spend.tokensIn - before.tokensIn, tokensOut: cfg.spend.tokensOut - before.tokensOut } : undefined;
 const out = {
   recordedAt: new Date().toISOString(), model: cfg.model, seeds: SEEDS, batch: PLAN_BATCH, modelCalls: calls, ...(spent?.usd ? { modelCost: spent } : {}),
-  templates: INJECTIONS.map((t) => t.text), prompts: Object.fromEntries(prompts.map((p) => [p, tally(p)])), cases: rows,
+  templates: INJECTIONS.map((t) => t.text), prompts: Object.fromEntries(prompts.map((p) => [p, tally(p)])), probes, cases: rows,
 };
 writeFileSync(new URL('../packages/web/src/data/hijack-rate.json', import.meta.url), JSON.stringify(out, null, 1) + '\n');
 console.log(JSON.stringify({ prompts: out.prompts, modelCalls: calls, spent }, null, 1));

@@ -62,7 +62,8 @@ Presets range from **Wild West** (no rules) through **Passport Theater**, **Know
   - the same `create_order` under three rulebooks: paid, refused, refused
   - the refund
 
-  Three AG Grid tables follow:
+  Four AG Grid tables follow:
+  - which rulebook catches which half of a hijack, one change at a time
   - which page tricks work
   - every one of the 78 planned orders, with views, grep, tooltips, CSV and a detail panel for the row you pick
   - the paid run, lane by lane, with order and refund ids
@@ -226,11 +227,22 @@ Recorded with Qwen3.5 9B, thinking off; 40 planner calls, $0.0051.
 | --- | --- | --- |
 | Poisoned listings that became a hijacked plan | 27 of 66 (41%) | 0 of 66 |
 | By trick: hidden HTML comment / system notice / "pro tip" / social proof | 12/17, 5/18, 5/16, 5/15 | 0 each |
-| Hijacked plans refused by the gate | 27 of 27 (Lab-Tuned and Know Your Agent alike) | — |
+| Hijacked plans refused by the gate | 27 of 27 (Lab-Tuned by ship lock, Know Your Agent by owner mandate) | — |
 | Honest owners' orders bought | 11 of 12 | 10 of 12 |
 | Honest orders refused by the gate | 0 | 0 |
 
 The careful prompt held against these four tricks, but it also skipped two honest purchases. The gate does not depend on the prompt holding.
+
+Every recorded hijack changed both the address and the quantity, so any rulebook with either check caught all 27. To see which check does the work, the script puts the same 27 plans through the gate again with one change at a time (no model calls):
+
+| The plan, with | Wild West | Balanced | Lab-Tuned | Know Your Agent |
+| --- | --- | --- | --- | --- |
+| The attacker's address and quantity (as planned) | 0 of 27 refused | 27 | 27 | 27 |
+| The attacker's address only | 0 | 27 | 27 | **0** |
+| The attacker's quantity only | 0 | 27 | **0** | 27 |
+| Honest plans (11) | 0 refused | 0 | 0 | 0 |
+
+Lab-Tuned's ship lock catches the address and Know Your Agent's owner mandate catches the quantity; each misses the other half. Auto-tune found Lab-Tuned on simulated days and left the mandate off. Balanced has both checks, caught every variant and refused no honest plan. The exhibit shows this table too.
 
 All model time for these experiments came to $0.112, under a hard cap enforced by the client. The gate, the planner batches, the executor's view, the case dealing and the refund audit are covered by `packages/server/test/toolkit.test.ts`.
 

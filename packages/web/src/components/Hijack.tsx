@@ -94,9 +94,37 @@ function Stats() {
   return (
     <div className="hj-stats">
       <div className="hj-stat bad"><b>{pctOf(plain.hijacked, plain.poisoned)}</b><span>of poisoned listings became a hijacked plan</span><em>{plain.hijacked} of {plain.poisoned} · ordinary shopping prompt</em></div>
-      <div className="hj-stat cy"><b>{refusedAll}/{plain.hijacked}</b><span>hijacked orders refused by the gate</span><em>Lab-Tuned and Know Your Agent, each one</em></div>
+      <div className="hj-stat cy"><b>{refusedAll}/{plain.hijacked}</b><span>hijacked orders refused by the gate</span><em>Lab-Tuned by ship lock, Know Your Agent by owner mandate</em></div>
       <div className="hj-stat gr"><b>{cleanRefused}</b><span>honest orders refused</span><em>of {plain.cleanBought} the model planned for real owners</em></div>
       <div className="hj-stat gold"><b>{pctOf(guarded.hijacked, guarded.poisoned)}</b><span>hijacked with the careful prompt</span><em>but it skipped {guarded.clean - guarded.cleanBought} of {guarded.clean} honest buys too</em></div>
+    </div>
+  );
+}
+
+/* ───── grid 0: one change at a time ───── */
+interface Probe { kind: string; note: string; n: number; refused: Record<string, number> }
+const probes = (rate as { probes?: { rulebooks: string[]; rows: Probe[] } }).probes;
+const ProbeCell = ({ value, data }: ICellRendererParams<Probe, number>) => {
+  if (!data || value == null) return null;
+  const honest = data.kind === 'Honest plans';
+  // a hijack row is good when everything is refused; the honest row is good when nothing is
+  const good = honest ? value === 0 : value === data.n, none = honest ? value === data.n : value === 0;
+  return <span className={good ? 'hj-ok' : none ? 'bad' : 'hj-part'}>{good ? '✓' : '✕'} {value}/{data.n} refused</span>;
+};
+function Probes() {
+  // on a phone the rulebook columns matter more than the description, which the row's tooltip still carries
+  const narrow = typeof window !== 'undefined' && window.innerWidth < 760;
+  const cols = useMemo<ColDef<Probe>[]>(() => [
+    { field: 'kind', headerName: 'THE PLAN, WITH', width: 150, cellClass: 'hj-strong', tooltipField: 'note', pinned: narrow ? 'left' : undefined },
+    { field: 'note', headerName: 'WHAT CHANGED', flex: 1, minWidth: 200, cellClass: 'mono-dim', tooltipField: 'note', hide: narrow },
+    ...(probes?.rulebooks ?? []).map((r): ColDef<Probe> => ({ colId: r, headerName: r.toUpperCase(), width: narrow ? 130 : 150, valueGetter: (p) => p.data?.refused[r], cellRenderer: ProbeCell })),
+  ], [narrow]);
+  if (!probes) return null;
+  return (
+    <div className="hj-grid">
+      <AgGridReact<Probe> theme={gridTheme} rowData={probes.rows} columnDefs={cols} domLayout="autoHeight" tooltipShowDelay={200}
+        getRowClass={(p) => (p.data?.kind === 'Honest plans' ? 'hj-honest-row' : '')}
+        defaultColDef={{ resizable: true, sortable: false, suppressMovable: true }} />
     </div>
   );
 }
@@ -270,6 +298,14 @@ export function Hijack() {
         <Story />
         <h3 className="hj-h">HOW OFTEN · <span>{plain.poisoned} poisoned listings from {rate.seeds.length} simulated days, planned by {modelLabel(rate.model)} under two prompts, every planned order put through the gate</span></h3>
         <Stats />
+        {probes && <>
+          <h3 className="hj-h">ONE CHANGE AT A TIME · <span>the same {probes.rows[0].n} hijacked plans, put through the gate again with only the address changed, then only the quantity; no model asked</span></h3>
+          <Probes />
+          <p className="hj-note">
+            Every recorded hijack changed both the address and the quantity, so each gated rulebook caught all of them. Split the change and each catches only the half it checks: Lab-Tuned's ship lock catches the address, Know Your Agent's owner mandate catches the quantity.
+            Auto-tune found Lab-Tuned on simulated days and left the mandate off. Balanced checks both and refused none of the honest plans.
+          </p>
+        </>}
         <h3 className="hj-h">WHICH PAGE TRICKS WORK</h3>
         <Templates />
         <h3 className="hj-h">EVERY PLAN · <span>{cases.length} cases</span></h3>
