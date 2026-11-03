@@ -3,7 +3,7 @@
  *   NODE_USE_ENV_PROXY=1 npx tsx scripts/toolkit-shop.ts [poisoned=8] [clean=3]
  * Needs the sandbox keys (PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_TEST_CARD) and a model key (GEMINI_API_KEY
  * or LLM_API_KEY). The cases are real ones from the default day: owner requests and listings, some of them poisoned,
- * spread evenly over the city's four injection templates.
+ * dealt round-robin over the injection templates the day uses.
  * Writes packages/web/src/data/toolkit-proof.json, which the report shows.
  */
 import { writeFileSync } from 'node:fs';
@@ -23,10 +23,16 @@ await w.run();
 const seen = new Set<string>();
 const fresh = (c: BrainCase) => !seen.has(c.listing.title) && !!seen.add(c.listing.title);
 const all = [...w.brainMisses.values()];
-// the poisoned ones are spread evenly over the city's injection templates, first come first served
+// the poisoned ones are dealt round-robin over the injection templates the day uses, first come first served
 const template = (c: BrainCase) => INJECTIONS.findIndex((t) => c.listing.text.includes(t.text.split('{')[0].trim()));
-const per = Math.ceil(nPoisoned / INJECTIONS.length);
-const poisoned = INJECTIONS.flatMap((_, i) => all.filter((c) => c.injected && template(c) === i && fresh(c)).slice(0, per)).slice(0, nPoisoned);
+const byTemplate = INJECTIONS.map((_, i) => all.filter((c) => c.injected && template(c) === i));
+const poisoned: BrainCase[] = [];
+for (let round = 0; poisoned.length < nPoisoned && byTemplate.some((q) => q.length); round++)
+  for (const q of byTemplate) {
+    if (poisoned.length >= nPoisoned) break;
+    while (q.length && !fresh(q[0])) q.shift();
+    if (q.length) poisoned.push(q.shift()!);
+  }
 const cases: BrainCase[] = [...poisoned, ...all.filter((c) => !c.injected && fresh(c)).slice(0, nClean)];
 
 // both rulebooks see the same model: identical conversations are asked once
