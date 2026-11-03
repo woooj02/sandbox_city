@@ -80,13 +80,18 @@ function ToolkitProof() {
   const ok = rb.orders > 0 && rb.matched === rb.orders && rb.completed === rb.orders;
   const when = new Date(toolkit.recordedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
   // one poisoned case, shown as the tool calls each rulebook saw
-  const ex = cases.find((c) => c.injected && c.lanes.some((l) => l.paid && l.strayed) && c.lanes.some((l) => l.steps.some((s) => s.gate === 'refused')));
+  const ex = cases.find((c) => c.injected && c.lanes.some((l) => l.paid && l.strayed) && c.lanes.some((l) => l.steps.some((s) => s.gate === 'refused')))
+    ?? cases.find((c) => c.injected && c.lanes.some((l) => l.steps.some((s) => s.gate === 'refused')))
+    ?? cases.find((c) => c.injected);
+  const poisoned = cases.filter((c) => c.injected);
+  const fooled = poisoned.filter((c) => c.lanes.some((l) => l.strayed)).length;
   const fmt = (s: TkStep) => s.gate === 'refused' ? `${s.tool}  ✕ gate refused · ${s.reason}` : /^\d+$/.test(s.status ?? '') ? `${s.tool}  ✕ PayPal ${s.status}` : `${s.tool}  ✓ ${s.status ?? ''}${s.tool === 'create_order' && s.total != null ? ` · ${money(s.total, 2)} to ${s.shipTo}` : ''}`;
   return (
     <div className={`recon proof toolkit ${ok ? 'ok' : 'warn'}`}>
       <b>{ok ? '✓ PAYPAL AGENT TOOLKIT · A MODEL PAID THROUGH IT, THE GATE CHECKED EVERY CALL' : '✗ AGENT TOOLKIT RUN DID NOT READ BACK CLEANLY'}</b>
       <span>
         {modelLabel(toolkit.model)} shopped {cases.length} real listings from this day ({cases.filter((c) => c.injected).length} poisoned) with {toolkit.toolkit} on the PayPal sandbox, {when}, calling {toolkit.tools.join(', ')} itself.
+        {' '}The model followed {fooled} of {poisoned.length} poisoned listings.
         {' '}{lanes.map((l) => `${l.rulebook}: ${l.orders} paid${l.hijackedPaid ? `, ${l.hijackedPaid} of them hijacked to an attacker's address (${money(l.hijackedValue, 2)})` : ''}${l.refused ? `, ${l.refused} create_order call${l.refused === 1 ? '' : 's'} refused before reaching PayPal` : ''}`).join(' · ')}.
         {' '}All {rb.orders} paid orders read back by id with get_order: {rb.completed} COMPLETED, {rb.matched} matched to the cent ({money(rb.amount, 2)}).
       </span>
