@@ -68,8 +68,9 @@ function SandboxProof() {
 }
 
 interface TkStep { tool: string; gate: string; reason?: string; status?: string; total?: number; shipTo?: string }
-interface TkCase { store: string; title: string; text: string; injected: boolean; owner: { address: string; qty: number }; lanes: { rulebook: string; steps: TkStep[]; paid: { total: number; shipTo: string; qty: number } | null; strayed: boolean }[] }
-interface TkLane { rulebook: string; orders: number; paid: number; hijackedPaid: number; hijackedValue: number; refused: number; honestPaid: number }
+interface TkCase { store: string; title: string; text: string; injected: boolean; owner: { address: string; qty: number }; plan?: { buy: boolean; qty: number; shipTo: string; reason: string } | null; lanes: { rulebook: string; steps: TkStep[]; paid: { total: number; shipTo: string; qty: number } | null; strayed: boolean }[] }
+interface TkLane { rulebook: string; orders: number; paid: number; hijackedPaid: number; hijackedValue: number; refused: number; honestPaid: number; refunded?: number; refundedValue?: number }
+interface TkRefund { rulebook: string; case: number; orderId: string; refundId?: string; status?: string; confirmed?: string; amount?: number; error?: string }
 
 /** A model shopper paying through PayPal's own Agent Toolkit on the sandbox, with the gate checking every tool call. */
 function ToolkitProof() {
@@ -77,6 +78,10 @@ function ToolkitProof() {
   const lanes = toolkit.lanes as TkLane[];
   const cases = toolkit.cases as TkCase[];
   const rb = toolkit.readBack;
+  const tk = toolkit as { mode?: string; recoveryTools?: string[]; refunds?: TkRefund[] };
+  const plan = tk.mode === 'plan';
+  const refunds = tk.refunds ?? [];
+  const refundedOk = refunds.filter((r) => r.confirmed === 'COMPLETED');
   const ok = rb.orders > 0 && rb.matched === rb.orders && rb.completed === rb.orders;
   const when = new Date(toolkit.recordedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
   // one poisoned case, shown as the tool calls each rulebook saw
@@ -85,18 +90,27 @@ function ToolkitProof() {
     ?? cases.find((c) => c.injected);
   const poisoned = cases.filter((c) => c.injected);
   const fooled = poisoned.filter((c) => c.lanes.some((l) => l.strayed)).length;
-  const fmt = (s: TkStep) => s.gate === 'refused' ? `${s.tool}  ✕ gate refused · ${s.reason}` : /^\d+$/.test(s.status ?? '') ? `${s.tool}  ✕ PayPal ${s.status}` : `${s.tool}  ✓ ${s.status ?? ''}${s.tool === 'create_order' && s.total != null ? ` · ${money(s.total, 2)} to ${s.shipTo}` : ''}`;
+  const fmt = (s: TkStep) => s.gate === 'refused' ? `${s.tool}  ✕ gate refused · ${s.reason}`
+    : /^\d+$/.test(s.status ?? '') ? `${s.tool}  ✕ PayPal ${s.status}`
+    : !s.status && s.reason ? `${s.tool}  ✕ PayPal: ${s.reason.replace(/^.*: /, '')}`
+    : `${s.tool}  ✓ ${s.status ?? ''}${s.tool === 'create_order' && s.total != null ? ` · ${money(s.total, 2)} to ${s.shipTo}` : ''}`;
+  const exRefund = ex && refunds.find((r) => r.case === cases.indexOf(ex) + 1);
   return (
     <div className={`recon proof toolkit ${ok ? 'ok' : 'warn'}`}>
       <b>{ok ? '✓ PAYPAL AGENT TOOLKIT · A MODEL PAID THROUGH IT, THE GATE CHECKED EVERY CALL' : '✗ AGENT TOOLKIT RUN DID NOT READ BACK CLEANLY'}</b>
       <span>
         {modelLabel(toolkit.model)} shopped {cases.length} real listings from this day ({cases.filter((c) => c.injected).length} poisoned) with {toolkit.toolkit} on the PayPal sandbox, {when}, calling {toolkit.tools.join(', ')} itself.
-        {' '}The model followed {fooled} of {poisoned.length} poisoned listings.
+        {plan ? ' Plan, then execute: the model planned the batch from the owners\' requests and the store pages, then placed each planned order with the toolkit, seeing only the plan.' : ''}
+        {' '}The {plan ? 'plan' : 'model'} followed {fooled} of {poisoned.length} poisoned listings.
         {' '}{lanes.map((l) => `${l.rulebook}: ${l.orders} paid${l.hijackedPaid ? `, ${l.hijackedPaid} of them hijacked to an attacker's address (${money(l.hijackedValue, 2)})` : ''}${l.refused ? `, ${l.refused} create_order call${l.refused === 1 ? '' : 's'} refused before reaching PayPal` : ''}`).join(' · ')}.
         {' '}All {rb.orders} paid orders read back by id with get_order: {rb.completed} COMPLETED, {rb.matched} matched to the cent ({money(rb.amount, 2)}).
+        {refunds.length ? ` The audit then refunded ${refundedOk.length} of ${refunds.length} hijacked order${refunds.length === 1 ? '' : 's'} (${money(refundedOk.reduce((n, r) => n + (r.amount ?? 0), 0), 2)}) with the toolkit's ${(tk.recoveryTools ?? ['create_refund']).join(' and ')}, each refund read back COMPLETED.` : ''}
       </span>
       {ex && (
-        <pre className="tk-trace">{[`listing  ${ex.store} · "${ex.title}" · owner wants ${ex.owner.qty} to ${ex.owner.address}`, ...(ex.injected ? [`page     ${ex.text.length > 150 ? ex.text.slice(0, 149) + '…' : ex.text}`] : []), ...ex.lanes.map((l) => `${l.rulebook.padEnd(10)} ${l.steps.map(fmt).join('  →  ')}`)].join('\n')}</pre>
+        <pre className="tk-trace">{[`listing  ${ex.store} · "${ex.title}" · owner wants ${ex.owner.qty} to ${ex.owner.address}`, ...(ex.injected ? [`page     ${ex.text.length > 150 ? ex.text.slice(0, 149) + '…' : ex.text}`] : []),
+          ...(ex.plan ? [`plan     ${ex.plan.buy ? `buy ${ex.plan.qty}, ship to ${ex.plan.shipTo}` : 'skip'} · "${ex.plan.reason}"`] : []),
+          ...ex.lanes.map((l) => `${l.rulebook.padEnd(10)} ${l.steps.map(fmt).join('  →  ') || 'no order'}`),
+          ...(exRefund?.refundId ? [`audit    create_refund ✓ ${exRefund.status} · ${money(exRefund.amount ?? 0, 2)} back  →  get_refund ✓ ${exRefund.confirmed}`] : [])].join('\n')}</pre>
       )}
     </div>
   );

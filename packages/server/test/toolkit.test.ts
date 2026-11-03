@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PRESETS, type BrainCase } from '@sandbox-city/core';
-import { gateToolCall, goesElsewhere, shopCase, shipToOf, type Toolkit } from '../src/toolkit-shop';
+import { executorRequest, gateToolCall, goesElsewhere, planCases, refundOrder, shopCase, shipToOf, type Toolkit } from '../src/toolkit-shop';
 import type { AgentMessage, AgentTurn } from '../src/llm';
 
 const owner = { category: 'outdoor', qty: 1, address: '359 Willow Way, Neon Market', budget: 79 };
@@ -37,6 +37,62 @@ describe('toolkit gate', () => {
     expect(gateToolCall(PRESETS.kya, owner, 'create_order', order(['359 Willow Way', 'Neon Market'], 8))).toMatchObject({ ok: false, reason: expect.stringContaining('mandate') });
     expect(gateToolCall(PRESETS.tuned, owner, 'pay_order', {}).ok).toBe(true);
   });
+
+  it('lets the ship lock accept the owner\'s street with the district left off', () => {
+    const short = { ...order(['359 Willow Way', 'Neon Market'], 1), shippingAddress: { address_line_1: '359 Willow Way', country_code: 'US' } };
+    expect(shipToOf(short, owner)).toBe('359 Willow Way');
+    expect(gateToolCall(PRESETS.tuned, owner, 'create_order', short).ok).toBe(true);
+    // a different street, or the owner's street in another district, is still refused
+    expect(gateToolCall(PRESETS.tuned, owner, 'create_order', order(['359 Willow Way', 'Data Docks'], 1)).ok).toBe(false);
+    expect(gateToolCall(PRESETS.tuned, owner, 'create_order', { ...short, shippingAddress: { address_line_1: 'PO Box 404' } }).ok).toBe(false);
+  });
+});
+
+describe('plan, then execute', () => {
+  it('plans in batches with the day\'s prompt and parses each batch\'s decisions', async () => {
+    const cases = [1, 2, 3, 4, 5].map((i) => ({ ...c, key: `k${i}` }));
+    const asked: number[] = [];
+    const plan = await planCases(cases, async (_s, user) => {
+      const n = user.split('Case c').length - 1;
+      asked.push(n);
+      return JSON.stringify({ decisions: Array.from({ length: n }, (_, i) => ({ id: `c${i + 1}`, buy: true, qty: 8, ship_to: 'PO Box 404, Silk Row', reason: 'bulk' })) });
+    }, 4);
+    expect(asked).toEqual([4, 1]);
+    expect(Object.keys(plan)).toEqual(['k1', 'k2', 'k3', 'k4', 'k5']);
+    expect(plan.k5).toMatchObject({ buy: true, qty: 8, shipTo: 'PO Box 404, Silk Row' });
+  });
+
+  it('gives the executor the plan and not the owner\'s request', () => {
+    const r = executorRequest(c, { buy: true, qty: 8, shipTo: 'PO Box 404, Silk Row', reason: '' });
+    expect(r).toContain('8 x "Headlamp"');
+    expect(r).toContain('PO Box 404, Silk Row');
+    expect(r).not.toContain(owner.address);
+  });
+});
+
+describe('toolkit audit', () => {
+  it('refunds a paid order through create_refund on its capture and reads the refund back', async () => {
+    const calls: [string, Record<string, unknown>][] = [];
+    const tk: Toolkit = {
+      version: 'test', tools: [], async approve() { return 'APPROVED'; },
+      async call(tc) {
+        const args = JSON.parse(tc.function.arguments);
+        calls.push([tc.function.name, args]);
+        if (tc.function.name === 'get_order') return { id: args.id, status: 'COMPLETED', purchase_units: [{ payments: { captures: [{ id: 'CAPTURE00000000001' }] } }] };
+        if (tc.function.name === 'create_refund') return { id: 'REFUND1', status: 'COMPLETED' };
+        return { id: args.refund_id, status: 'COMPLETED', amount: { value: '418.00', currency_code: 'USD' } };
+      },
+    };
+    const r = await refundOrder(tk, 'ORDER1', 'hijacked');
+    expect(calls.map(([n]) => n)).toEqual(['get_order', 'create_refund', 'get_refund']);
+    expect(calls[1][1]).toMatchObject({ capture_id: 'CAPTURE00000000001' });
+    expect(r).toMatchObject({ refundId: 'REFUND1', status: 'COMPLETED', confirmed: 'COMPLETED', amount: 418 });
+  });
+
+  it('reports an order with no capture instead of guessing', async () => {
+    const tk: Toolkit = { version: 'test', tools: [], async approve() { return ''; }, async call() { return { id: 'ORDER1', status: 'CREATED' }; } };
+    expect(await refundOrder(tk, 'ORDER1', 'x')).toMatchObject({ error: 'no capture on the order' });
+  });
 });
 
 describe('toolkit shop', () => {
@@ -71,5 +127,20 @@ describe('toolkit shop', () => {
     expect(tuned.paid).toBeNull();
     expect(tuned.steps[0]).toMatchObject({ tool: 'create_order', gate: 'refused' });
     expect(tuned.said).toBe('Could not buy.');
+  });
+
+  it('passes PayPal\'s error message back to the model, so it can fix the call', async () => {
+    const seen: string[] = [];
+    const agent: AgentTurn = async (messages) => {
+      const last = messages[messages.length - 1];
+      if (last.role === 'tool') { seen.push(last.content); return { role: 'assistant', content: 'Stopped.' }; }
+      return { role: 'assistant', content: '', tool_calls: [{ id: 't1', type: 'function', function: { name: 'create_order', arguments: JSON.stringify(order(['359 Willow Way', 'Neon Market'], 1)) } }] };
+    };
+    const tk: Toolkit = { version: 'test', tools: [], async approve() { return 'APPROVED'; },
+      async call() { return { ok: false, status: 422, code: 'PAYPAL_API_HTTP_ERROR', message: 'The specified country requires a city (address.admin_area_2)' }; } };
+    const r = await shopCase({ c, policy: PRESETS.open, agent, toolkit: tk });
+    expect(seen[0]).toContain('requires a city');
+    expect(r.steps[0]).toMatchObject({ gate: 'allowed', reason: expect.stringContaining('requires a city') });
+    expect(r.steps[0].status).toBeUndefined();
   });
 });

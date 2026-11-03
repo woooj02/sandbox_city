@@ -11,6 +11,8 @@
  *   LLM_PRICE_IN / LLM_PRICE_OUT     USD per million tokens (read from the provider's model list when it publishes one)
  *   LLM_BUDGET_USD                   default 0.25: no request is sent that could take the total past it
  *   LLM_SPEND_FILE                   optional file that carries the total across runs
+ *   LLM_THINKING=off                 asks a thinking model to answer directly (Together's `reasoning: {enabled: false}`);
+ *                                    otherwise its hidden reasoning can use up the reply length and cut a tool call short
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
@@ -20,6 +22,8 @@ export interface LlmConfig {
   /** Set for paid models: prices per million tokens and the most this process may spend. */
   price?: { in: number; out: number }; budgetUsd?: number; spendFile?: string;
   spend?: Spend;
+  /** false: ask the model not to think before answering. */
+  thinking?: boolean;
 }
 
 export class BudgetExceeded extends Error {}
@@ -33,15 +37,16 @@ export function llmFromEnv(env = process.env): LlmConfig | null {
   const spendFile = env.LLM_SPEND_FILE || undefined;
   const spend: Spend = spendFile && existsSync(spendFile) ? JSON.parse(readFileSync(spendFile, 'utf8')) : { usd: 0, tokensIn: 0, tokensOut: 0, calls: 0 };
   const priced = env.LLM_PRICE_IN != null && env.LLM_PRICE_OUT != null;
+  const thinking = env.LLM_THINKING === 'off' ? false : undefined;
   if (together) return {
-    apiKey, baseUrl: TOGETHER,
+    apiKey, baseUrl: TOGETHER, thinking,
     model: env.LLM_MODEL || 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo',
     minGapMs: Number(env.LLM_MIN_GAP_MS ?? 500),
     price: priced ? { in: Number(env.LLM_PRICE_IN), out: Number(env.LLM_PRICE_OUT) } : undefined,
     budgetUsd: Number(env.LLM_BUDGET_USD ?? 0.25), spendFile, spend,
   };
   return {
-    apiKey,
+    apiKey, thinking,
     price: priced ? { in: Number(env.LLM_PRICE_IN), out: Number(env.LLM_PRICE_OUT) } : undefined,
     budgetUsd: priced || env.LLM_BUDGET_USD ? Number(env.LLM_BUDGET_USD ?? 0.25) : undefined,
     spendFile, spend,
@@ -94,7 +99,8 @@ function poster(cfg: LlmConfig, fetchImpl: typeof fetch) {
       const res = await fetchImpl(`${cfg.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${cfg.apiKey}` },
-        body: JSON.stringify({ model: cfg.model, temperature: 0, ...(cfg.budgetUsd != null ? { max_tokens: MAX_OUT } : {}), ...body }),
+        body: JSON.stringify({ model: cfg.model, temperature: 0, ...(cfg.budgetUsd != null ? { max_tokens: MAX_OUT } : {}),
+          ...(cfg.thinking === false ? { reasoning: { enabled: false } } : {}), ...body }),
       });
       if (res.ok) {
         const data = await res.json() as { choices?: { message?: AgentMessage }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
