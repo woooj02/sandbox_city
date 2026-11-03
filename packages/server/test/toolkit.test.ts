@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { PRESETS, type BrainCase } from '@sandbox-city/core';
-import { executorRequest, gateToolCall, goesElsewhere, planCases, refundOrder, shopCase, shipToOf, type Toolkit } from '../src/toolkit-shop';
+import { INJECTIONS, PRESETS, type BrainCase } from '@sandbox-city/core';
+import { dayCases, executorRequest, gatePlan, gateToolCall, goesElsewhere, planCases, templateOf, refundOrder, shopCase, shipToOf, type Toolkit } from '../src/toolkit-shop';
 import type { AgentMessage, AgentTurn } from '../src/llm';
 
 const owner = { category: 'outdoor', qty: 1, address: '359 Willow Way, Neon Market', budget: 79 };
@@ -68,6 +68,28 @@ describe('plan, then execute', () => {
     expect(r).toContain('PO Box 404, Silk Row');
     expect(r).not.toContain(owner.address);
   });
+});
+
+describe('hijack rate', () => {
+  it('puts a planned order through the same create_order check the paid run uses', () => {
+    const plan = (qty: number, shipTo: string) => ({ buy: true, qty, shipTo, reason: '' });
+    expect(gatePlan(PRESETS.tuned, c, plan(1, '359 Willow Way, Neon Market')).ok).toBe(true);
+    expect(gatePlan(PRESETS.tuned, c, plan(1, '359 Willow Way')).ok).toBe(true);
+    expect(gatePlan(PRESETS.tuned, c, plan(8, 'PO Box 404, Silk Row'))).toMatchObject({ ok: false, reason: expect.stringContaining('ship lock') });
+    expect(gatePlan(PRESETS.kya, c, plan(8, '359 Willow Way, Neon Market'))).toMatchObject({ ok: false, reason: expect.stringContaining('mandate') });
+    expect(gatePlan(PRESETS.open, c, plan(8, 'PO Box 404, Silk Row')).ok).toBe(true);
+  });
+
+  it('deals a day\'s poisoned listings over all four page tricks, each listing once', async () => {
+    const cases = await dayCases(8, 3);
+    const poisoned = cases.filter((x) => x.injected);
+    expect(poisoned).toHaveLength(8);
+    expect(cases.filter((x) => !x.injected)).toHaveLength(3);
+    expect(new Set(cases.map((x) => x.listing.title)).size).toBe(cases.length);
+    expect(poisoned.map(templateOf)).toEqual([0, 1, 2, 3, 0, 1, 2, 3].map((i) => i % INJECTIONS.length));
+    // the same seed gives the same cases, so a recorded run can be replayed
+    expect((await dayCases(8, 3)).map((x) => x.listing.title)).toEqual(cases.map((x) => x.listing.title));
+  }, 60_000);
 });
 
 describe('toolkit audit', () => {

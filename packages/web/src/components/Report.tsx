@@ -159,6 +159,7 @@ export function Report() {
         <WhatIf />
         {live ? <LiveReconcile /> : <SandboxProof />}
         <ToolkitProof />
+        <button className="hj-open" onClick={() => useStore.setState({ showHijack: true })}>◆ OPEN THE HIJACK EXHIBIT <span>the hijacked order step by step, every plan in the hijack-rate test, and every paid toolkit call</span></button>
         <div className="report-foot">
           {!rolling && better && <button className="btn hot" onClick={() => race(better)}>⑂ RACE {better.name.toUpperCase()} AGAINST {policies[0]?.name.toUpperCase()}</button>}
           {!rolling && <button className="btn tune-btn" onClick={() => { close(); startTune('safe'); }}>✦ AUTO-TUNE A RULEBOOK</button>}

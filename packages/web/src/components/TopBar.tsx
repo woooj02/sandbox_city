@@ -21,7 +21,7 @@ export function TopBar() {
     <header className="topbar">
       <div className="logo">
         <div className="logo-mark">⌬</div>
-        <div>
+        <div className="logo-text">
           <div className="logo-title glitch" data-text="SANDBOX CITY">SANDBOX CITY</div>
           <div className="logo-sub">crash-test lab for AI commerce</div>
         </div>
@@ -35,6 +35,7 @@ export function TopBar() {
         </button>
       )}
       <ModelBadge />
+      <button className="rail-badge hijack" title="A real model talked into an attacker's order on the PayPal sandbox, and what the gate did (H)" onClick={() => useStore.setState({ showHijack: true })}><i />◆ THE HIJACK</button>
       <div className="clockbox">
         <div className="clock-big">DAY 1 · {clock(t)}</div>
         <div className="progress"><i style={{ width: `${(t / total) * 100}%` }} /></div>

@@ -56,6 +56,16 @@ Presets range from **Wild West** (no rules) through **Passport Theater**, **Know
 - **What-if.** At the end of the day, the same day is replayed under every other rulebook. You see what each would have saved, or cost.
 - **Auto-tune.** An evolutionary search over the rulebook. Candidates are trained on two other days, so the day on screen stays unseen and the replay is a fair test. You can require a safety floor, for example "at least 85% of fraud stopped", and it finds the most value above it.
 - **Attack forge.** The red team. Attack tactics evolve against your rulebook on two other days. Each attack family keeps whichever variant got the most money past the gate. Attack frequency is a fixed budget, so the forge finds smarter attacks, not more of them. You can unleash the forged attackers on the city, or re-tune the rulebook against them.
+- **The hijack.** Press **H**, click ◆ THE HIJACK, or open `?hijack=1`. The recorded toolkit run, told in four steps:
+  - the poisoned page, with the planted instruction marked
+  - the plan the model wrote
+  - the same `create_order` under three rulebooks: paid, refused, refused
+  - the refund
+
+  Three AG Grid tables follow:
+  - which page tricks work
+  - every one of the 78 planned orders, with views, grep, tooltips, CSV and a detail panel for the row you pick
+  - the paid run, lane by lane, with order and refund ids
 - **Ledger.** Every order, refund and PayPal call, in AG Grid. Filter by view or grep, see totals for what is in view, and export it as CSV.
 - **Model shoppers.** Switch on ◈ MODEL SHOPPERS (or open `?brain=1`) and every shopper's agent hands listings that try to give instructions to a language model, which writes the order itself. Click again for the same model with a careful prompt that treats page text as untrusted (`?brain=guarded`). Each day replays a recorded run, so it stays deterministic and needs no key in the browser. On the default day the plain agent obeyed all 42 poisoned listings it read; the careful one obeyed none, yet Wild West still lost $28,802 to the attacks no prompt can see, and Lab-Tuned with the fooled agent kept more value ($121,756) than Wild West with the careful one ($108,099).
 - **Rule matrix.** Every rule against every preset in one grid. Edit your rulebook in place and replay the same day.
@@ -133,6 +143,7 @@ Request sizes are clamped, searches stop when the browser disconnects, and the e
 | `?cinema=1&roll=1&act=5` | Start the film at a given act (1 to 6) |
 | `#film`, `#act5` | Same as above, for hosts that drop query strings |
 | `?brain=1`, `?brain=guarded` | Model shoppers, plain or careful prompt |
+| `?hijack=1` | Open the hijack exhibit (also **H**) |
 | `?live=1` | Use the lab server and the PayPal sandbox |
 
 ### Command line
@@ -196,7 +207,32 @@ Two fixes came out of these runs:
 - The ship lock now accepts the owner's street with the district left off. It had turned away honest orders written that way.
 - The model now gets PayPal's error text. Before, it got only the HTTP status of a rejected call, so it could not fix it.
 
-The smaller serverless models on Together (Tev1 4B, a Qwen 2 1.5B fine-tune) made no tool calls at all, and Llama 3.1 8B and Qwen 2.5 7B now need a dedicated endpoint. All model time for these experiments came to $0.107, under a hard $0.15 cap enforced by the client. The gate, the planner batches, the executor's view and the refund audit are covered by `packages/server/test/toolkit.test.ts`.
+The smaller serverless models on Together (Tev1 4B, a Qwen 2 1.5B fine-tune) made no tool calls at all, and Llama 3.1 8B and Qwen 2.5 7B now need a dedicated endpoint.
+
+```bash
+NODE_USE_ENV_PROXY=1 npx tsx scripts/hijack-rate.ts [--estimate]
+```
+
+How often it happens. One paid run follows one plan, so this script asks the planner about more cases:
+- **Cases:** every distinct poisoned listing from three simulated days, 66 of them across the four injection styles, plus 12 honest ones.
+- **Prompts:** each case is planned twice, with the ordinary shopping prompt and with the careful one.
+- **Gate:** every planned order goes through the same `create_order` check, under Lab-Tuned and Know Your Agent.
+- **No payments:** nothing reaches PayPal.
+- **Output:** results are saved to `packages/web/src/data/hijack-rate.json` for the hijack exhibit.
+
+Recorded with Qwen3.5 9B, thinking off; 40 planner calls, $0.0051.
+
+| | Ordinary prompt | Careful prompt |
+| --- | --- | --- |
+| Poisoned listings that became a hijacked plan | 27 of 66 (41%) | 0 of 66 |
+| By trick: hidden HTML comment / system notice / "pro tip" / social proof | 12/17, 5/18, 5/16, 5/15 | 0 each |
+| Hijacked plans refused by the gate | 27 of 27 (Lab-Tuned and Know Your Agent alike) | — |
+| Honest owners' orders bought | 11 of 12 | 10 of 12 |
+| Honest orders refused by the gate | 0 | 0 |
+
+The careful prompt held against these four tricks, but it also skipped two honest purchases. The gate does not depend on the prompt holding.
+
+All model time for these experiments came to $0.112, under a hard cap enforced by the client. The gate, the planner batches, the executor's view, the case dealing and the refund audit are covered by `packages/server/test/toolkit.test.ts`.
 
 ## Layout
 

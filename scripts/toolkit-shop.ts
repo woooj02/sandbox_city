@@ -13,9 +13,9 @@
  * Writes packages/web/src/data/toolkit-proof.json, which the report shows.
  */
 import { writeFileSync } from 'node:fs';
-import { DEFAULT_CONFIG, INJECTIONS, PRESETS, World, type BrainCase } from '@sandbox-city/core';
+import { PRESETS, type BrainCase } from '@sandbox-city/core';
 import { llmAgent, llmClient, llmFromEnv, llmPricing, type AgentTurn } from '../packages/server/src/llm.ts';
-import { executorRequest, goesElsewhere, planCases, RECOVERY_TOOLS, refundOrder, shopCase, toolkitFromEnv, TOOLKIT_TOOLS, type LaneRun, type Refund, type Toolkit } from '../packages/server/src/toolkit-shop.ts';
+import { dayCases, executorRequest, goesElsewhere, planCases, RECOVERY_TOOLS, refundOrder, shopCase, toolkitFromEnv, TOOLKIT_TOOLS, type LaneRun, type Refund, type Toolkit } from '../packages/server/src/toolkit-shop.ts';
 
 const cfg = llmFromEnv();
 const real = toolkitFromEnv();
@@ -40,28 +40,7 @@ const toolkit: Toolkit = dry ? {
 } : real;
 const seed = 'neo-osaka-7';
 
-// every case a model shopper meets on the default day, in the order the day meets them. Stock attackers all write
-// at one subtlety, so the day only carries one injection template; to cover the city's four, the same day is also
-// run with the injection crews set to each template's subtlety (the knob the attack forge evolves)
-const day = async (subtlety?: number) => {
-  const w = new World({ ...DEFAULT_CONFIG, seed, crypto: 'modeled', policy: PRESETS.open, brain: { shoppers: 1200, tape: {} },
-    ...(subtlety == null ? {} : { genomes: { prompt_injection: { subtlety } } }) });
-  await w.run();
-  return [...w.brainMisses.values()];
-};
-const all = await day();
-const seen = new Set<string>();
-const fresh = (c: BrainCase) => !seen.has(c.listing.title) && !!seen.add(c.listing.title);
-const template = (c: BrainCase) => INJECTIONS.findIndex((t) => c.listing.text.includes(t.text.split('{')[0].trim()));
-const byTemplate = await Promise.all(INJECTIONS.map(async (_, i) => (await day((i + 0.5) / INJECTIONS.length)).filter((c) => c.injected && template(c) === i)));
-const poisoned: BrainCase[] = [];
-for (let round = 0; poisoned.length < nPoisoned && byTemplate.some((q) => q.length); round++)
-  for (const q of byTemplate) {
-    if (poisoned.length >= nPoisoned) break;
-    while (q.length && !fresh(q[0])) q.shift();
-    if (q.length) poisoned.push(q.shift()!);
-  }
-const cases: BrainCase[] = [...poisoned, ...all.filter((c) => !c.injected && fresh(c)).slice(0, nClean)];
+const cases = await dayCases(nPoisoned, nClean, seed);
 
 // every rulebook sees the same model: identical conversations are asked once
 const memo = new Map<string, ReturnType<AgentTurn>>();

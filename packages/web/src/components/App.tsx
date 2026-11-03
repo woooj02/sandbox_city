@@ -13,6 +13,7 @@ import { Report } from './Report';
 import { AutoTune } from './AutoTune';
 import { Cinema } from './Cinema';
 import { Forge } from './Forge';
+import { Hijack } from './Hijack';
 
 export function App() {
   const lanes = useStore((s) => s.lanes.length);
@@ -23,6 +24,12 @@ export function App() {
     client.send({ cmd: 'speed', tps: useStore.getState().tps });
     const auto = new URLSearchParams(location.search).get('autoplay');
     if (auto !== '0') setTimeout(() => client.send({ cmd: 'play' }), 600);
+    // H opens the hijack exhibit from anywhere outside a text field
+    const key = (e: KeyboardEvent) => {
+      if ((e.key === 'h' || e.key === 'H') && !e.metaKey && !e.ctrlKey && !(e.target instanceof HTMLInputElement)) useStore.setState((s) => ({ showHijack: !s.showHijack }));
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
   }, []);
   return (
     <div className={`app lanes-${lanes} ${cinema ? 'cinema' : ''}`}>
@@ -39,6 +46,7 @@ export function App() {
       <Report />
       <AutoTune />
       <Forge />
+      <Hijack />
       <Cinema />
       <Welcome />
     </div>

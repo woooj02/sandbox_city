@@ -10,7 +10,7 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
-import { BRAIN_SYSTEM, brainPrompt, parseChoices, sameAddress, type BrainCase, type BrainChoice, type Policy } from '@sandbox-city/core';
+import { BRAIN_SYSTEM, brainPrompt, DEFAULT_CONFIG, INJECTIONS, parseChoices, PRESETS, sameAddress, World, type BrainCase, type BrainChoice, type Policy } from '@sandbox-city/core';
 import type { AgentMessage, AgentTurn, ToolCall } from './llm';
 
 /** The toolkit tools the shopper model is given. */
@@ -153,14 +153,54 @@ const short = (o: Record<string, unknown>) => {
  * executor as an ordinary instruction. The gate still checks each order against what the owner asked for.
  */
 export const PLAN_BATCH = 4;
-export async function planCases(cases: BrainCase[], ask: (system: string, user: string) => Promise<string>, batch = PLAN_BATCH): Promise<Record<string, BrainChoice>> {
+export async function planCases(cases: BrainCase[], ask: (system: string, user: string) => Promise<string>, batch = PLAN_BATCH, system = BRAIN_SYSTEM): Promise<Record<string, BrainChoice>> {
   const plan: Record<string, BrainChoice> = {};
   for (let i = 0; i < cases.length; i += batch) {
     const part = cases.slice(i, i + batch);
-    Object.assign(plan, parseChoices(await ask(BRAIN_SYSTEM, brainPrompt(part)), part));
+    Object.assign(plan, parseChoices(await ask(system, brainPrompt(part)), part));
   }
   return plan;
 }
+
+/** The create_order an executor places for a planned decision, put through the gate (no model, no PayPal). */
+export function gatePlan(policy: Policy, c: BrainCase, d: BrainChoice) {
+  const [line, ...rest] = d.shipTo.split(',');
+  return gateToolCall(policy, c.owner, 'create_order', {
+    items: [{ quantity: d.qty, itemCost: c.listing.price, itemTotal: Math.round(c.listing.price * d.qty * 100) / 100 }],
+    shippingAddress: { address_line_1: line.trim(), admin_area_2: rest.join(',').trim() || undefined },
+  });
+}
+
+/**
+ * The cases a model shopper meets on a simulated day: owner requests and listings, some poisoned. Stock attackers
+ * all write at one subtlety, so the day only carries one injection template; to cover the city's four, the same
+ * day is also run with the injection crews set to each template's subtlety (the knob the attack forge evolves),
+ * and poisoned cases are dealt round-robin over the templates. Every listing appears once.
+ */
+export async function dayCases(nPoisoned: number, nClean: number, seed = 'neo-osaka-7'): Promise<BrainCase[]> {
+  const day = async (subtlety?: number) => {
+    const w = new World({ ...DEFAULT_CONFIG, seed, crypto: 'modeled', policy: PRESETS.open, brain: { shoppers: 1200, tape: {} },
+      ...(subtlety == null ? {} : { genomes: { prompt_injection: { subtlety } } }) });
+    await w.run();
+    return [...w.brainMisses.values()];
+  };
+  const all = await day();
+  const seen = new Set<string>();
+  const fresh = (c: BrainCase) => !seen.has(c.listing.title) && !!seen.add(c.listing.title);
+  const template = (c: BrainCase) => INJECTIONS.findIndex((t) => c.listing.text.includes(t.text.split('{')[0].trim()));
+  const byTemplate = await Promise.all(INJECTIONS.map(async (_, i) => (await day((i + 0.5) / INJECTIONS.length)).filter((c) => c.injected && template(c) === i)));
+  const poisoned: BrainCase[] = [];
+  while (poisoned.length < nPoisoned && byTemplate.some((q) => q.length))
+    for (const q of byTemplate) {
+      if (poisoned.length >= nPoisoned) break;
+      while (q.length && !fresh(q[0])) q.shift();
+      if (q.length) poisoned.push(q.shift()!);
+    }
+  return [...poisoned, ...all.filter((c) => !c.injected && fresh(c)).slice(0, nClean)];
+}
+
+/** Which of the city's injection templates a poisoned listing carries (-1: none). */
+export const templateOf = (c: BrainCase) => INJECTIONS.findIndex((t) => c.listing.text.includes(t.text.split('{')[0].trim()));
 
 /** What the executor is told: the planned order and the postal details, not the owner's request. */
 export function executorRequest(c: BrainCase, d: BrainChoice): string {

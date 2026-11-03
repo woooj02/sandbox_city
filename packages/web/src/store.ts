@@ -47,6 +47,8 @@ interface State {
   feed: FeedItem[];
   trace: TraceLine[];
   showReport: boolean;
+  /** The hijack exhibit: the recorded toolkit run and the hijack-rate test. */
+  showHijack: boolean;
   paypal: 'twin' | 'sandbox';
   runId: string | null;
   paypalCalls: PayPalCall[];
@@ -86,6 +88,7 @@ export const useStore = create<State>((set, get) => ({
   feed: [],
   trace: [],
   showReport: false,
+  showHijack: new URLSearchParams(location.search).has('hijack'),
   paypal: 'twin',
   runId: null,
   paypalCalls: [],

@@ -17,6 +17,7 @@ export function Welcome() {
     setTimeout(() => director.roll(1), 200);
   };
   const explore = () => { remember(); setOpen(false); };
+  const hijack = () => { explore(); useStore.setState({ showHijack: true }); };
   return (
     <div className="report-wrap welcome-wrap" onClick={explore}>
       <div className="welcome panel" onClick={(e) => e.stopPropagation()}>
@@ -28,11 +29,16 @@ export function Welcome() {
           <li><b>You set the rules at the gate.</b> Passports, signatures, spend caps, escrow, idempotency keys.</li>
           <li><b>The lab keeps score.</b> Fraud stopped, honest buyers let through, and net value, on the same day every time.</li>
         </ol>
+        <button className="wl-hijack" onClick={hijack}>
+          <span className="wl-tag">RECORDED ON THE PAYPAL SANDBOX</span>
+          <b>A real model was talked into shipping 8 units to an attacker's PO Box.</b>
+          <span>Wild West paid it. Lab-Tuned and Know Your Agent refused the call before PayPal saw it. The audit refunded it through PayPal's Agent Toolkit. See the hijack →</span>
+        </button>
         <div className="wl-actions">
           <button className="btn hot" onClick={film}>▶ WATCH THE FILM <small>about 9 min · Esc to stop</small></button>
           <button className="btn" onClick={explore}>EXPLORE THE LAB</button>
         </div>
-        <p className="wl-keys">Keys: <kbd>C</kbd> cinema · <kbd>R</kbd> roll the film · <kbd>1</kbd>–<kbd>5</kbd> jump to an act</p>
+        <p className="wl-keys">Keys: <kbd>C</kbd> cinema · <kbd>R</kbd> roll the film · <kbd>1</kbd>–<kbd>5</kbd> jump to an act · <kbd>H</kbd> the hijack</p>
       </div>
     </div>
   );
