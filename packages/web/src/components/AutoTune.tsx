@@ -6,6 +6,7 @@ import { gridTheme } from './Ledger';
 import { emptyTune, useStore } from '../store';
 import { client } from '../sim/client';
 import { money, pct } from './meta';
+import { useModal } from './useModal';
 
 const MODES = {
   safe: { label: 'SAFE', sub: 'most value with ≥ 85% of fraud stopped', minSafety: 0.85, minAccess: 0.8 },
@@ -103,15 +104,16 @@ export function AutoTune() {
   const tune = useStore((s) => s.tune);
   const policies = useStore((s) => s.policies);
   const forged = useStore((s) => s.genomes !== null);
-  if (!tune.open) return null;
   const close = () => { if (tune.running) client.send({ cmd: 'tune_stop' }); useStore.setState({ tune: { ...tune, open: false, running: false } }); };
+  const panel = useModal<HTMLDivElement>(tune.open, close);
+  if (!tune.open) return null;
   const replay = (lanes: Policy[]) => { useStore.setState({ tune: { ...tune, open: false } }); client.start(lanes); setTimeout(() => client.send({ cmd: 'play' }), 300); };
   const b = tune.best;
   const progress = tune.total ? tune.evals / tune.total : 0;
   const isPreset = b && !b.policy.name.startsWith('Tuned');
   return (
     <div className="report-wrap" onClick={close}>
-      <div className="tune panel" onClick={(e) => e.stopPropagation()}>
+      <div className="tune panel" ref={panel} tabIndex={-1} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Auto-tune">
         <div className="report-head">
           <span className="glyph">./tune</span>
           <div>

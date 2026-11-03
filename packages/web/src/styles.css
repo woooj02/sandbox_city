@@ -639,3 +639,4 @@ button.rail-badge { background: transparent; cursor: pointer; }
 .hj-part { color: var(--gold); }
 .hj-note { margin: 8px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--dim); max-width: 1100px; }
 .hj-grid .hj-honest-row { border-top: 1px solid var(--line); }
+.panel[role="dialog"]:focus { outline: none; }

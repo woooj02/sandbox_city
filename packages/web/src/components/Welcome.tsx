@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useStore } from '../store';
 import { director } from '../sim/director';
+import { useModal } from './useModal';
 
 const KEY = 'sandbox-city:welcomed';
 const seen = () => { try { return localStorage.getItem(KEY) === '1'; } catch { return false; } };
@@ -10,20 +11,21 @@ const remember = () => { try { localStorage.setItem(KEY, '1'); } catch { /* stor
 export function Welcome() {
   const cinema = useStore((s) => s.cinema.on);
   const [open, setOpen] = useState(() => !seen() && !location.search && !location.hash);
+  const explore = () => { remember(); setOpen(false); };
+  const panel = useModal<HTMLDivElement>(open && !cinema, explore);
   if (!open || cinema) return null;
   const film = () => {
     remember(); setOpen(false);
     useStore.setState((s) => ({ cinema: { ...s.cinema, on: true } }));
     setTimeout(() => director.roll(1), 200);
   };
-  const explore = () => { remember(); setOpen(false); };
   const hijack = () => { explore(); useStore.setState({ showHijack: true }); };
   return (
     <div className="report-wrap welcome-wrap" onClick={explore}>
-      <div className="welcome panel" onClick={(e) => e.stopPropagation()}>
+      <div className="welcome panel" ref={panel} tabIndex={-1} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Welcome to Sandbox City">
         <div className="wl-prompt"><span>root@sandbox-city:~$</span> ./intro</div>
         <h2>SANDBOX CITY</h2>
-        <p className="wl-lede">A crash-test lab for AI commerce. Crash-test every payment rule before a single real cent moves.</p>
+        <p className="wl-lede">A crash-test lab for AI commerce. Try every payment rule before a single real cent moves.</p>
         <ol className="wl-steps">
           <li><b>A whole city trades for one day.</b> AI shoppers, stores and six crews of attackers, every payment on PayPal rails.</li>
           <li><b>You set the rules at the gate.</b> Passports, signatures, spend caps, escrow, idempotency keys.</li>

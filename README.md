@@ -4,6 +4,35 @@ A crash-test lab for agentic commerce. AI shoppers, AI stores and AI attackers s
 
 You can test a rule here before it ever touches a real customer.
 
+[![verify](https://github.com/woooj02/Sandbox-City/actions/workflows/verify.yml/badge.svg)](https://github.com/woooj02/Sandbox-City/actions/workflows/verify.yml)
+
+## In two minutes
+
+1. **See the lab.** Run `npm install && npm run dev`, open http://localhost:5173 and choose **▶ WATCH THE FILM** for the directed tour, or **EXPLORE THE LAB** and press **RUN**.
+2. **See the hijack.** Press **H**, or open http://localhost:5173/?hijack=1. A real model was talked into a $1,620.64 order to an attacker's PO box on the PayPal sandbox. Wild West paid it, Lab-Tuned and Know Your Agent refused it at the gate, and PayPal's Agent Toolkit refunded it. The PayPal order, capture and refund ids are on screen.
+3. **Check the numbers yourself.** No keys, no network:
+
+   ```bash
+   npm run verify
+   ```
+
+   This typechecks, runs the test suite, rebuilds the front end and runs `scripts/verify-claims.ts`. That script recomputes every number this README states from the recorded runs: it replays the model tapes through the engine, re-scores every recorded plan, and puts each one through today's gate code again. It fails if any number here, or in the exhibit, has drifted. CI runs the same command on every push.
+
+| Claim | Recorded in | Checked by |
+| --- | --- | --- |
+| The hijacked order, its refund and 10 paid orders read back from PayPal | `packages/web/src/data/toolkit-proof.json` | `verify-claims`: totals re-added, refund matched to the hijacked order, the plan re-gated |
+| 27 of 66 poisoned listings became a hijacked plan, and which check catches which half | `packages/web/src/data/hijack-rate.json` | `verify-claims`: every plan re-scored and re-gated under four rulebooks |
+| Model shoppers obeyed 42 of 42 poisoned listings on the default day | `packages/web/src/data/brain-tape*.json` | `verify-claims`: the tapes replayed through the engine |
+| A Lab-Tuned day reconciled with PayPal to the cent | `packages/web/src/data/paypal-proof.json` | `verify-claims`; `npm test` replays full live-server days against a PayPal contract mock |
+
+### What this does not show
+
+- **One paid hijack.** The PayPal sandbox has one hijacked order, paid and refunded. The 41% rate comes from 66 plans put through the gate; none of them was paid.
+- **Our own attacks.** The four injection styles are the city's own templates. Real attackers will write better ones.
+- **One planner model.** The rate was measured on Qwen3.5 9B. A larger model may resist these tricks. The gate does not depend on that, because it checks the order, not the model.
+- **Two different setups.** The 42 of 42 comes from Gemma 4 26B choosing orders from a text prompt inside the simulated day. The 41% comes from Qwen3.5 9B writing a shopping plan. They are not two measurements of the same thing.
+- **Recorded, not live, in the browser.** The model shoppers replay recorded answers, so every day is deterministic and the page needs no key. The scripts below record new ones.
+
 ## What happens in a day
 
 - **1,440 simulated minutes.** Shoppers browse, compare and buy through their own AI agents. Stores list, ship and refund.
@@ -154,6 +183,12 @@ npm test
 ```
 
 Runs the engine, the policy search and the PayPal adapter against a strict contract mock, plus full live-server days that reconcile to the cent.
+
+```bash
+npm run claims
+```
+
+Recomputes every number in this README from the recorded runs and prints each claim with ✓ or ✕. `npm run verify` runs it together with the typecheck, the tests and the build.
 
 ```bash
 npx tsx scripts/tune.ts 8 10 0.85

@@ -4,6 +4,7 @@ import { startTune } from './AutoTune';
 import { useEffect, useState } from 'react';
 import { useStore } from '../store';
 import { WhatIf } from './WhatIf';
+import { useModal } from './useModal';
 import proof from '../data/paypal-proof.json';
 import toolkit from '../data/toolkit-proof.json';
 import { PROMPT_LABEL, modelLabel } from '../sim/brain';
@@ -125,16 +126,17 @@ export function Report() {
   const w = useStore((s) => s.whatif);
   const brain = useStore((s) => s.brain);
   const brainPrompt = useStore((s) => s.brainPrompt);
-  if (!show) return null;
   const close = () => useStore.setState({ showReport: false });
+  const panel = useModal<HTMLDivElement>(show, close);
+  if (!show) return null;
   // the best preset this day, if it beats the first lane: one click races it on the same seed
   const mine = w && w !== 'pending' ? w.mine[0] : null;
   const top = w && w !== 'pending' ? [...w.alternatives].sort((a, b) => b.net - a.net)[0] : null;
   const better: Policy | null = mine && top && top.net > mine.net ? PRESETS[top.key] ?? null : null;
   const race = (p: Policy) => { close(); client.start([policies[0], p]); setTimeout(() => client.send({ cmd: 'play' }), 300); };
   return (
-    <div className="report-wrap" onClick={() => useStore.setState({ showReport: false })}>
-      <div className="report panel" onClick={(e) => e.stopPropagation()}>
+    <div className="report-wrap" onClick={close}>
+      <div className="report panel" ref={panel} tabIndex={-1} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="End of day report">
         <div className="report-head"><span className="glyph">EOD</span><div><h2>END OF DAY REPORT</h2><p>{live ? '24 simulated hours · lane A paid on the PayPal sandbox, reconciled below' : '24 simulated hours · every payment on the PayPal twin, a contract-tested model of the Orders v2 API'}</p></div></div>
         <div className={`report-cols n${lanes.length}`}>
           {lanes.map((l, i) => l.metrics && (

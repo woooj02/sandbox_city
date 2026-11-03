@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AgGridReact } from 'ag-grid-react';
 import { ColDef, ICellRendererParams, CellClassParams, ValueSetterParams } from 'ag-grid-community';
 import { Policy, PRESETS, RULES } from '@sandbox-city/core';
 import { gridTheme } from './Ledger';
+import { useModal } from './useModal';
 
 type Val = boolean | number;
 interface Row { key: keyof Policy; label: string; kind: 'bool' | 'num'; min: number; max: number; step: number; blurb: string; yours: Val; [preset: string]: unknown }
@@ -21,11 +22,7 @@ export function RuleMatrix({ policy, onChange, onApply, onClose, dirty }: {
 }) {
   const change = useRef(onChange);
   change.current = onChange;
-  useEffect(() => {
-    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', k);
-    return () => window.removeEventListener('keydown', k);
-  }, [onClose]);
+  const panel = useModal<HTMLDivElement>(true, onClose);
 
   const rows = useMemo<Row[]>(() => RULES.map((r) => ({
     key: r.key, label: r.label, kind: r.kind, min: r.min ?? 0, max: r.max ?? 1, step: r.step ?? 1, blurb: r.blurb,
@@ -38,8 +35,10 @@ export function RuleMatrix({ policy, onChange, onApply, onClose, dirty }: {
       field: 'yours', headerName: `YOURS · ${policy.name}`, width: 150, editable: true, singleClickEdit: true, cellDataType: false,
       cellRenderer: Cell, cellClass: 'rm-yours', headerClass: 'rm-yours-h',
       cellEditorSelector: (p) => p.data?.kind === 'bool'
-        ? { component: 'agSelectCellEditor', params: { values: [true, false], formatValue: (v: boolean) => (v ? 'on' : 'off') } }
+        ? { component: 'agSelectCellEditor', params: { values: [true, false] } }
         : { component: 'agNumberCellEditor', params: { min: p.data?.min, max: p.data?.max, step: p.data?.step, precision: p.data && p.data.step < 1 ? 2 : 0 } },
+      // the select editor labels its options with this; without it a boolean label crashes the list (the cell itself uses Cell)
+      valueFormatter: (p) => (typeof p.value === 'boolean' ? (p.value ? 'on' : 'off') : String(p.value ?? '')),
       valueSetter: (p: ValueSetterParams<Row>) => {
         const r = p.data;
         const v = r.kind === 'bool' ? p.newValue === true || p.newValue === 'true' : snap(r, Number(p.newValue) || 0);
@@ -56,7 +55,7 @@ export function RuleMatrix({ policy, onChange, onApply, onClose, dirty }: {
 
   return createPortal(
     <div className="report-wrap" onClick={onClose}>
-      <div className="report panel rule-matrix" onClick={(e) => e.stopPropagation()}>
+      <div className="report panel rule-matrix" ref={panel} tabIndex={-1} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Rule matrix">
         <div className="report-head">
           <div className="glyph">⊞</div>
           <div>

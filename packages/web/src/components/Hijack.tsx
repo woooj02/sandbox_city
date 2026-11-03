@@ -6,6 +6,7 @@ import { INJECTIONS } from '@sandbox-city/core';
 import { useStore } from '../store';
 import { gridTheme } from './Ledger';
 import { modelLabel } from '../sim/brain';
+import { useModal } from './useModal';
 import { money } from './meta';
 import toolkit from '../data/toolkit-proof.json';
 import rate from '../data/hijack-rate.json';
@@ -278,16 +279,11 @@ function PaidRun() {
 export function Hijack() {
   const open = useStore((s) => s.showHijack);
   const close = () => useStore.setState({ showHijack: false });
-  useEffect(() => {
-    if (!open) return;
-    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
-    window.addEventListener('keydown', k);
-    return () => window.removeEventListener('keydown', k);
-  }, [open]);
+  const panel = useModal<HTMLDivElement>(open, close);
   if (!open) return null;
   return createPortal(
     <div className="report-wrap" onClick={close}>
-      <div className="report panel hijack" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="The hijack">
+      <div className="report panel hijack" ref={panel} tabIndex={-1} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="The hijack">
         <div className="report-head">
           <span className="glyph hj-glyph">HJK</span>
           <div>

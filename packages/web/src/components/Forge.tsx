@@ -7,6 +7,7 @@ import { emptyForge, useStore } from '../store';
 import { client } from '../sim/client';
 import { startTune } from './AutoTune';
 import { ATTACK_CODE, ATTACK_SHORT, money } from './meta';
+import { useModal } from './useModal';
 
 /** Red team: evolve attacker tactics against a rulebook (lane B's if forked, else lane A's). */
 export function startForge(target?: Policy, size?: { generations: number; children: number }) {
@@ -90,8 +91,9 @@ function ForgeGrid({ best, base }: { best: ForgeScore; base: ForgeScore }) {
 export function Forge() {
   const f = useStore((s) => s.forge);
   const policies = useStore((s) => s.policies);
-  if (!f.open) return null;
   const close = () => { if (f.running) client.send({ cmd: 'forge_stop' }); useStore.setState({ forge: { ...f, open: false, running: false } }); };
+  const panel = useModal<HTMLDivElement>(f.open, close);
+  if (!f.open) return null;
   const b = f.best, base = f.baseline;
   const progress = f.total ? f.evals / f.total : 0;
   const name = f.target?.name ?? 'your rulebook';
@@ -105,7 +107,7 @@ export function Forge() {
   };
   return (
     <div className="report-wrap" onClick={close}>
-      <div className="tune forge panel" onClick={(e) => e.stopPropagation()}>
+      <div className="tune forge panel" ref={panel} tabIndex={-1} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Attack forge">
         <div className="report-head">
           <span className="glyph">./forge</span>
           <div>

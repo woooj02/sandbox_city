@@ -1,0 +1,16 @@
+name: verify
+on:
+  push:
+  pull_request:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # typecheck, tests, every README number recomputed from the recorded runs, production build
+      - run: npm run verify
