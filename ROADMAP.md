@@ -18,4 +18,4 @@ Product work in progress. Items are ticked as they land on `main`.
 - [x] **Model shoppers in the film.** Act VI: every honest shopper's agent is the recorded model, racing Wild West against Lab-Tuned with a plain prompt and then a careful one (`#act6`, and after Act V).
 - [x] **A careful agent.** The same model recorded with a prompt that treats page text as untrusted, to show what a better prompt fixes and what still has to be stopped at the gate (`?brain=guarded`, or click the model badge again).
 - [x] **More recorded days.** Both prompts cover the default day and the three training days auto-tune uses, so tuning with model shoppers on stays on recorded decisions.
-- [ ] **PayPal Agent Toolkit shop.** A model shopper pays through `@paypal/agent-toolkit` on the sandbox, calling its tools itself, with the gate checking every call and every paid order read back by id.
+- [x] **PayPal Agent Toolkit shop.** A model shopper pays through `@paypal/agent-toolkit` on the sandbox, calling its tools itself, with the gate checking every call and every paid order read back by id.
