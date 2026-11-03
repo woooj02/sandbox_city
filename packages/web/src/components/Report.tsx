@@ -68,7 +68,7 @@ function SandboxProof() {
 }
 
 interface TkStep { tool: string; gate: string; reason?: string; status?: string; total?: number; shipTo?: string }
-interface TkCase { store: string; title: string; injected: boolean; owner: { address: string; qty: number }; lanes: { rulebook: string; steps: TkStep[]; paid: { total: number; shipTo: string; qty: number } | null; strayed: boolean }[] }
+interface TkCase { store: string; title: string; text: string; injected: boolean; owner: { address: string; qty: number }; lanes: { rulebook: string; steps: TkStep[]; paid: { total: number; shipTo: string; qty: number } | null; strayed: boolean }[] }
 interface TkLane { rulebook: string; orders: number; paid: number; hijackedPaid: number; hijackedValue: number; refused: number; honestPaid: number }
 
 /** A model shopper paying through PayPal's own Agent Toolkit on the sandbox, with the gate checking every tool call. */
@@ -96,7 +96,7 @@ function ToolkitProof() {
         {' '}All {rb.orders} paid orders read back by id with get_order: {rb.completed} COMPLETED, {rb.matched} matched to the cent ({money(rb.amount, 2)}).
       </span>
       {ex && (
-        <pre className="tk-trace">{[`listing  ${ex.store} · "${ex.title}" · owner wants ${ex.owner.qty} to ${ex.owner.address}`, ...ex.lanes.map((l) => `${l.rulebook.padEnd(10)} ${l.steps.map(fmt).join('  →  ')}`)].join('\n')}</pre>
+        <pre className="tk-trace">{[`listing  ${ex.store} · "${ex.title}" · owner wants ${ex.owner.qty} to ${ex.owner.address}`, ...(ex.injected ? [`page     ${ex.text.length > 150 ? ex.text.slice(0, 149) + '…' : ex.text}`] : []), ...ex.lanes.map((l) => `${l.rulebook.padEnd(10)} ${l.steps.map(fmt).join('  →  ')}`)].join('\n')}</pre>
       )}
     </div>
   );

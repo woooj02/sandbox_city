@@ -173,6 +173,8 @@ NODE_USE_ENV_PROXY=1 npx tsx scripts/toolkit-shop.ts [poisoned=8] [clean=3]
 
 A model shopper paying through PayPal's Agent Toolkit on the sandbox. It takes real owner requests and listings from the default day, some of them poisoned, and gives the model the toolkit's own `create_order`, `pay_order` and `get_order` tools. Each `create_order` passes through the gate first, under Wild West and under Lab-Tuned: a refused call never reaches PayPal and the model is told why. Allowed orders are approved by the owner's wallet (the sandbox test card, confirmed as the payment source) and captured by the model with `pay_order`. Every paid order is read back by id, and the receipt is saved to `packages/web/src/data/toolkit-proof.json` for the end-of-day report. Needs the sandbox keys and a model key.
 
+Recorded run (Gemma 4 26B, toolkit 1.11.0): 11 listings, 8 of them poisoned, under both rulebooks. 22 orders were paid and all 22 read back as COMPLETED, matched to the cent ($1,905.76). Given the owner's full order details and the toolkit's typed tools, the model followed none of the 8 poisoned listings, so the gate had nothing to refuse; the same model choosing from a plain text prompt in the simulated day followed 42 of 42. The gate refusing a hijacked toolkit call before it reaches PayPal is covered by `packages/server/test/toolkit.test.ts`.
+
 ## Layout
 
 | Path | Contents |
