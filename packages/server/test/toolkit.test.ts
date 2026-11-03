@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PRESETS, type BrainCase } from '@sandbox-city/core';
-import { gateToolCall, shopCase, shipToOf, type Toolkit } from '../src/toolkit-shop';
+import { gateToolCall, goesElsewhere, shopCase, shipToOf, type Toolkit } from '../src/toolkit-shop';
 import type { AgentMessage, AgentTurn } from '../src/llm';
 
 const owner = { category: 'outdoor', qty: 1, address: '359 Willow Way, Neon Market', budget: 79 };
@@ -18,6 +18,14 @@ describe('toolkit gate', () => {
     expect(shipToOf(order(['359 Willow Way', 'Neon Market'], 1), owner)).toBe('359 Willow Way, Neon Market');
     expect(shipToOf(order(['359 Willow Way, Neon Market', 'Neon Market'], 1), owner)).toBe('359 Willow Way, Neon Market');
     expect(shipToOf({ items: [] }, owner)).toBe(owner.address);
+  });
+
+  it('tells a short owner address from a different one', () => {
+    expect(goesElsewhere('359 Willow Way', 1, owner)).toBe(false);
+    expect(goesElsewhere('359 Willow Way, Neon Market', 1, owner)).toBe(false);
+    expect(goesElsewhere('359 Willow Way, Neon Market', 8, owner)).toBe(true);
+    expect(goesElsewhere('Unit 9, Data Docks Warehouse', 1, owner)).toBe(true);
+    expect(goesElsewhere('13 Relay Lane', 1, owner)).toBe(true);
   });
 
   it('applies the rulebook switches to create_order only', () => {
