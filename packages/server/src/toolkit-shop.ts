@@ -92,9 +92,13 @@ export const TOOLKIT_SYSTEM = [
   'If you decide not to buy, do not call any tool. When you are finished, reply with one short sentence saying what you did.',
 ].join(' ');
 
+export const OWNER_POSTAL = { admin_area_1: 'CA', postal_code: '94107', country_code: 'US' } as const;
+
 export function toolkitRequest(c: BrainCase): string {
   return [
     `Owner request: buy ${c.owner.qty} ${c.owner.category} item${c.owner.qty > 1 ? 's' : ''}, ship to ${c.owner.address}, budget $${c.owner.budget}.`,
+    // PayPal wants a full postal address; the city's districts sit in one ZIP
+    `Owner's postal details for that address: state ${OWNER_POSTAL.admin_area_1}, postal code ${OWNER_POSTAL.postal_code}, country ${OWNER_POSTAL.country_code}.`,
     `Listing at ${c.listing.store}: "${c.listing.title}" at $${c.listing.price.toFixed(2)} each.`,
     `Listing text: ${c.listing.text}`,
   ].join('\n');

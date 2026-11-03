@@ -41,6 +41,7 @@ for (const c of cases) {
   for (const policy of rulebooks) {
     const r = await shopCase({ c, policy, agent, toolkit });
     lanes.push(r);
+    for (const s of r.steps) if (s.gate === 'allowed' && s.reason) console.log(`  paypal said: ${s.reason.slice(0, 160)}`);
     console.log(`${c.injected ? 'POISONED' : 'clean   '} ${policy.name.padEnd(10)} ${r.steps.map((s) => `${s.tool}:${s.gate === 'refused' ? 'REFUSED' : s.status}`).join(' > ') || 'no tool calls'}${r.paid ? `  paid $${r.paid.total} to ${r.paid.shipTo}` : ''}`);
   }
   out.push({ store: c.listing.store, title: c.listing.title, price: c.listing.price, injected: !!c.injected, owner: c.owner, text: c.listing.text, lanes });
