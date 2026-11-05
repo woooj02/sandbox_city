@@ -58,3 +58,10 @@ The first repair for empty parcels failed. It delayed the store's credit, but he
 - **PayPal's own protections.** Purchase Protection, seller holds and PayPal's risk engine are not modelled, so real losses would differ.
 - **Triangulation.** No signal at the gate separates it from honest trade, so the gate cannot stop it. It belongs to card-network and marketplace controls.
 - **Model weights and tools.** Attacks on the model provider or the toolkit package are out of scope.
+
+## At the checkout
+
+- **Claiming a good record.** The store and agent ids in a request are looked up, never believed. Unknown means new, so its orders are held. Ids are not authenticated yet, so a caller can name another party's id. Production needs them bound to a signed identity.
+- **Faking delivery.** Delivery events can release money, so they need `LAB_TOKEN`, and imported records must state a source.
+- **Retrying under a softer rulebook.** A key stays bound to its first decision. Anything else gets a 409.
+

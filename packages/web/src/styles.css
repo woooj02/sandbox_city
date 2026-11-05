@@ -696,3 +696,9 @@ button.rail-badge { background: transparent; cursor: pointer; }
   .rail-badge.evidence i { display: none; }
   .clockbox { min-width: 118px; }
 }
+.ev-path { display: flex; gap: 8px; margin: 0 0 16px; flex-wrap: wrap; }
+.ev-path button { flex: 1 1 200px; display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(76,242,255,.05); border: 1px solid rgba(76,242,255,.25); color: #dfe6ff; font: inherit; font-size: 12.5px; cursor: pointer; text-align: left; }
+.ev-path button:hover, .ev-path button:focus-visible { border-color: var(--cy); background: rgba(76,242,255,.12); }
+.ev-path i { font-style: normal; font-family: var(--mono); color: var(--cy); }
+.ev-note { color: var(--dim); font-size: 12px; }
+

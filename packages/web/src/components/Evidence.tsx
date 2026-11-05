@@ -24,10 +24,13 @@ interface Bench {
 interface Recovery { mode: string; steps: { step: string; detail: string }[]; charges: { afterRecovery?: number; afterControl?: number } }
 interface CheckoutRow { label: string; kind: string; decision: string; reason: string | null; policy: string; replay: boolean; payment: { state: string; captureId?: string } | null }
 interface Checkout { mode: string; policy: string; rows: CheckoutRow[] }
+interface SleeperRow { amount: number; escrow: boolean; finalState: string; provider: { capture: string | null; authorization: string | null } }
+interface SleeperArm { label: string; ships: boolean; total: number; captured: number; keptByBuyers: number; rows: SleeperRow[] }
+interface SleeperCheckout { mode: string; seed: string; policy: string; bound: number; record: { independent: number }; stated: string; arms: SleeperArm[] }
 interface Reg { id: string; kind: string; title: string; minimized: { from?: Record<string, number>; to?: Record<string, number> } | null }
 interface AgentTally { n: number; bought: number; breached: number; noAnswer: number }
 const ev = raw as unknown as {
-  first: Bench | null; second: Bench | null; third: Bench | null; recovery: Recovery | null; checkout: Checkout | null; regressions: Reg[]; sleeperCase: unknown;
+  first: Bench | null; second: Bench | null; third: Bench | null; recovery: Recovery | null; checkout: Checkout | null; sleeperCheckout: SleeperCheckout | null; regressions: Reg[]; sleeperCase: unknown;
   agents: Record<string, { poisoned: AgentTally; clean: AgentTally }> | null;
   defender: { model: string; budget: number; rows: { kind: string; rejected: number; accepted: number }[] } | null;
 };
@@ -155,6 +158,34 @@ function Defender({ d }: { d: NonNullable<typeof ev.defender> }) {
   return <p className="ev-p"><b>Can a model repair the rulebook?</b> Not in this test. {d.model} read the incident and proposed changes: {total('model', (r) => r.accepted)} were kept, and containment rejected {total('model', (r) => r.rejected)} of {tries}. Blind mutation had {total('mutation', (r) => r.accepted)} kept at the same budget.</p>;
 }
 
+/** The benchmark's failure, carried out of the simulation: what PayPal says happened to each order. */
+function SleeperAtCheckout({ s }: { s: SleeperCheckout }) {
+  const cents = (n: number) => `$${n.toFixed(2)}`;
+  return (
+    <>
+      <p className="ev-p"><span className="ev-tag">{RAIL[s.mode]}</span> The store's record and its orders come from simulated day <code>{s.seed}</code>: {cents(s.record.independent)} of independent credit, so a bound of {cents(s.bound)} under rulebook <code>{s.policy}</code>. Past the bound the checkout places a PayPal authorization, so no money moves. The evaluator sees the store's exposure grow with each order.</p>
+      <div className="ev-held" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+        {s.arms.map((a) => {
+          const held = a.rows.filter((r) => r.escrow).length, voided = a.rows.filter((r) => r.provider.authorization === 'VOIDED').length, released = a.rows.filter((r) => r.provider.authorization === 'CAPTURED').length;
+          return (
+            <div key={a.label} className={`ev-case ${a.captured < a.total || a.ships ? 'v-caught' : 'v-missed'}`}>
+              <div className="ev-case-head"><b>{a.label}</b></div>
+              <small>{a.ships ? 'ships everything, nobody complains' : 'ships nothing, every buyer complains'}</small>
+              <dl>
+                <dt>Sold</dt><dd>{cents(a.total)}</dd>
+                <dt>{a.ships ? 'Store received' : 'Store kept'}</dt><dd>{cents(a.captured)}</dd>
+                <dt>Orders held</dt><dd>{held} of {a.rows.length}</dd>
+                {held > 0 && <><dt>{a.ships ? 'Released' : 'Voided'}</dt><dd>{a.ships ? released : voided}</dd></>}
+              </dl>
+            </div>
+          );
+        })}
+      </div>
+      <p className="ev-p ev-note">{s.stated}</p>
+    </>
+  );
+}
+
 function CheckoutProof({ c }: { c: Checkout }) {
   return (
     <>
@@ -221,22 +252,29 @@ export function Evidence() {
           </div>
         </div>
         {!b ? <Missing what="the benchmark" /> : <>
+          <nav className="ev-path" aria-label="The path through the evidence">
+            {[['ev-cost', 'Compare what stopping it costs'], ['ev-missed', 'See what still gets through'], ['ev-checkout', 'Watch it at the checkout'], ['ev-regressions', 'Take it into CI']].map(([id, label], i) => (
+              <button key={id} onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })}><i>{i + 2}</i>{label}</button>
+            ))}
+          </nav>
           <Incident b={b} />
-          <h3 className="hj-h">THE COST OF STOPPING IT · <span>{b.protocol.testDays} unread simulated days, rulebook {b.frozen.policyId} frozen before they ran</span></h3>
+          <h3 className="hj-h" id="ev-cost">THE COST OF STOPPING IT · <span>{b.protocol.testDays} unread simulated days, rulebook {b.frozen.policyId} frozen before they ran</span></h3>
           <Frontier b={b} />
           <CostTable b={b} />
           <p className="ev-p">{b.sensitivity ? (flips.length ? `The frozen rulebook lost first place under ${flips.length} of ${b.sensitivity.rows.length} changed assumptions: ${flips.map((f) => f.label).join('; ')}.` : `The frozen rulebook kept first place under all ${b.sensitivity.rows.length} changed assumptions.`) : ''} Fees, cost of goods and owner approval rates are stated assumptions, not measurements.</p>
-          <h3 className="hj-h">WHAT IT WAS NOT TUNED ON · <span>stolen per day. A miss is reported as a miss. Each round ran on its own days, so compare within a round, not across them</span></h3>
+          <h3 className="hj-h" id="ev-missed">WHAT IT WAS NOT TUNED ON · <span>stolen per day. A miss is reported as a miss. Each round ran on its own days, so compare within a round, not across them</span></h3>
           {ev.third ? <HeldOut first={ev.first} second={ev.second} third={ev.third} /> : <Missing what="the third frozen rulebook" />}
           <h3 className="hj-h">AN ATTACKER THAT ADAPTS · <span>a search for the most profitable sleeper against the frozen rulebook</span></h3>
           <Adaptive b={b} />
           {ev.defender && <Defender d={ev.defender} />}
         </>}
-        <h3 className="hj-h">THE SAME RULEBOOK AT CHECKOUT</h3>
+        <h3 className="hj-h" id="ev-checkout">THE SAME FAILURE AT THE CHECKOUT · <span>orders PayPal really held, voided or captured</span></h3>
+        {ev.sleeperCheckout ? <SleeperAtCheckout s={ev.sleeperCheckout} /> : <Missing what="the sleeper at the checkout" />}
+        <h3 className="hj-h">THE SAME RULEBOOK, ORDER BY ORDER</h3>
         {ev.checkout ? <CheckoutProof c={ev.checkout} /> : <Missing what="the checkout proof" />}
         <h3 className="hj-h">THE LOST RESPONSE</h3>
         {ev.recovery ? <RecoveryProof r={ev.recovery} /> : <Missing what="the crash recovery proof" />}
-        <h3 className="hj-h">TAKE THE FAILURE WITH YOU</h3>
+        <h3 className="hj-h" id="ev-regressions">TAKE THE FAILURE WITH YOU</h3>
         <Regressions />
         <div className="report-foot"><button className="btn" onClick={close}>CLOSE</button></div>
       </div>

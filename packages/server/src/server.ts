@@ -21,6 +21,8 @@ export interface ServerOptions {
   logger?: boolean;
   /** Where durable payments are journaled. */
   journalPath?: string;
+  /** Lets a caller report deliveries and complaints, which can release held money. Default: LAB_TOKEN. */
+  labToken?: string;
 }
 
 /** What the sim says moved on the sandbox lane, summed the same way the twin ledger is. */
@@ -54,7 +56,7 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
   await app.register(websocket);
 
   const checkout = registerCheckout(app, {
-    rails: makeRails, journalPath: opts.journalPath ?? process.env.PAYMENT_JOURNAL ?? '.data/payments.log', webhookId: process.env.PAYPAL_WEBHOOK_ID,
+    rails: makeRails, journalPath: opts.journalPath ?? process.env.PAYMENT_JOURNAL ?? '.data/payments.log', webhookId: process.env.PAYPAL_WEBHOOK_ID, labToken: opts.labToken ?? process.env.LAB_TOKEN,
     log: (m) => app.log.info(m),
   });
   // whatever a previous process left open is finished before this one takes traffic
@@ -162,7 +164,7 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
 if (import.meta.url === `file://${process.argv[1]}`) {
   const port = Number(process.env.PORT ?? 8787);
   buildServer({ logger: true, liveSample: Number(process.env.LIVE_SAMPLE ?? 0.02) }).then(async (app) => {
-    await app.listen({ port, host: '0.0.0.0' });
+    await app.listen({ port, host: process.env.HOST ?? '0.0.0.0' });
     console.log(SandboxRails.fromEnv() ? 'PayPal sandbox: configured' : 'PayPal sandbox: not configured (twin only)');
   });
 }

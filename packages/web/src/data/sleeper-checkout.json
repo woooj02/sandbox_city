@@ -1,0 +1,442 @@
+{
+  "mode": "paypal-sandbox",
+  "recordedAt": "2026-11-05T18:47:46.456Z",
+  "seed": "last-01",
+  "turnMinute": 1008,
+  "evaluator": "gate-2",
+  "policy": "f5dc2c8ff6099bdd",
+  "record": {
+    "independent": 1679.29,
+    "fulfilled": 1723.83,
+    "exposure": 0,
+    "age": 865,
+    "orders": 37
+  },
+  "simulatedDay": {
+    "turned": 946,
+    "collectedUnderTuned": 18,
+    "collectedUnderV3": 2
+  },
+  "bound": 83.96,
+  "stated": "The record and order amounts come from a simulated day, and both rulebooks start from the record the store earned under Lab-Tuned. The carrier, the complaints and the window closing are this script. All stores settle to one sandbox business account.",
+  "arms": [
+    {
+      "label": "Lab-Tuned, sleeper",
+      "rulebook": "tuned",
+      "policy": "fef3fa032c7acf50",
+      "ships": false,
+      "store": "sl-mw3wbyou-tuned-sleeper",
+      "rows": [
+        {
+          "key": "sl-mw3wbyou-tuned-sleeper-0",
+          "amount": 64.48,
+          "escrow": false,
+          "exposureBefore": 0,
+          "state": "captured",
+          "orderId": "0DL22917HN821651H",
+          "captureId": "85L312368V148140W",
+          "finalState": "captured",
+          "steps": [],
+          "finalCapture": "85L312368V148140W",
+          "credited": false,
+          "provider": {
+            "order": "COMPLETED",
+            "capture": "COMPLETED",
+            "authorization": null,
+            "address": "94107"
+          }
+        },
+        {
+          "key": "sl-mw3wbyou-tuned-sleeper-1",
+          "amount": 57.9,
+          "escrow": false,
+          "exposureBefore": 64.48,
+          "state": "captured",
+          "orderId": "5RD96560UT3304125",
+          "captureId": "08N792671P409221T",
+          "finalState": "captured",
+          "steps": [],
+          "finalCapture": "08N792671P409221T",
+          "credited": false,
+          "provider": {
+            "order": "COMPLETED",
+            "capture": "COMPLETED",
+            "authorization": null,
+            "address": "94107"
+          }
+        },
+        {
+          "key": "sl-mw3wbyou-tuned-sleeper-2",
+          "amount": 115.8,
+          "escrow": false,
+          "exposureBefore": 122.38,
+          "state": "captured",
+          "orderId": "5T966359G1464321W",
+          "captureId": "8ES304025W962514V",
+          "finalState": "captured",
+          "steps": [],
+          "finalCapture": "8ES304025W962514V",
+          "credited": false,
+          "provider": {
+            "order": "COMPLETED",
+            "capture": "COMPLETED",
+            "authorization": null,
+            "address": "94107"
+          }
+        },
+        {
+          "key": "sl-mw3wbyou-tuned-sleeper-3",
+          "amount": 57.9,
+          "escrow": false,
+          "exposureBefore": 238.18,
+          "state": "captured",
+          "orderId": "9LD452846F557512L",
+          "captureId": "06B556679G5045347",
+          "finalState": "captured",
+          "steps": [],
+          "finalCapture": "06B556679G5045347",
+          "credited": false,
+          "provider": {
+            "order": "COMPLETED",
+            "capture": "COMPLETED",
+            "authorization": null,
+            "address": "94107"
+          }
+        },
+        {
+          "key": "sl-mw3wbyou-tuned-sleeper-4",
+          "amount": 139.37,
+          "escrow": false,
+          "exposureBefore": 296.08,
+          "state": "captured",
+          "orderId": "94E73687JT4360705",
+          "captureId": "4CM01703M5760913G",
+          "finalState": "captured",
+          "steps": [],
+          "finalCapture": "4CM01703M5760913G",
+          "credited": false,
+          "provider": {
+            "order": "COMPLETED",
+            "capture": "COMPLETED",
+            "authorization": null,
+            "address": "94107"
+          }
+        },
+        {
+          "key": "sl-mw3wbyou-tuned-sleeper-5",
+          "amount": 139.37,
+          "escrow": false,
+          "exposureBefore": 435.45,
+          "state": "captured",
+          "orderId": "8SX09797SV769480N",
+          "captureId": "5K6268750F841041L",
+          "finalState": "captured",
+          "steps": [],
+          "finalCapture": "5K6268750F841041L",
+          "credited": false,
+          "provider": {
+            "order": "COMPLETED",
+            "capture": "COMPLETED",
+            "authorization": null,
+            "address": "94107"
+          }
+        }
+      ],
+      "total": 574.82,
+      "captured": 574.82,
+      "charges": 6,
+      "keptByBuyers": 0,
+      "worstOverBound": null,
+      "record": {
+        "exposure": 574.82,
+        "independent": 1679.29
+      }
+    },
+    {
+      "label": "Frozen v3, sleeper",
+      "rulebook": "frozen-v3",
+      "policy": "f5dc2c8ff6099bdd",
+      "ships": false,
+      "store": "sl-mw3wbyou-frozen-v3-sleeper",
+      "rows": [
+        {
+          "key": "sl-mw3wbyou-frozen-v3-sleeper-0",
+          "amount": 64.48,
+          "escrow": false,
+          "exposureBefore": 0,
+          "state": "captured",
+          "orderId": "0X1648760Y9846840",
+          "captureId": "55F9781595678921Y",
+          "finalState": "captured",
+          "steps": [],
+          "finalCapture": "55F9781595678921Y",
+          "credited": false,
+          "provider": {
+            "order": "COMPLETED",
+            "capture": "COMPLETED",
+            "authorization": null,
+            "address": "94107"
+          }
+        },
+        {
+          "key": "sl-mw3wbyou-frozen-v3-sleeper-1",
+          "amount": 57.9,
+          "escrow": true,
+          "exposureBefore": 64.48,
+          "state": "held",
+          "orderId": "9F6979968Y875080U",
+          "authorizationId": "35S62222NR599181V",
+          "finalState": "voided",
+          "steps": [
+            "void"
+          ],
+          "credited": false,
+          "provider": {
+            "order": "COMPLETED",
+            "capture": null,
+            "authorization": "VOIDED",
+            "address": "94107"
+          }
+        },
+        {
+          "key": "sl-mw3wbyou-frozen-v3-sleeper-2",
+          "amount": 115.8,
+          "escrow": true,
+          "exposureBefore": 64.48,
+          "state": "held",
+          "orderId": "3DM26164WR887994N",
+          "authorizationId": "3NJ44374V66673350",
+          "finalState": "voided",
+          "steps": [
+            "void"
+          ],
+          "credited": false,
+          "provider": {
+            "order": "COMPLETED",
+            "capture": null,
+            "authorization": "VOIDED",
+            "address": "94107"
+          }
+        },
+        {
+          "key": "sl-mw3wbyou-frozen-v3-sleeper-3",
+          "amount": 57.9,
+          "escrow": true,
+          "exposureBefore": 64.48,
+          "state": "held",
+          "orderId": "04U1104210903650A",
+          "authorizationId": "4RA15737UE898561N",
+          "finalState": "voided",
+          "steps": [
+            "void"
+          ],
+          "credited": false,
+          "provider": {
+            "order": "COMPLETED",
+            "capture": null,
+            "authorization": "VOIDED",
+            "address": "94107"
+          }
+        },
+        {
+          "key": "sl-mw3wbyou-frozen-v3-sleeper-4",
+          "amount": 139.37,
+          "escrow": true,
+          "exposureBefore": 64.48,
+          "state": "held",
+          "orderId": "94712901W4022782M",
+          "authorizationId": "17Y18857HV591845R",
+          "finalState": "voided",
+          "steps": [
+            "void"
+          ],
+          "credited": false,
+          "provider": {
+            "order": "COMPLETED",
+            "capture": null,
+            "authorization": "VOIDED",
+            "address": "94107"
+          }
+        },
+        {
+          "key": "sl-mw3wbyou-frozen-v3-sleeper-5",
+          "amount": 139.37,
+          "escrow": true,
+          "exposureBefore": 64.48,
+          "state": "held",
+          "orderId": "5ER06712KW405464F",
+          "authorizationId": "4BS921713V200205U",
+          "finalState": "voided",
+          "steps": [
+            "void"
+          ],
+          "credited": false,
+          "provider": {
+            "order": "COMPLETED",
+            "capture": null,
+            "authorization": "VOIDED",
+            "address": "94107"
+          }
+        }
+      ],
+      "total": 574.82,
+      "captured": 64.48,
+      "charges": 1,
+      "keptByBuyers": 510.34,
+      "worstOverBound": -19.48,
+      "record": {
+        "exposure": 64.48,
+        "independent": 1679.29
+      }
+    },
+    {
+      "label": "Frozen v3, honest store",
+      "rulebook": "frozen-v3",
+      "policy": "f5dc2c8ff6099bdd",
+      "ships": true,
+      "store": "sl-mw3wbyou-frozen-v3-honest",
+      "rows": [
+        {
+          "key": "sl-mw3wbyou-frozen-v3-honest-0",
+          "amount": 64.48,
+          "escrow": false,
+          "exposureBefore": 0,
+          "state": "captured",
+          "orderId": "7ST106248G274041S",
+          "captureId": "3HF14215YN742901Y",
+          "finalState": "captured",
+          "steps": [
+            "credit"
+          ],
+          "finalCapture": "3HF14215YN742901Y",
+          "credited": true,
+          "provider": {
+            "order": "COMPLETED",
+            "capture": "COMPLETED",
+            "authorization": null,
+            "address": "94107"
+          }
+        },
+        {
+          "key": "sl-mw3wbyou-frozen-v3-honest-1",
+          "amount": 57.9,
+          "escrow": true,
+          "exposureBefore": 64.48,
+          "state": "held",
+          "orderId": "7AB934902H8637242",
+          "authorizationId": "7JK08579FM8787442",
+          "finalState": "captured",
+          "steps": [
+            "release",
+            "credit"
+          ],
+          "finalCapture": "3JA90955V5828784X",
+          "credited": true,
+          "provider": {
+            "order": "COMPLETED",
+            "capture": "COMPLETED",
+            "authorization": "CAPTURED",
+            "address": "94107"
+          }
+        },
+        {
+          "key": "sl-mw3wbyou-frozen-v3-honest-2",
+          "amount": 115.8,
+          "escrow": true,
+          "exposureBefore": 64.48,
+          "state": "held",
+          "orderId": "0N563861FM060910J",
+          "authorizationId": "3P676138WB317683N",
+          "finalState": "captured",
+          "steps": [
+            "release",
+            "credit"
+          ],
+          "finalCapture": "5BK45199TD217633E",
+          "credited": true,
+          "provider": {
+            "order": "COMPLETED",
+            "capture": "COMPLETED",
+            "authorization": "CAPTURED",
+            "address": "94107"
+          }
+        },
+        {
+          "key": "sl-mw3wbyou-frozen-v3-honest-3",
+          "amount": 57.9,
+          "escrow": true,
+          "exposureBefore": 64.48,
+          "state": "held",
+          "orderId": "9RR23395VV609880F",
+          "authorizationId": "17S82714EA656571K",
+          "finalState": "captured",
+          "steps": [
+            "release",
+            "credit"
+          ],
+          "finalCapture": "3PG28044MK448513B",
+          "credited": true,
+          "provider": {
+            "order": "COMPLETED",
+            "capture": "COMPLETED",
+            "authorization": "CAPTURED",
+            "address": "94107"
+          }
+        },
+        {
+          "key": "sl-mw3wbyou-frozen-v3-honest-4",
+          "amount": 139.37,
+          "escrow": true,
+          "exposureBefore": 64.48,
+          "state": "held",
+          "orderId": "03554669WH413531E",
+          "authorizationId": "7KX2354897787201E",
+          "finalState": "captured",
+          "steps": [
+            "release",
+            "credit"
+          ],
+          "finalCapture": "86J39153UA9895340",
+          "credited": true,
+          "provider": {
+            "order": "COMPLETED",
+            "capture": "COMPLETED",
+            "authorization": "CAPTURED",
+            "address": "94107"
+          }
+        },
+        {
+          "key": "sl-mw3wbyou-frozen-v3-honest-5",
+          "amount": 139.37,
+          "escrow": true,
+          "exposureBefore": 64.48,
+          "state": "held",
+          "orderId": "53762035XM105022T",
+          "authorizationId": "3YY789488X3966842",
+          "finalState": "captured",
+          "steps": [
+            "release",
+            "credit"
+          ],
+          "finalCapture": "1PX99472AS283371K",
+          "credited": true,
+          "provider": {
+            "order": "COMPLETED",
+            "capture": "COMPLETED",
+            "authorization": "CAPTURED",
+            "address": "94107"
+          }
+        }
+      ],
+      "total": 574.82,
+      "captured": 574.82,
+      "charges": 6,
+      "keptByBuyers": 0,
+      "worstOverBound": -19.48,
+      "record": {
+        "exposure": 0,
+        "independent": 2254.11
+      }
+    }
+  ]
+}

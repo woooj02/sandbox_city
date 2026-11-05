@@ -5,6 +5,7 @@
  * The rulebook id the checkout answers with must be the id the benchmark measured.
  * Writes packages/web/src/data/checkout-proof.json.
  */
+import { randomBytes } from 'node:crypto';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -24,10 +25,17 @@ if (sandbox) {
   rails = () => new SandboxRails({ clientId: 'mock-client', clientSecret: 'mock-secret', base });
 }
 const frozen = JSON.parse(readFileSync(new URL('../evidence/frozen-v3.json', import.meta.url), 'utf8'));
-const app = await buildServer({ rails, journalPath: join(mkdtempSync(join(tmpdir(), 'sc-proof-')), 'payments.log') });
+const token = randomBytes(16).toString('hex');
+const app = await buildServer({ rails, labToken: token, journalPath: join(mkdtempSync(join(tmpdir(), 'sc-proof-')), 'payments.log') });
 await app.ready();
 
 const run = `proof-${Date.now().toString(36)}`;
+// the buyer and the store are imported, and say so: this proof is about the order, sleeper-checkout.ts is about history
+const history = { merchant: `${run}-store`, agent: `${run}-agent` };
+for (const payload of [
+  { type: 'import-merchant', id: history.merchant, source: 'proof fixture: an established store', age: 20000, verified: true, orders: 50, deliveries: 50, fulfilled: 5000, independent: 5000 },
+  { type: 'import-agent', id: history.agent, source: 'proof fixture: an established shopper', age: 90000, orders: 40 },
+]) await app.inject({ method: 'POST', url: '/api/history/events', headers: { authorization: `Bearer ${token}` }, payload });
 const owner = { category: 'home', qty: 1, address: '12 Neon St, Silk Row', budget: 100 };
 const addr = { address_line_1: '12 Neon St', admin_area_2: 'Silk Row', admin_area_1: 'CA', postal_code: '94107', country_code: 'US' };
 const lamp = { name: 'Lamp', quantity: 1, itemCost: 80, itemTotal: 80 };
@@ -39,7 +47,7 @@ const steps: [string, string, object][] = [
 ];
 const rows = [];
 for (const [label, kind, body] of steps) {
-  const res = await app.inject({ method: 'POST', url: '/api/checkout', payload: { rulebook: 'frozen-v3', owner, listedUnit: 80, ...body } });
+  const res = await app.inject({ method: 'POST', url: '/api/checkout', payload: { rulebook: 'frozen-v3', owner, listedUnit: 80, ...history, ...body } });
   const r = res.json();
   rows.push({ label, kind, decision: r.decision, reason: r.reason ?? null, policy: r.policy, replay: !!r.replay, payment: r.payment ? { state: r.payment.state, orderId: r.payment.orderId, captureId: r.payment.captureId, amount: r.payment.amount } : null });
   console.log(`${label}: ${r.decision}${r.reason ? ` (${r.reason})` : ''}${r.payment ? ` · ${r.payment.state} ${r.payment.captureId}` : ''}`);

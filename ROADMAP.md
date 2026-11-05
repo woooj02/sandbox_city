@@ -26,7 +26,8 @@ Product work in progress. Items are ticked as they land on `main`.
 - [x] **Frozen benchmark.** Three rounds on separate days, with held-out mechanisms and misses reported.
 - [x] **Paying exactly once.** Durable worker, crash proof, verified webhooks.
 - [x] **Portable regressions.** A stdin and stdout agent contract, with reduced cases.
-- [x] **Durable path on the PayPal sandbox.** Crash recovery and checkout both ran there.
+- [x] **Durable path on the PayPal sandbox.** Crash recovery, checkout and holds all ran there.
+- [x] **The sleeper at the checkout.** Real holds, voids and evolving history, from one simulated day's record.
 - [ ] **Webhooks on the PayPal sandbox.** Needs a public URL, and may need the raw request body.
 - [ ] **External builder test.** Needs a real person.
 

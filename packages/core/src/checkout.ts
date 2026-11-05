@@ -10,6 +10,7 @@
  */
 import { deriveKey, signRequest, SignatureVerifier, type KeyPair, type VerifyResult } from './kya';
 import { addressMatches, evaluateOrder, EVALUATOR_VERSION, policyId, type AgentView, type GateContext, type GateOrder, type MerchantView, type Policy } from './policy';
+import type { PostalAddress } from './rails';
 import type { GateResult, Mandate, Passport } from './types';
 
 export interface CheckoutLine { name?: string; quantity?: number; itemCost?: number; itemTotal?: number; taxPercent?: number }
@@ -43,6 +44,25 @@ export function shipToOfArgs(a: CheckoutAddress | null | undefined, scope: Check
   if (a.postal_code?.trim() && a.postal_code.trim() !== postal.postal_code) extra.push(a.postal_code.trim());
   if (a.country_code?.trim() && a.country_code.trim().toUpperCase() !== postal.country_code) extra.push(a.country_code.trim());
   return extra.length ? `${base} / ${extra.join(' / ')}` : base;
+}
+
+/**
+ * The address the gate just read, whole, for the order PayPal will hold. A field the caller left out is one the gate
+ * read as the owner's own, so it is filled the same way here. Nothing is replaced.
+ */
+export function canonicalAddress(a: CheckoutAddress | null | undefined, scope: CheckoutScope): PostalAddress | undefined {
+  if (!a?.address_line_1?.trim()) return undefined;
+  const postal = scope.postal ?? OWNER_POSTAL;
+  const [first, ...rest] = a.address_line_1.split(/,\s*/);
+  const city = a.admin_area_2?.trim();
+  return {
+    address_line_1: (city ? a.address_line_1 : first).trim(),
+    ...(a.address_line_2?.trim() ? { address_line_2: a.address_line_2.trim() } : {}),
+    admin_area_2: city || rest.join(', ').trim() || 'Sandbox City',
+    admin_area_1: a.admin_area_1?.trim() || postal.admin_area_1,
+    postal_code: a.postal_code?.trim() || postal.postal_code,
+    country_code: a.country_code?.trim() || postal.country_code,
+  };
 }
 
 /** What the order will really charge, in the order's own terms. Anything that does not add up is reported, not corrected. */
@@ -79,7 +99,7 @@ export function requestPassport(owner: { category: string; qty: number; address:
   return { agentId, keyId: key.keyId, publicKey: key.publicKey, ownerPayerId: `OWNER-${agentId}`, address: owner.address, issuedAt: 0, mandate };
 }
 
-/** Facts the checkout has no feed for yet, in plain sight: an established agent buying from an established store. */
+/** Facts for a session with no history feed: an established agent buying from an established store. The toolkit shop uses this; POST /api/checkout supplies real history. */
 export const ESTABLISHED_AGENT: AgentView = { age: 30000, orders: 20, recent: 0, refunds: 0, rep: 0.8 };
 export const ESTABLISHED_STORE: MerchantView = { age: 20000, verified: true, rep: 0.8, ring: 0, orders: 50, exposure: 0, fulfilled: 5000, independent: 5000 };
 
@@ -97,6 +117,9 @@ const verdict = (policy: Policy, gate: GateResult, order?: GateOrder): Verdict =
   const reason = stop ? `${stop.rule}: ${stop.reason}` : undefined;
   return { ...gate, ok: gate.decision === 'allow', reason, policy: policyId(policy), evaluator: EVALUATOR_VERSION, order };
 };
+
+/** What the checkout knows about this store and this agent at the moment of the order. */
+export interface HistoryFacts { merchant: MerchantView; agent: AgentView }
 
 export interface SessionOptions {
   owner: { category: string; qty: number; address: string; budget: number };
@@ -137,18 +160,18 @@ export class CheckoutSession {
       `https://agents.sandbox.city/.well-known/http-message-signatures-directory#${this.passport.agentId}`, this.now(), `n${++this.nonce}`, 'ed25519');
   }
 
-  private context(verify: VerifyResult | null): GateContext {
+  private context(verify: VerifyResult | null, facts?: HistoryFacts): GateContext {
     return {
       verify, identity: this.passport.agentId, claimsPassportHolder: true, passport: this.passport,
-      agent: this.opts.agent ?? ESTABLISHED_AGENT, merchant: this.opts.merchant ?? ESTABLISHED_STORE, session: this.spent,
+      agent: facts?.agent ?? this.opts.agent ?? ESTABLISHED_AGENT, merchant: facts?.merchant ?? this.opts.merchant ?? ESTABLISHED_STORE, session: this.spent,
     };
   }
 
   /** A create_order call: signed, read in full, and put through the same evaluator the simulated day uses. */
-  checkOrder(args: CheckoutArgs): Verdict {
+  checkOrder(args: CheckoutArgs, facts?: HistoryFacts): Verdict {
     const order = checkoutOrder(args, this.scope);
     const verify = this.policy.verifySignatures ? this.verifier.verify(this.sign(JSON.stringify(args)), this.now()) : null;
-    return verdict(this.policy, evaluateOrder(this.policy, order, this.context(verify)), order);
+    return verdict(this.policy, evaluateOrder(this.policy, order, this.context(verify, facts)), order);
   }
 
   /** The order this call describes, read the way the gate reads it, without deciding anything. */

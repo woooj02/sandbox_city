@@ -1,12 +1,14 @@
 # Sandbox City
 
-A crash-test lab for agentic commerce. AI shoppers, stores and attackers trade through a simulated day on PayPal rails. You choose the safeguards at the gate, and the lab measures what each rulebook stops and what it costs honest people.
+Sandbox City helps developers test payment-capable agents before release: reproduce a financial failure, compare defenses and their cost to honest buyers, then carry the result into checkout and CI.
 
-Then the failure leaves the lab: the same rulebook runs at a real checkout, and each failure becomes a regression any agent can run.
+Try it: https://sandbox-city.91.99.162.43.sslip.io (press **E** for the evidence).
 
 [![verify](https://github.com/woooj02/Sandbox-City/actions/workflows/verify.yml/badge.svg)](https://github.com/woooj02/Sandbox-City/actions/workflows/verify.yml)
 
 ## In two minutes
+
+Needs Node 22.9 or later (`nvm use` reads `.nvmrc`).
 
 ```bash
 npm install
@@ -64,6 +66,18 @@ npx tsx scripts/crash-recovery.ts
 
 This kills a real process with SIGKILL after the capture succeeds and before it can write that down. Recovery finds the capture and makes no new charge. A client with no journal, retrying, charges twice.
 
+## The same failure at the checkout
+
+Sharing an evaluator proves little unless the checkout acts on it. So the sleeper leaves the simulation: its record and its orders from one simulated day go through `POST /api/checkout`. It ships nothing, and every buyer complains.
+
+| On the PayPal sandbox | Sold | Store got | What PayPal shows |
+| --- | --- | --- | --- |
+| Lab-Tuned, sleeper | $574.82 | **$574.82** | 6 captures |
+| Frozen v3, sleeper | $574.82 | **$64.48** | 1 capture, 5 authorizations voided |
+| Frozen v3, honest store, same record | $574.82 | **$574.82** | 1 capture, 5 authorizations captured after delivery |
+
+The bound was $83.96, so one order paid and the rest were held. The honest store got everything, later. That wait is the cost shown above. This is 6 orders on one day's record: it shows the checkout enforces the rule, and the benchmark is what measures how much it matters. How it works: [docs/CHECKOUT.md](docs/CHECKOUT.md).
+
 The recorded receipts ran against the PayPal sandbox, so no real money moved, and each says `paypal-sandbox`. Without keys the same scripts run on a local mock, say so, and leave the receipts alone. Add `--sandbox` and keys to record your own. Details: [docs/RELIABILITY.md](docs/RELIABILITY.md).
 
 ## Run a failure against your agent
@@ -78,7 +92,8 @@ Your agent is any command that reads a case as JSON on stdin and prints its orde
 
 - **Simulated economics.** The days are simulated. Fees, cost of goods and owner approval rates are stated assumptions, not measurements. PayPal's own protections are not modelled.
 - **One author.** The attacks, the held-out mechanisms and the defense come from the same team. No outside builder has tried it yet: [docs/EXTERNAL_TEST.md](docs/EXTERNAL_TEST.md).
-- **A mock, for the crash proof.** The durable payment path has not run on the PayPal sandbox yet. The hijack, the refund and the reconciled day did.
+- **Sandbox, not production.** The crash recovery, the checkout and the holds below ran on the PayPal sandbox, as did the hijack and the refund. Webhooks have only run against the mock.
+- **A script plays the carrier.** Deliveries, complaints and closing windows reach the checkout through an adapter, and in this lab a script sends them. Every store settles to one sandbox account.
 - **One paid hijack.** The 41% comes from plans put through the gate; one hijacked order was actually paid.
 - **Closer work exists.** See [docs/PRIOR_ART.md](docs/PRIOR_ART.md).
 
@@ -142,10 +157,13 @@ cp .env.example .env
 npm run build && npm run server
 ```
 
-Fill in `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` and a sandbox test card, then open http://localhost:8787/?live=1. If the server is unreachable, the page falls back to the twin.
+Fill in `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` and a sandbox test card, then open http://localhost:8787/?live=1. The server reads `.env` itself. Scripts need it passed: `npx tsx --env-file=.env scripts/sleeper-checkout.ts --sandbox`. If the server is unreachable, the page falls back to the twin.
 
 | Variable | Default | Effect |
 | --- | --- | --- |
+| `HOST` | 0.0.0.0 | Address the server binds. Use 127.0.0.1 behind a proxy |
+| `LAB_TOKEN` | off | Lets a caller report deliveries and complaints, which can release held money |
+| `PAYPAL_WEBHOOK_ID` | off | Turns on `POST /webhooks/paypal` |
 | `MAX_SESSIONS` | 8 | Cities that can run on the server at once |
 | `MAX_LIVE` | 2 | Of those, how many pay on the PayPal sandbox |
 | `LIVE_SAMPLE` | 0.02 | Share of ordinary shoppers whose payments also go to the sandbox |

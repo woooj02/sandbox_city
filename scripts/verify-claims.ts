@@ -160,6 +160,17 @@ claim('regressions', 'cases in the repository', regs.length, 13, '13 cases');
 const recovery = json('../packages/web/src/data/recovery-proof.json'), checkout = json('../packages/web/src/data/checkout-proof.json');
 claim('receipts', 'a real SIGKILL, one charge with the journal, two without', [recovery.crash.signal, recovery.crash.lastOnDisk, recovery.charges.afterRecovery, recovery.charges.afterControl], ['SIGKILL', 'capturing', 1, 2]);
 claim('receipts', 'receipts say what they ran against', [recovery.mode, checkout.mode], ['paypal-sandbox', 'paypal-sandbox'], 'paypal-sandbox');
+const sc = json('../packages/web/src/data/sleeper-checkout.json');
+const [scTuned, scSleeper, scHonest] = sc.arms;
+const held = (a: { rows: { escrow: boolean }[] }) => a.rows.filter((r) => r.escrow);
+const auths = (a: { rows: { provider: { authorization: string | null } }[] }, s: string) => a.rows.filter((r) => r.provider.authorization === s).length;
+claim('receipts', 'the sleeper ran on the sandbox, under the measured rulebook', [sc.mode, scSleeper.policy], ['paypal-sandbox', frozen3.policyId]);
+claim('receipts', 'Lab-Tuned let the sleeper keep everything', [scTuned.captured, scTuned.total, held(scTuned).length], [574.82, 574.82, 0], '$574.82');
+claim('receipts', 'Frozen v3 held all but one, and PayPal voided them', [scSleeper.captured, held(scSleeper).length, auths(scSleeper, 'VOIDED')], [64.48, 5, 5], '$64.48');
+claim('receipts', 'no held order was captured for the sleeper', held(scSleeper).filter((r: { provider: { capture: string | null } }) => r.provider.capture).length, 0);
+claim('receipts', 'the honest store received everything', [scHonest.captured, scHonest.total, auths(scHonest, 'CAPTURED')], [574.82, 574.82, 5]);
+claim('receipts', 'the bound follows from the record', Math.round(sc.record.independent * 0.05 * 100) / 100, sc.bound);
+claim('receipts', 'exposure stayed under the bound', scSleeper.worstOverBound <= 0, true);
 claim('receipts', 'the checkout answers with the measured rulebook', [...new Set(checkout.rows.map((r: { policy: string }) => r.policy))], [frozen3.policyId]);
 
 const w = Math.max(...rows.map((r) => r.area.length));

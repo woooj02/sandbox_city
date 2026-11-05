@@ -2,6 +2,7 @@
  * Sandbox City world: a deterministic, forkable agent economy.
  * Same seed + same policy => identical run. Change only the policy and you get a clean counterfactual.
  */
+import { agentRep, closedLoop, holdsToRelease, isIndependentBuyer, merchantRep } from './history';
 import { Rng, round2, clamp } from './rng';
 import type {
   Attacker, AttackerBook, AttackKind, Cohort, CohortTally, GateResult, KindTally, Merchant, Metrics, OrderIntent, Outcome, Passport, Product, RuleHit, Shopper, SignedRequest, SimEvent,
@@ -302,7 +303,7 @@ export class World {
     const st = this.aStats.get(id);
     if (!st) return { age: 0, orders: 0, recent: 0, refunds: 0, rep: 0 };
     while (st.times.length && st.times[0] <= this.t - 60) st.times.shift();
-    const rep = clamp(0.15 + 0.6 * (1 - Math.exp(-st.orders / 10)) + Math.min(0.2, (this.t - st.first) / 20000) - (st.orders ? 1.5 * st.refunds / st.orders : 0), 0, 1);
+    const rep = agentRep(st.orders, st.refunds, this.t - st.first);
     return { age: this.t - st.first, orders: st.orders, recent: st.times.length, refunds: st.refunds, rep };
   }
 
@@ -310,17 +311,15 @@ export class World {
     const m = this.merchants.get(id)!;
     const st = this.mStats.get(id)!;
     const refundRatio = st.orders ? st.refunds / st.orders : 0;
-    const rep = clamp(0.2 + 0.5 * (1 - Math.exp(-st.fulfilled / 25)) + (m.verified ? 0.15 : 0) + Math.min(0.1, (this.t - m.openedAt) / 3000) - 2 * refundRatio, 0, 1);
+    const rep = merchantRep(st.fulfilled, m.verified, this.t - m.openedAt, refundRatio);
     // closed-loop score: share of this store's orders from buyers who shop almost only here
-    let loop = 0, total = 0;
-    for (const [buyer, n] of st.buyers) {
-      total += n;
+    const { loop, total } = closedLoop(st.buyers, (buyer) => {
       const bm = this.aStats.get(buyer)?.merchants;
-      if (!bm) continue;
+      if (!bm) return undefined;
       let all = 0;
       for (const v of bm.values()) all += v;
-      if (n >= 3 && n / all > 0.6) loop += n;
-    }
+      return all;
+    });
     return { age: this.t - m.openedAt, verified: m.verified, rep, ring: total ? loop / total : 0, orders: total, exposure: st.exposure, fulfilled: st.scannedValue, independent: st.independentValue };
   }
 
@@ -868,8 +867,7 @@ export class World {
   private independentBuyer(buyer: string, m: Merchant): boolean {
     const st = this.aStats.get(buyer);
     if (!st) return false;
-    const here = st.merchants.get(m.id) ?? 0;
-    return st.first <= m.openedAt && here / Math.max(1, st.orders) <= 0.5;
+    return isIndependentBuyer(st.first, m.openedAt, st.merchants.get(m.id) ?? 0, st.orders);
   }
 
   private book(kind: AttackKind | undefined, take: number, cost: number) {
@@ -909,7 +907,7 @@ export class World {
   }
 
   /** Held money waits for the complaint window, not just the scan: an empty parcel scans like a full one. */
-  private get holdsToRelease() { return !!this.policy.captureAfterRelease && (this.policy.releaseLag ?? 0) > 0; }
+  private get holdsToRelease() { return holdsToRelease(this.policy); }
 
   private async captureHeld(rec: OrderRec, m: Merchant) {
     const o = rec.intent;

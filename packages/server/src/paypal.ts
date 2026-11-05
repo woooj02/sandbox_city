@@ -6,7 +6,7 @@
  * enacted through PayPal's own negative-testing header (PayPal-Mock-Response) so the decline comes
  * back from PayPal itself.
  */
-import { RailsError, type CreateOrderInput, type OrderResult, type Rails } from '@sandbox-city/core';
+import { OWNER_POSTAL, RailsError, sentQty, type CreateOrderInput, type OrderResult, type PostalAddress, type Rails } from '@sandbox-city/core';
 
 export interface PayPalConfig {
   clientId: string;
@@ -113,8 +113,7 @@ export class SandboxRails implements Rails {
     const money = (n: number) => ({ currency_code: input.currency, value: n.toFixed(2) });
     const [line1, rest] = input.shipTo.split(/,\s*/);
     // PayPal requires item_total == sum(unit_amount * quantity) to the cent
-    const exact = Math.round(input.item.unit * 100) * input.item.qty === Math.round(input.amount * 100);
-    const qty = exact ? input.item.qty : 1, unit = exact ? input.item.unit : input.amount;
+    const qty = sentQty(input), unit = qty === input.item.qty ? input.item.unit : input.amount;
     return {
       intent: input.intent,
       purchase_units: [{
@@ -129,7 +128,8 @@ export class SandboxRails implements Rails {
         ...(payeeEmail ? { payee: { email_address: payeeEmail } } : {}),
         shipping: {
           name: { full_name: `Agent ${input.payerId}` },
-          address: { address_line_1: line1.slice(0, 300), admin_area_2: (rest ?? 'Sandbox City').slice(0, 120), admin_area_1: 'CA', postal_code: '94105', country_code: 'US' },
+          // the checkout passes the address the gate read, unchanged; the simulated day has only the owner's one-line form
+          address: input.address ?? { address_line_1: line1.slice(0, 300), admin_area_2: (rest ?? 'Sandbox City').slice(0, 120), ...OWNER_POSTAL },
         },
       }],
       payment_source: {
@@ -172,7 +172,7 @@ export class SandboxRails implements Rails {
     if (status >= 300) throw new RailsError(status, json.details?.[0]?.issue ?? json.name ?? 'ERROR', status >= 500);
     const amount = json.amount ? Number(json.amount.value) : this.authAmount.get(authId);
     if (amount !== undefined) this.moves.set(json.id, { kind: 'capture', id: json.id, amount });
-    return { captureId: json.id, status: json.status };
+    return { captureId: json.id, status: json.status, amount };
   }
 
   async voidAuthorization(authId: string, requestId: string) {
@@ -217,15 +217,28 @@ export class SandboxRails implements Rails {
     return { captureId: cap?.id, status: cap?.status ?? json.status, amount: cap?.amount ? Number(cap.amount.value) : undefined };
   }
 
+  /** Puts a hold on an approved order. No money moves until the authorization is captured. */
+  async authorizeOrder(orderId: string, requestId: string) {
+    const { status, json } = await this.call<PayPalOrder & PayPalError>('POST', `/v2/checkout/orders/${orderId}/authorize`, {}, requestId);
+    if (status >= 300) throw new RailsError(status, json.details?.[0]?.issue ?? json.name ?? 'ERROR', status >= 500);
+    const auth = json.purchase_units?.[0]?.payments?.authorizations?.[0];
+    return { authorizationId: auth?.id, status: auth?.status ?? json.status };
+  }
+
   /** The order as PayPal has it now. This is what a restart believes. */
   async readOrder(orderId: string) {
     const { status, json } = await this.call<PayPalOrder>('GET', `/v2/checkout/orders/${orderId}`);
     if (status === 404) return null;
     if (status >= 300) throw new RailsError(status, 'READ_BACK_FAILED', status >= 500);
-    const cap = json.purchase_units?.[0]?.payments?.captures?.[0];
-    const value = json.purchase_units?.[0]?.amount?.value;
+    const unit = json.purchase_units?.[0], cap = unit?.payments?.captures?.[0], auth = unit?.payments?.authorizations?.[0];
+    const value = unit?.amount?.value;
     const captureCount = (json.purchase_units ?? []).flatMap((u) => u.payments?.captures ?? []).filter((c) => c.status === 'COMPLETED').length;
-    return { status: json.status, captureCount, orderAmount: value != null ? Number(value) : undefined, captureId: cap?.id, captureStatus: cap?.status, amount: cap?.amount ? Number(cap.amount.value) : undefined, customId: json.purchase_units?.[0]?.custom_id };
+    return {
+      status: json.status, captureCount, orderAmount: value != null ? Number(value) : undefined, currency: unit?.amount?.currency_code,
+      qty: unit?.items?.[0]?.quantity != null ? Number(unit.items[0].quantity) : undefined, address: unit?.shipping?.address,
+      captureId: cap?.id, captureStatus: cap?.status, amount: cap?.amount ? Number(cap.amount.value) : undefined, customId: unit?.custom_id,
+      authorizationId: auth?.id, authorizationStatus: auth?.status,
+    };
   }
 
   /** PayPal's own check of a webhook's signature. Nothing is applied to a payment unless this says SUCCESS. */
@@ -273,6 +286,6 @@ const DECLINES = new Set(['INSTRUMENT_DECLINED', 'TRANSACTION_REFUSED', 'CARD_EX
 interface PayPalError { name?: string; message?: string; debug_id?: string; details?: { issue: string; description?: string }[] }
 interface PayPalOrder {
   id: string; status: string;
-  purchase_units?: { custom_id?: string; amount?: { value: string }; payments?: { captures?: { id: string; status: string; amount?: { value: string }; status_details?: { reason: string } }[]; authorizations?: { id: string; status: string }[] } }[];
+  purchase_units?: { custom_id?: string; amount?: { value: string; currency_code?: string }; items?: { quantity?: string }[]; shipping?: { address?: Partial<PostalAddress> }; payments?: { captures?: { id: string; status: string; amount?: { value: string }; status_details?: { reason: string } }[]; authorizations?: { id: string; status: string }[] } }[];
 }
 export interface TxnDetail { transaction_info: { transaction_id: string; transaction_event_code: string; transaction_amount: { value: string; currency_code: string }; custom_field?: string; invoice_id?: string; transaction_status: string } }

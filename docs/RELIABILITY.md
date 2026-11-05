@@ -8,13 +8,21 @@ The call that moves money only ever acts on an order we already know by id, and 
 
 ```text
 recorded -> created -> approved -> capturing -> captured -> refunded
-                                \-> declined      any -> unresolved
+                               |            \-> pending -> captured
+                               \-> authorizing -> held -> releasing -> captured
+                                                      \-> voiding -> voided
+declined and unresolved can follow any step
 ```
 
 - **Create** moves no money, so losing its response costs nothing.
 - **Approved** is read back first. If the order PayPal holds is not the order the gate allowed, nothing is captured.
 - **Capturing** is written and synced to disk before the capture is sent.
 - **After a crash** the worker reads the order by id. A capture is there or it is not. It never re-sends a capture it cannot account for.
+- **Only a `COMPLETED` capture of the right amount is `captured`.** `PENDING` stays pending, and `FAILED` and `DECLINED` are declined. The same holds on a restart and for a webhook.
+- **A hold is a PayPal authorization.** No money moves until it is released, and a hold survives a restart as a hold.
+- **The read-back compares the whole order:** amount, currency, quantity, identity and every address field. The address is sent as the gate read it.
+- **A torn last line is cut off when the journal opens,** so the next record cannot join it and be lost.
+- **The journal also holds the decision behind each payment and what happened to the goods.** A receipt, a mandate and a store's record come back with it after a restart.
 
 Recovery does not depend on how long PayPal remembers a `PayPal-Request-Id`, which its documentation gives only as "a period of time". The ids are still stable across restarts, because the run id lives next to the journal.
 
@@ -28,6 +36,13 @@ Recovery does not depend on how long PayPal remembers a `PayPal-Request-Id`, whi
 | Eight requests for one key at once | One payment | `payments.test.ts` |
 | Same key, different order | 409, nothing moves | `checkout-api.test.ts` |
 | Order changed after the gate allowed it | Unresolved, no capture | `payments.test.ts` |
+| Capture answers `PENDING` or `FAILED`, live or on restart | Pending or declined, never captured | `audit-regressions.test.ts` |
+| Rulebook says hold | Authorized, not captured | `audit-regressions.test.ts`, `scripts/sleeper-checkout.ts` |
+| Killed halfway through a release | Finishes on restart, one capture | `audit-regressions.test.ts` |
+| New key in a spent session, after a restart | Challenged | `audit-regressions.test.ts` |
+| Retry under another rulebook | 409, and the original decision is named | `audit-regressions.test.ts` |
+| Torn journal tail, then a new payment | Both kept right | `audit-regressions.test.ts` |
+| Address differs at PayPal | Unresolved, no capture | `audit-regressions.test.ts` |
 | Read-back disagrees with the intent | Unresolved | `payments.test.ts` |
 | Journal line torn by the crash | Ignored, the rest loads | `payments.test.ts` |
 | Webhook repeated, or late after a refund | No change | `payments.test.ts` |

@@ -26,7 +26,7 @@ export function Welcome() {
       <div className="welcome panel" ref={panel} tabIndex={-1} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Welcome to Sandbox City">
         <div className="wl-prompt"><span>root@sandbox-city:~$</span> ./intro</div>
         <h2>SANDBOX CITY</h2>
-        <p className="wl-lede">A crash-test lab for AI commerce. Try every payment rule before a single real cent moves.</p>
+        <p className="wl-lede">Test an agent that can spend money before you ship it. Reproduce a financial failure, compare defenses and what they cost honest buyers, then carry the result into checkout and CI.</p>
         <ol className="wl-steps">
           <li><b>A whole city trades for one day.</b> AI shoppers, stores and six crews of attackers, every payment on PayPal rails.</li>
           <li><b>You set the rules at the gate.</b> Passports, signatures, spend caps, escrow, idempotency keys.</li>
@@ -38,9 +38,9 @@ export function Welcome() {
           <span>Wild West paid it. Lab-Tuned and Know Your Agent refused the call before PayPal saw it. The audit refunded it through PayPal's Agent Toolkit. See the hijack →</span>
         </button>
         <div className="wl-actions">
-          <button className="btn hot" onClick={film}>▶ WATCH THE FILM <small>about 9 min · Esc to stop</small></button>
-          <button className="btn" onClick={evidence}>SEE THE EVIDENCE</button>
+          <button className="btn hot" onClick={evidence}>SEE THE EVIDENCE <small>start here · two minutes</small></button>
           <button className="btn" onClick={explore}>EXPLORE THE LAB</button>
+          <button className="btn" onClick={film}>THE LONG FILM <small>about 9 min</small></button>
         </div>
         <p className="wl-keys">Keys: <kbd>C</kbd> cinema · <kbd>R</kbd> roll the film · <kbd>1</kbd>–<kbd>5</kbd> jump to an act · <kbd>H</kbd> the hijack</p>
       </div>

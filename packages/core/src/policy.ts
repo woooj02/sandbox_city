@@ -178,7 +178,7 @@ export function evaluateOrder(p: Policy, o: GateOrder, c: GateContext): GateResu
   for (const h of hits) if (SEV[h.action] > SEV[decision]) decision = h.action;
   const credit = (p.independentCredit ? c.merchant.independent : c.merchant.fulfilled) ?? 0;
   const exposed = p.exposureRatio > 0 && (c.merchant.exposure ?? 0) + o.amount > p.exposureFloor + p.exposureRatio * credit;
-  if (exposed && decision !== 'block') hit('exposureHold', 'allow', `$${Math.round((c.merchant.exposure ?? 0) + o.amount)} unfulfilled against $${Math.round(credit)} delivered: held until the carrier scans`);
+  if (exposed && decision !== 'block') hit('exposureHold', 'allow', `$${Math.round((c.merchant.exposure ?? 0) + o.amount)} unfulfilled against $${Math.round(credit)} delivered: held until delivery is proven`);
   const escrow = decision !== 'block' && (exposed || (p.escrowNewMerchants > 0 && c.merchant.age < p.escrowNewMerchants));
   return { decision, hits, escrow };
 }

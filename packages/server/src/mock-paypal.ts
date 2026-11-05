@@ -6,8 +6,8 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 
 interface Cap { id: string; amount: number; refunded: number; custom: string; invoice?: string; at: string }
-interface Auth { id: string; amount: number; status: 'CREATED' | 'CAPTURED' | 'VOIDED'; custom: string; invoice?: string }
-interface Pending { id: string; status: 'CREATED' | 'APPROVED' | 'COMPLETED'; amount: number; custom: string; invoice?: string; captureId?: string }
+interface Auth { id: string; amount: number; status: 'CREATED' | 'CAPTURED' | 'VOIDED'; custom: string; invoice?: string; order?: string }
+interface Pending { id: string; intent: 'CAPTURE' | 'AUTHORIZE'; status: 'CREATED' | 'APPROVED' | 'COMPLETED'; amount: number; custom: string; invoice?: string; captureId?: string; authId?: string; items?: unknown; shipping?: unknown }
 
 const id = () => Array.from({ length: 17 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 34)]).join('');
 const err = (name: string, issue: string, status = 422) => ({ status, body: { name, message: issue, debug_id: id().toLowerCase(), details: [{ issue }] } });
@@ -69,9 +69,8 @@ export function buildMockPayPal(opts: { clientId?: string; clientSecret?: string
       if (Math.round(sumItems * 100) !== Math.round(itemTotal * 100)) return err('UNPROCESSABLE_ENTITY', 'ITEM_TOTAL_MISMATCH');
       // no payment source: an order waiting for the payer, nothing has moved yet
       if (!b.payment_source) {
-        if (b.intent !== 'CAPTURE') return err('INVALID_REQUEST', 'INVALID_PARAMETER_VALUE', 400);
         if (pu.invoice_id) { if (invoices.has(pu.invoice_id)) return err('UNPROCESSABLE_ENTITY', 'DUPLICATE_INVOICE_ID'); invoices.add(pu.invoice_id); }
-        const o: Pending = { id: id(), status: 'CREATED', amount, custom: pu.custom_id, invoice: pu.invoice_id };
+        const o: Pending = { id: id(), intent: b.intent, status: 'CREATED', amount, custom: pu.custom_id, invoice: pu.invoice_id, items: pu.items, shipping: pu.shipping };
         orders.set(o.id, o);
         return { status: 201, body: { id: o.id, status: 'CREATED' } };
       }
@@ -107,20 +106,40 @@ export function buildMockPayPal(opts: { clientId?: string; clientSecret?: string
     return reply.code(r.status).send(r.body);
   });
 
-  const orderView = (o: Pending) => ({
-    id: o.id, status: o.status,
-    purchase_units: [{ custom_id: o.custom, amount: { currency_code: 'USD', value: o.amount.toFixed(2) }, payments: o.captureId ? { captures: [{ id: o.captureId, status: 'COMPLETED', amount: { currency_code: 'USD', value: o.amount.toFixed(2) } }] } : undefined }],
-  });
+  const orderView = (o: Pending) => {
+    const money = { currency_code: 'USD', value: o.amount.toFixed(2) };
+    const auth = o.authId ? state.auths.get(o.authId) : undefined;
+    const payments = {
+      ...(auth ? { authorizations: [{ id: auth.id, status: auth.status, amount: money }] } : {}),
+      ...(o.captureId ? { captures: [{ id: o.captureId, status: 'COMPLETED', amount: money }] } : {}),
+    };
+    return { id: o.id, status: o.status, purchase_units: [{ custom_id: o.custom, amount: money, items: o.items, shipping: o.shipping, ...(auth || o.captureId ? { payments } : {}) }] };
+  };
 
   app.post('/v2/checkout/orders/:id/capture', async (req, reply) => {
     const r = once(req as never, () => {
       const o = orders.get((req.params as { id: string }).id);
       if (!o) return err('RESOURCE_NOT_FOUND', 'INVALID_RESOURCE_ID', 404);
+      if (o.intent !== 'CAPTURE') return err('UNPROCESSABLE_ENTITY', 'ACTION_DOES_NOT_MATCH_INTENT');
       if (o.status === 'COMPLETED') return err('UNPROCESSABLE_ENTITY', 'ORDER_ALREADY_CAPTURED');
       if (o.status !== 'APPROVED') return err('UNPROCESSABLE_ENTITY', 'ORDER_NOT_APPROVED');
       const c: Cap = { id: id(), amount: o.amount, refunded: 0, custom: o.custom, invoice: o.invoice, at: new Date().toISOString() };
       state.captures.set(c.id, c);
       o.status = 'COMPLETED'; o.captureId = c.id;
+      return { status: 201, body: orderView(o) };
+    });
+    return reply.code(r.status).send(r.body);
+  });
+
+  app.post('/v2/checkout/orders/:id/authorize', async (req, reply) => {
+    const r = once(req as never, () => {
+      const o = orders.get((req.params as { id: string }).id);
+      if (!o) return err('RESOURCE_NOT_FOUND', 'INVALID_RESOURCE_ID', 404);
+      if (o.intent !== 'AUTHORIZE') return err('UNPROCESSABLE_ENTITY', 'ACTION_DOES_NOT_MATCH_INTENT');
+      if (o.status !== 'APPROVED') return err('UNPROCESSABLE_ENTITY', 'ORDER_NOT_APPROVED');
+      const a: Auth = { id: id(), amount: o.amount, status: 'CREATED', custom: o.custom, invoice: o.invoice, order: o.id };
+      state.auths.set(a.id, a);
+      o.status = 'COMPLETED'; o.authId = a.id;
       return { status: 201, body: orderView(o) };
     });
     return reply.code(r.status).send(r.body);
@@ -146,6 +165,7 @@ export function buildMockPayPal(opts: { clientId?: string; clientSecret?: string
       a.status = 'CAPTURED';
       const c: Cap = { id: id(), amount: a.amount, refunded: 0, custom: a.custom, invoice: a.invoice, at: new Date().toISOString() };
       state.captures.set(c.id, c);
+      if (a.order) orders.get(a.order)!.captureId = c.id;
       return { status: 201, body: { id: c.id, status: 'COMPLETED' } };
     });
     return reply.code(r.status).send(r.body);

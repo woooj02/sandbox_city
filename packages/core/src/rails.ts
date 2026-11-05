@@ -11,6 +11,12 @@ export type CardState = 'ok' | 'stolen';
 
 export interface CardRef { last4: string; state: CardState; holder: string }
 
+/** How many units the order line PayPal holds will show. PayPal needs item totals exact, so a total that is not unit x qty goes as one line of 1. */
+export const sentQty = (i: { amount: number; item: { unit: number; qty: number } }) => (Math.round(i.item.unit * 100) * i.item.qty === Math.round(i.amount * 100) ? i.item.qty : 1);
+
+/** A delivery address the way PayPal takes it. */
+export interface PostalAddress { address_line_1: string; address_line_2?: string; admin_area_2: string; admin_area_1: string; postal_code: string; country_code: string }
+
 export interface CreateOrderInput {
   intent: 'CAPTURE' | 'AUTHORIZE';
   amount: number;
@@ -20,6 +26,8 @@ export interface CreateOrderInput {
   card: CardRef;
   item: { name: string; sku: string; unit: number; qty: number };
   shipTo: string;
+  /** The address the gate checked. When set, this is what PayPal gets, field for field. */
+  address?: PostalAddress;
   customId: string;
   /** PayPal negative testing hook (PayPal-Mock-Response) set by the twin risk model. */
   mockCode?: string;

@@ -19,7 +19,7 @@ const cases = readdirSync(dir).filter((f) => f.endsWith('.json')).sort().map((f)
 
 writeFileSync(data('evidence.json'), JSON.stringify({
   first: compact(load('benchmark.json')), second: compact(load('benchmark-v2.json')), third: compact(load('benchmark-v3.json')),
-  recovery: load('recovery-proof.json'), checkout: load('checkout-proof.json'), agents: load('agent-rate.json'), defender: load('defender.json'),
+  recovery: load('recovery-proof.json'), checkout: load('checkout-proof.json'), sleeperCheckout: load('sleeper-checkout.json'), agents: load('agent-rate.json'), defender: load('defender.json'),
   regressions: cases.map((c) => ({ id: c.id, kind: c.kind, title: c.title, minimized: c.minimized ?? null, threat: c.threat })),
   sleeperCase: cases.find((c) => c.id === 'day-sleeper-store') ?? null,
 }) + '\n');

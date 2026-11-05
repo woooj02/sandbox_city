@@ -23,5 +23,6 @@ The flagship failure, stated so that someone else can check it. All figures are 
 ## How to see it
 
 - Press **E** in the app.
+- `npx tsx --env-file=.env scripts/sleeper-checkout.ts --sandbox` runs it through the real checkout. On the PayPal sandbox the store kept $574.82 under Lab-Tuned and $64.48 under Frozen v3. See [CHECKOUT.md](CHECKOUT.md).
 - `npx tsx scripts/regress.ts regressions/day-sleeper-store.json` replays the failure to the cent under two rulebooks.
 - `regressions/day-empty-box.json` is the variant that beat the first two rulebooks.

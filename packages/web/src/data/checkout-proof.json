@@ -1,6 +1,6 @@
 {
   "mode": "paypal-sandbox",
-  "recordedAt": "2026-11-05T17:01:14.019Z",
+  "recordedAt": "2026-11-05T18:48:59.199Z",
   "policy": "f5dc2c8ff6099bdd",
   "evaluator": "gate-2",
   "charges": null,
@@ -32,8 +32,8 @@
       "replay": false,
       "payment": {
         "state": "captured",
-        "orderId": "5PS270862R089845E",
-        "captureId": "19209305DK488502D",
+        "orderId": "16G15374UY0927021",
+        "captureId": "5J8575199P954172S",
         "amount": 80
       }
     },
@@ -46,8 +46,8 @@
       "replay": true,
       "payment": {
         "state": "captured",
-        "orderId": "5PS270862R089845E",
-        "captureId": "19209305DK488502D",
+        "orderId": "16G15374UY0927021",
+        "captureId": "5J8575199P954172S",
         "amount": 80
       }
     }
