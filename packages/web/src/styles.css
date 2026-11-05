@@ -640,3 +640,59 @@ button.rail-badge { background: transparent; cursor: pointer; }
 .hj-note { margin: 8px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--dim); max-width: 1100px; }
 .hj-grid .hj-honest-row { border-top: 1px solid var(--line); }
 .panel[role="dialog"]:focus { outline: none; }
+
+/* the evidence exhibit */
+.ev-glyph { color: var(--cy) !important; text-shadow: 0 0 20px var(--cy) !important; }
+.rail-badge.evidence { color: #9ef6ff; border-color: rgba(76,242,255,.5); background: rgba(76,242,255,.06); cursor: pointer; }
+.rail-badge.evidence i { background: var(--cy); box-shadow: 0 0 10px var(--cy); }
+.rail-badge.evidence:hover { background: rgba(76,242,255,.16); color: #fff; }
+.ev-missing { margin: 6px 0; padding: 10px 12px; border: 1px dashed var(--line); color: var(--dim); font-size: 12.5px; }
+.ev-p { margin: 10px 0; font-size: 13px; line-height: 1.55; color: #b8c1e8; }
+.ev-p code, .ev-cmd { font-family: var(--mono); color: #fff; }
+.ev-tag { display: inline-block; margin-right: 8px; padding: 2px 7px; border: 1px solid var(--am); color: var(--am); font: 700 10px var(--mono); letter-spacing: 1px; }
+.ev-chart { position: relative; margin-bottom: 12px; }
+.ev-chart svg { display: block; width: 100%; max-width: 900px; height: auto; margin: 0 auto; }
+.ev-grid { stroke: rgba(110,130,255,.12); stroke-width: 1; }
+.ev-tick { fill: var(--dim); font: 11px var(--mono); }
+.ev-axis { fill: #9aa5d6; font: 12px var(--ui); }
+.ev-whisker { stroke: #3987e5; stroke-width: 2; opacity: .55; }
+.ev-dot { fill: #3987e5; stroke: #070a1c; stroke-width: 2; }
+.ev-dot.mine { fill: #c98500; }
+.ev-label { fill: #cfd8ff; font: 12px var(--ui); }
+.ev-label.mine { fill: #fff; font-weight: 700; }
+.ev-tip { position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%); padding: 6px 10px; border: 1px solid var(--line); background: rgba(5,7,20,.96); color: #cfd8ff; font: 11.5px var(--mono); white-space: nowrap; pointer-events: none; }
+.ev-tip b { color: #fff; }
+.ev-mine { background: rgba(201,133,0,.12) !important; }
+.ev-held { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.ev-case { padding: 11px 12px; border: 1px solid var(--line); background: rgba(8,10,28,.6); display: flex; flex-direction: column; gap: 6px; }
+.ev-case-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.ev-case-head b { color: #fff; font-size: 14px; }
+.ev-case-head span { font: 700 10.5px var(--mono); letter-spacing: 1.5px; }
+.ev-case small { color: var(--dim); font-size: 11.5px; line-height: 1.4; }
+.ev-case dl { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; margin: 2px 0 0; font: 11.5px var(--mono); }
+.ev-case dt { color: #9aa5d6; } .ev-case dd { margin: 0; color: #fff; text-align: right; }
+.v-caught { box-shadow: inset 0 2px 0 var(--gr); } .v-caught .ev-case-head span { color: var(--gr); }
+.v-partly { box-shadow: inset 0 2px 0 var(--am); } .v-partly .ev-case-head span { color: var(--am); }
+.v-missed { box-shadow: inset 0 2px 0 var(--rd); } .v-missed .ev-case-head span { color: #ff6f8a; }
+.ev-list { margin: 6px 0; padding-left: 18px; font-size: 13px; line-height: 1.6; color: #b8c1e8; }
+.ev-list b { color: #fff; }
+.ev-rows { display: grid; gap: 6px; margin: 8px 0; }
+.ev-row { display: grid; grid-template-columns: 230px 1fr; gap: 1px 12px; padding: 7px 10px; border: 1px solid var(--line); font-size: 12.5px; }
+.ev-row b { color: #fff; } .ev-row span { font: 700 11px var(--mono); letter-spacing: .5px; color: #cfd8ff; }
+.ev-row small { grid-column: 2; color: var(--dim); font: 11px var(--mono); word-break: break-word; }
+.ev-row.stop { border-color: rgba(76,242,255,.4); } .ev-row.paid { border-color: rgba(125,255,154,.35); }
+.ev-steps { margin: 8px 0; padding-left: 20px; font-size: 13px; line-height: 1.65; color: #b8c1e8; }
+.ev-steps b { color: #fff; }
+.ev-charges { display: flex; gap: 12px; margin: 10px 0; }
+.ev-charges div { flex: 1; padding: 10px 12px; border: 1px solid var(--line); display: flex; align-items: baseline; gap: 10px; font-size: 13px; color: #b8c1e8; }
+.ev-charges b { font: 700 26px var(--mono); color: var(--gr); } .ev-charges .bad b { color: #ff4a62; }
+.ev-cmd { margin: 8px 0; padding: 9px 12px; border: 1px solid var(--line); background: rgba(5,7,20,.7); font-size: 12px; overflow-x: auto; }
+@media (max-width: 900px) { .ev-held { grid-template-columns: minmax(0, 1fr); } .ev-row { grid-template-columns: minmax(0, 1fr); } .ev-row small { grid-column: 1; } }
+.ev-leader { stroke: #7d88b8; stroke-width: 1; opacity: .55; }
+/* laptops: the evidence badge joins the rail, so the brand and badges tighten to keep it on one line */
+@media (max-width: 1500px) and (min-width: 901px) {
+  .logo-title { white-space: nowrap; font-size: 16px; letter-spacing: 1.5px; }
+  .rail-badge { padding: 4px 6px; letter-spacing: .5px; gap: 4px; }
+  .rail-badge.evidence i { display: none; }
+  .clockbox { min-width: 118px; }
+}

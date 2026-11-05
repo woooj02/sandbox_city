@@ -12,3 +12,7 @@ export * from './whatif';
 export * from './search';
 export * from './forge';
 export * from './brain';
+export * from './checkout';
+export * from './experiment';
+export * from './regression';
+export * from './policy-patch';

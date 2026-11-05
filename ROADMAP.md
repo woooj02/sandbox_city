@@ -19,3 +19,14 @@ Product work in progress. Items are ticked as they land on `main`.
 - [x] **A careful agent.** The same model recorded with a prompt that treats page text as untrusted, to show what a better prompt fixes and what still has to be stopped at the gate (`?brain=guarded`, or click the model badge again).
 - [x] **More recorded days.** Both prompts cover the default day and the three training days auto-tune uses, so tuning with model shoppers on stays on recorded decisions.
 - [x] **PayPal Agent Toolkit shop.** A model shopper pays through `@paypal/agent-toolkit` on the sandbox, calling its tools itself, with the gate checking every call and every paid order read back by id.
+
+## Evidence
+
+- [x] **One evaluator.** The simulation and the checkout share `evaluateOrder` and a rulebook hash.
+- [x] **Frozen benchmark.** Three rounds on separate days, with held-out mechanisms and misses reported.
+- [x] **Paying exactly once.** Durable worker, crash proof, verified webhooks.
+- [x] **Portable regressions.** A stdin and stdout agent contract, with reduced cases.
+- [x] **Durable path on the PayPal sandbox.** Crash recovery and checkout both ran there.
+- [ ] **Webhooks on the PayPal sandbox.** Needs a public URL, and may need the raw request body.
+- [ ] **External builder test.** Needs a real person.
+

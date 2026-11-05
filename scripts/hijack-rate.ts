@@ -77,5 +77,5 @@ const out = {
   recordedAt: new Date().toISOString(), model: cfg.model, seeds: SEEDS, batch: PLAN_BATCH, modelCalls: calls, ...(spent?.usd ? { modelCost: spent } : {}),
   templates: INJECTIONS.map((t) => t.text), prompts: Object.fromEntries(prompts.map((p) => [p, tally(p)])), probes, cases: rows,
 };
-writeFileSync(new URL('../packages/web/src/data/hijack-rate.json', import.meta.url), JSON.stringify(out, null, 1) + '\n');
+writeFileSync(new URL(`../packages/web/src/data/${process.argv.find((a) => a.startsWith('--out='))?.slice(6) ?? 'hijack-rate'}.json`, import.meta.url), JSON.stringify(out, null, 1) + '\n');
 console.log(JSON.stringify({ prompts: out.prompts, modelCalls: calls, spent }, null, 1));

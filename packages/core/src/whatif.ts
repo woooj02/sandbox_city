@@ -19,11 +19,16 @@ export interface DaySummary {
   safety: number;
   access: number;
   fraudAttempted: number;
+  /** Honest value that was delivered and kept, the measure of commerce that finished. */
+  fulfilled: number;
+  /** Fulfilled value, minus money stolen, minus double charges. */
+  kept: number;
 }
 
 export const summarize = (key: string, name: string, m: Metrics): DaySummary => ({
   key, name, stolen: m.fraud.leaked, duplicate: m.chaos.duplicateValue, honestLost: round2(m.honest.blockedValue + m.honest.abandonedValue),
   gmv: m.honest.gmv, net: m.netValue, safety: m.safety, access: m.access, fraudAttempted: m.fraud.prevented + m.fraud.leaked,
+  fulfilled: m.honest.fulfilledValue, kept: round2(m.honest.fulfilledValue - m.fraud.leaked - m.chaos.duplicateValue),
 });
 
 export const samePolicy = (a: Policy, b: Policy) => {

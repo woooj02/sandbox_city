@@ -8,6 +8,10 @@
  * offline (see packages/server/src/brain-record.ts). Same tape + same seed = same day.
  */
 
+import { sameAddress } from './policy';
+
+export { sameAddress };
+
 export interface BrainCase {
   key: string;
   shopper: string;
@@ -106,5 +110,3 @@ export function parseChoices(reply: string, cases: BrainCase[]): Record<string, 
   return out;
 }
 
-/** Same street, same order: forgive case and punctuation when checking whether the agent kept the owner's address. */
-export const sameAddress = (a: string, b: string) => a.toLowerCase().replace(/[^a-z0-9]/g, '') === b.toLowerCase().replace(/[^a-z0-9]/g, '');

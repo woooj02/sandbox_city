@@ -7,17 +7,21 @@ import Fastify, { type FastifyInstance } from 'fastify';
 
 interface Cap { id: string; amount: number; refunded: number; custom: string; invoice?: string; at: string }
 interface Auth { id: string; amount: number; status: 'CREATED' | 'CAPTURED' | 'VOIDED'; custom: string; invoice?: string }
+interface Pending { id: string; status: 'CREATED' | 'APPROVED' | 'COMPLETED'; amount: number; custom: string; invoice?: string; captureId?: string }
 
 const id = () => Array.from({ length: 17 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 34)]).join('');
 const err = (name: string, issue: string, status = 422) => ({ status, body: { name, message: issue, debug_id: id().toLowerCase(), details: [{ issue }] } });
 
-export function buildMockPayPal(opts: { clientId?: string; clientSecret?: string } = {}): FastifyInstance & { state: { captures: Map<string, Cap>; auths: Map<string, Auth>; refunds: { id: string; capture: string; amount: number; at: string; custom: string }[]; requests: number } } {
-  const app = Fastify() as unknown as FastifyInstance & { state: { captures: Map<string, Cap>; auths: Map<string, Auth>; refunds: { id: string; capture: string; amount: number; at: string; custom: string }[]; requests: number } };
+export type MockPayPal = FastifyInstance & { state: { captures: Map<string, Cap>; auths: Map<string, Auth>; orders: Map<string, Pending>; refunds: { id: string; capture: string; amount: number; at: string; custom: string }[]; requests: number } };
+
+export function buildMockPayPal(opts: { clientId?: string; clientSecret?: string } = {}): MockPayPal {
+  const app = Fastify() as unknown as MockPayPal;
   const cid = opts.clientId ?? 'mock-client', secret = opts.clientSecret ?? 'mock-secret';
   const tokens = new Set<string>();
   const idem = new Map<string, { status: number; body: unknown }>();
   const invoices = new Set<string>();
-  const state = { captures: new Map<string, Cap>(), auths: new Map<string, Auth>(), refunds: [] as { id: string; capture: string; amount: number; at: string; custom: string }[], requests: 0 };
+  const orders = new Map<string, Pending>();
+  const state = { captures: new Map<string, Cap>(), auths: new Map<string, Auth>(), refunds: [] as { id: string; capture: string; amount: number; at: string; custom: string }[], requests: 0, orders };
   app.decorate('state', state);
   app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string' }, (_r, body, done) => done(null, body));
 
@@ -63,6 +67,14 @@ export function buildMockPayPal(opts: { clientId?: string; clientSecret?: string
       const sumItems = (pu.items ?? []).reduce((s: number, it: any) => s + Math.round((money(it.unit_amount) ?? NaN) * 100) * Number(it.quantity), 0) / 100;
       if (itemTotal === null || Math.abs(itemTotal - amount) > 0.001) return err('UNPROCESSABLE_ENTITY', 'AMOUNT_MISMATCH');
       if (Math.round(sumItems * 100) !== Math.round(itemTotal * 100)) return err('UNPROCESSABLE_ENTITY', 'ITEM_TOTAL_MISMATCH');
+      // no payment source: an order waiting for the payer, nothing has moved yet
+      if (!b.payment_source) {
+        if (b.intent !== 'CAPTURE') return err('INVALID_REQUEST', 'INVALID_PARAMETER_VALUE', 400);
+        if (pu.invoice_id) { if (invoices.has(pu.invoice_id)) return err('UNPROCESSABLE_ENTITY', 'DUPLICATE_INVOICE_ID'); invoices.add(pu.invoice_id); }
+        const o: Pending = { id: id(), status: 'CREATED', amount, custom: pu.custom_id, invoice: pu.invoice_id };
+        orders.set(o.id, o);
+        return { status: 201, body: { id: o.id, status: 'CREATED' } };
+      }
       if (!b.payment_source?.card?.number || !/^\d{4}-\d{2}$/.test(b.payment_source.card.expiry ?? '')) return err('INVALID_REQUEST', 'MISSING_REQUIRED_PARAMETER', 400);
       if (pu.invoice_id) { if (invoices.has(pu.invoice_id)) return err('UNPROCESSABLE_ENTITY', 'DUPLICATE_INVOICE_ID'); invoices.add(pu.invoice_id); }
       const mock = req.headers['paypal-mock-response'];
@@ -81,6 +93,49 @@ export function buildMockPayPal(opts: { clientId?: string; clientSecret?: string
       return { status: 201, body: { id: oid, status: 'COMPLETED', purchase_units: [{ reference_id: pu.reference_id, payments: { captures: [{ id: c.id, status: 'COMPLETED', amount: pu.amount, custom_id: pu.custom_id }] } }] } };
     });
     return reply.code(r.status).send(r.body);
+  });
+
+  app.post('/v2/checkout/orders/:id/confirm-payment-source', async (req, reply) => {
+    const r = once(req as never, () => {
+      const o = orders.get((req.params as { id: string }).id);
+      if (!o) return err('RESOURCE_NOT_FOUND', 'INVALID_RESOURCE_ID', 404);
+      const card = (req.body as any)?.payment_source?.card;
+      if (!card?.number || !/^\d{4}-\d{2}$/.test(card.expiry ?? '')) return err('INVALID_REQUEST', 'MISSING_REQUIRED_PARAMETER', 400);
+      if (o.status === 'CREATED') o.status = 'APPROVED';
+      return { status: 200, body: { id: o.id, status: o.status } };
+    });
+    return reply.code(r.status).send(r.body);
+  });
+
+  const orderView = (o: Pending) => ({
+    id: o.id, status: o.status,
+    purchase_units: [{ custom_id: o.custom, amount: { currency_code: 'USD', value: o.amount.toFixed(2) }, payments: o.captureId ? { captures: [{ id: o.captureId, status: 'COMPLETED', amount: { currency_code: 'USD', value: o.amount.toFixed(2) } }] } : undefined }],
+  });
+
+  app.post('/v2/checkout/orders/:id/capture', async (req, reply) => {
+    const r = once(req as never, () => {
+      const o = orders.get((req.params as { id: string }).id);
+      if (!o) return err('RESOURCE_NOT_FOUND', 'INVALID_RESOURCE_ID', 404);
+      if (o.status === 'COMPLETED') return err('UNPROCESSABLE_ENTITY', 'ORDER_ALREADY_CAPTURED');
+      if (o.status !== 'APPROVED') return err('UNPROCESSABLE_ENTITY', 'ORDER_NOT_APPROVED');
+      const c: Cap = { id: id(), amount: o.amount, refunded: 0, custom: o.custom, invoice: o.invoice, at: new Date().toISOString() };
+      state.captures.set(c.id, c);
+      o.status = 'COMPLETED'; o.captureId = c.id;
+      return { status: 201, body: orderView(o) };
+    });
+    return reply.code(r.status).send(r.body);
+  });
+
+  app.get('/v2/checkout/orders/:id', async (req, reply) => {
+    const o = orders.get((req.params as { id: string }).id);
+    if (!o) return reply.code(404).send({ name: 'RESOURCE_NOT_FOUND', details: [{ issue: 'INVALID_RESOURCE_ID' }] });
+    return orderView(o);
+  });
+
+  // a stand-in for PayPal's signature check: the mock accepts one fixed signature, so tests can send a valid and a forged event
+  app.post('/v1/notifications/verify-webhook-signature', async (req) => {
+    const b = req.body as { transmission_sig?: string; webhook_id?: string };
+    return { verification_status: b.transmission_sig === 'mock-valid-signature' && b.webhook_id === 'WH-MOCK' ? 'SUCCESS' : 'FAILURE' };
   });
 
   app.post('/v2/payments/authorizations/:id/capture', async (req, reply) => {

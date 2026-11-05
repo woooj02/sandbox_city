@@ -1,10 +1,10 @@
 import type { AttackKind } from '@sandbox-city/core';
 /** Short monospace codes for each attack family, as they appear on the gate's trace. */
 export const ATTACK_CODE: Record<AttackKind, string> = {
-  prompt_injection: 'INJ', fake_store: 'FAKE', refund_abuse: 'RFND', card_testing: 'CARD', impersonation: 'SPOOF', fraud_ring: 'RING',
+  prompt_injection: 'INJ', fake_store: 'FAKE', refund_abuse: 'RFND', card_testing: 'CARD', impersonation: 'SPOOF', fraud_ring: 'RING', sleeper_store: 'SLEEP', subscription_trap: 'SUBS', triangulation: 'TRI',
 };
 export const ATTACK_SHORT: Record<AttackKind, string> = {
-  prompt_injection: 'Prompt injection', fake_store: 'Fake stores', refund_abuse: 'Refund abuse', card_testing: 'Stolen cards', impersonation: 'Impersonation', fraud_ring: 'Fraud ring',
+  prompt_injection: 'Prompt injection', fake_store: 'Fake stores', refund_abuse: 'Refund abuse', card_testing: 'Stolen cards', impersonation: 'Impersonation', fraud_ring: 'Fraud ring', sleeper_store: 'Sleeper store', subscription_trap: 'Subscription trap', triangulation: 'Triangulation',
 };
 export const money = (n: number, d = 0) => `$${(n ?? 0).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })}`;
 export const pct = (n: number) => `${((n ?? 0) * 100).toFixed(1)}%`;

@@ -1,0 +1,115 @@
+{
+  "model": "llama3.1:8b",
+  "budget": 10,
+  "runs": 3,
+  "trainDays": 2,
+  "testDays": 8,
+  "startKept": 91773,
+  "rows": [
+    {
+      "kind": "model",
+      "run": 1,
+      "rejected": 1,
+      "accepted": 0,
+      "devKept": 91030,
+      "testKept": 91773,
+      "testStolen": 9123,
+      "access": 0.8818286986975739,
+      "policy": "6a9b12fcbce71ab7",
+      "reasons": [
+        "idempotencyKeys is an invariant and stays on"
+      ]
+    },
+    {
+      "kind": "mutation",
+      "run": 1,
+      "rejected": 4,
+      "accepted": 1,
+      "devKept": 91173,
+      "testKept": 91663,
+      "testStolen": 9251,
+      "access": 0.8818824652963168,
+      "policy": "db9987c5e57fe9b9",
+      "reasons": [
+        "enforceMandate is an invariant and stays on",
+        "shipLock is an invariant and stays on",
+        "strictOrders is an invariant and stays on",
+        "strictOrders is an invariant and stays on"
+      ]
+    },
+    {
+      "kind": "model",
+      "run": 2,
+      "rejected": 4,
+      "accepted": 0,
+      "devKept": 91030,
+      "testKept": 91773,
+      "testStolen": 9123,
+      "access": 0.8818286986975739,
+      "policy": "6a9b12fcbce71ab7",
+      "reasons": [
+        "enforceMandate is an invariant and stays on",
+        "shipLock is an invariant and stays on",
+        "the patch changes nothing",
+        "idempotencyKeys is an invariant and stays on"
+      ]
+    },
+    {
+      "kind": "mutation",
+      "run": 2,
+      "rejected": 5,
+      "accepted": 2,
+      "devKept": 92246,
+      "testKept": 92846,
+      "testStolen": 8053,
+      "access": 0.8818286986975739,
+      "policy": "a668f65f6226ce12",
+      "reasons": [
+        "the patch changes nothing",
+        "the patch changes nothing",
+        "the patch changes nothing",
+        "the patch changes nothing",
+        "enforceMandate is an invariant and stays on"
+      ]
+    },
+    {
+      "kind": "model",
+      "run": 3,
+      "rejected": 6,
+      "accepted": 0,
+      "devKept": 91030,
+      "testKept": 91773,
+      "testStolen": 9123,
+      "access": 0.8818286986975739,
+      "policy": "6a9b12fcbce71ab7",
+      "reasons": [
+        "idempotencyKeys is an invariant and stays on",
+        "enforceMandate is an invariant and stays on",
+        "enforceMandate is an invariant and stays on",
+        "enforceMandate is an invariant and stays on",
+        "enforceMandate is an invariant and stays on",
+        "enforceMandate is an invariant and stays on"
+      ]
+    },
+    {
+      "kind": "mutation",
+      "run": 3,
+      "rejected": 7,
+      "accepted": 1,
+      "devKept": 91034,
+      "testKept": 91786,
+      "testStolen": 9123,
+      "access": 0.8819525661339627,
+      "policy": "995b684217b7a5fa",
+      "reasons": [
+        "enforceMandate is an invariant and stays on",
+        "shipLock is an invariant and stays on",
+        "shipLock is an invariant and stays on",
+        "enforceMandate is an invariant and stays on",
+        "strictOrders is an invariant and stays on",
+        "enforceMandate is an invariant and stays on",
+        "enforceMandate is an invariant and stays on"
+      ]
+    }
+  ]
+}

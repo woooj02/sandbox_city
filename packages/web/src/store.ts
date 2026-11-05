@@ -49,6 +49,8 @@ interface State {
   showReport: boolean;
   /** The hijack exhibit: the recorded toolkit run and the hijack-rate test. */
   showHijack: boolean;
+  /** The evidence exhibit: the benchmark, the proofs and the regressions. */
+  showEvidence: boolean;
   paypal: 'twin' | 'sandbox';
   runId: string | null;
   paypalCalls: PayPalCall[];
@@ -89,6 +91,7 @@ export const useStore = create<State>((set, get) => ({
   trace: [],
   showReport: false,
   showHijack: new URLSearchParams(location.search).has('hijack'),
+  showEvidence: new URLSearchParams(location.search).has('evidence'),
   paypal: 'twin',
   runId: null,
   paypalCalls: [],

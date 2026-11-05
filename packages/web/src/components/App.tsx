@@ -14,6 +14,7 @@ import { AutoTune } from './AutoTune';
 import { Cinema } from './Cinema';
 import { Forge } from './Forge';
 import { Hijack } from './Hijack';
+import { Evidence } from './Evidence';
 
 export function App() {
   const lanes = useStore((s) => s.lanes.length);
@@ -28,6 +29,8 @@ export function App() {
     const key = (e: KeyboardEvent) => {
       if ((e.key === 'h' || e.key === 'H') && !e.metaKey && !e.ctrlKey && !(e.target instanceof HTMLInputElement) && !useStore.getState().cinema.on)
         useStore.setState((s) => ({ showHijack: !s.showHijack }));
+      if ((e.key === 'e' || e.key === 'E') && !e.metaKey && !e.ctrlKey && !(e.target instanceof HTMLInputElement) && !useStore.getState().cinema.on)
+        useStore.setState((s) => ({ showEvidence: !s.showEvidence }));
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
@@ -48,6 +51,7 @@ export function App() {
       <AutoTune />
       <Forge />
       <Hijack />
+      <Evidence />
       <Cinema />
       <Welcome />
     </div>

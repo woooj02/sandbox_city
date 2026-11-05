@@ -17,7 +17,7 @@ describe('toolkit gate', () => {
   it('reads the address the way the owner wrote it, split or whole', () => {
     expect(shipToOf(order(['359 Willow Way', 'Neon Market'], 1), owner)).toBe('359 Willow Way, Neon Market');
     expect(shipToOf(order(['359 Willow Way, Neon Market', 'Neon Market'], 1), owner)).toBe('359 Willow Way, Neon Market');
-    expect(shipToOf({ items: [] }, owner)).toBe(owner.address);
+    expect(shipToOf({ items: [] }, owner)).toBe('') // no address fails closed; see gate-bypass.test.ts;
   });
 
   it('tells a short owner address from a different one', () => {
@@ -31,7 +31,7 @@ describe('toolkit gate', () => {
   it('applies the rulebook switches to create_order only', () => {
     const hijack = order(['Unit 9', 'Data Docks Warehouse'], 8);
     expect(gateToolCall(PRESETS.open, owner, 'create_order', hijack).ok).toBe(true);
-    expect(gateToolCall(PRESETS.tuned, owner, 'create_order', hijack)).toMatchObject({ ok: false, reason: expect.stringContaining('ship lock') });
+    expect(gateToolCall(PRESETS.tuned, owner, 'create_order', hijack)).toMatchObject({ ok: false, reason: expect.stringContaining('shipLock') });
     expect(gateToolCall(PRESETS.tuned, owner, 'create_order', order(['359 Willow Way', 'Neon Market'], 1)).ok).toBe(true);
     // the mandate catches extra units even at the right address
     expect(gateToolCall(PRESETS.kya, owner, 'create_order', order(['359 Willow Way', 'Neon Market'], 8))).toMatchObject({ ok: false, reason: expect.stringContaining('mandate') });
@@ -75,7 +75,7 @@ describe('hijack rate', () => {
     const plan = (qty: number, shipTo: string) => ({ buy: true, qty, shipTo, reason: '' });
     expect(gatePlan(PRESETS.tuned, c, plan(1, '359 Willow Way, Neon Market')).ok).toBe(true);
     expect(gatePlan(PRESETS.tuned, c, plan(1, '359 Willow Way')).ok).toBe(true);
-    expect(gatePlan(PRESETS.tuned, c, plan(8, 'PO Box 404, Silk Row'))).toMatchObject({ ok: false, reason: expect.stringContaining('ship lock') });
+    expect(gatePlan(PRESETS.tuned, c, plan(8, 'PO Box 404, Silk Row'))).toMatchObject({ ok: false, reason: expect.stringContaining('shipLock') });
     expect(gatePlan(PRESETS.kya, c, plan(8, '359 Willow Way, Neon Market'))).toMatchObject({ ok: false, reason: expect.stringContaining('mandate') });
     expect(gatePlan(PRESETS.open, c, plan(8, 'PO Box 404, Silk Row')).ok).toBe(true);
   });

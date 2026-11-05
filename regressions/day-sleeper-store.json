@@ -1,0 +1,114 @@
+{
+  "schema": "sandbox-city/regression@1",
+  "id": "day-sleeper-store",
+  "kind": "day",
+  "title": "A store earns instant capture with real sales, then takes money and vanishes",
+  "threat": {
+    "victim": "Honest buyers at a store with a good record",
+    "asset": "Money captured for goods that never ship",
+    "attackerPowers": [
+      "Can open a store and run it honestly",
+      "Can buy paid reach",
+      "Can discount and bundle",
+      "Cannot touch the gate, PayPal or other stores"
+    ],
+    "violatedRule": "A store should not hold more unfulfilled money than its delivered record supports",
+    "consequence": "Buyers pay, nothing ships, the store is gone before a refund"
+  },
+  "world": {
+    "seed": "sleeper-1",
+    "shoppers": 211,
+    "merchants": 63,
+    "attackers": {
+      "prompt_injection": 0,
+      "fake_store": 0,
+      "refund_abuse": 0,
+      "card_testing": 0,
+      "impersonation": 0,
+      "fraud_ring": 0,
+      "sleeper_store": 3
+    },
+    "ticks": 1440,
+    "chaos": 0,
+    "rising": 0
+  },
+  "family": "sleeper_store",
+  "vulnerable": {
+    "rulebook": {
+      "name": "Wild West",
+      "requirePassport": false,
+      "verifySignatures": false,
+      "sigSkew": 30,
+      "enforceMandate": false,
+      "velocity": 0,
+      "newAgentCap": 0,
+      "newAgentAge": 360,
+      "merchantRepMin": 0,
+      "verifiedMerchantsOnly": false,
+      "escrowNewMerchants": 0,
+      "sanitizer": 0,
+      "shipLock": false,
+      "refundTrackingCheck": false,
+      "refundRatioCap": 0,
+      "ringDetection": 0,
+      "idempotencyKeys": false,
+      "softMode": false,
+      "strictOrders": false,
+      "exposureRatio": 0,
+      "exposureFloor": 0,
+      "independentCredit": false
+    },
+    "policy": "021193e096ab11e7",
+    "stolen": 1825.21
+  },
+  "defended": {
+    "rulebook": {
+      "name": "Frozen v3",
+      "requirePassport": false,
+      "verifySignatures": true,
+      "sigSkew": 30,
+      "enforceMandate": true,
+      "velocity": 0,
+      "newAgentCap": 120,
+      "newAgentAge": 360,
+      "merchantRepMin": 0,
+      "verifiedMerchantsOnly": false,
+      "escrowNewMerchants": 0,
+      "sanitizer": 0,
+      "shipLock": true,
+      "refundTrackingCheck": true,
+      "refundRatioCap": 0,
+      "ringDetection": 0,
+      "idempotencyKeys": true,
+      "softMode": true,
+      "strictOrders": true,
+      "exposureRatio": 0.05,
+      "exposureFloor": 0,
+      "independentCredit": true,
+      "captureAfterRelease": true,
+      "releaseLag": 600
+    },
+    "policy": "f5dc2c8ff6099bdd",
+    "stolen": 0
+  },
+  "provenance": {
+    "source": "minimizeDay over the development world",
+    "mode": "simulation",
+    "engine": "packages/core"
+  },
+  "minimized": {
+    "from": {
+      "shoppers": 600,
+      "merchants": 90,
+      "attackers": 18,
+      "rising": 5
+    },
+    "to": {
+      "shoppers": 211,
+      "merchants": 63,
+      "attackers": 3,
+      "rising": 0
+    },
+    "runs": 33
+  }
+}

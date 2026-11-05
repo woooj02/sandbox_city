@@ -1,0 +1,55 @@
+{
+  "mode": "paypal-sandbox",
+  "recordedAt": "2026-11-05T17:01:14.019Z",
+  "policy": "f5dc2c8ff6099bdd",
+  "evaluator": "gate-2",
+  "charges": null,
+  "rows": [
+    {
+      "label": "hijacked address",
+      "kind": "exploit",
+      "decision": "challenge",
+      "reason": "shipLock: ship-to differs from owner address",
+      "policy": "f5dc2c8ff6099bdd",
+      "replay": false,
+      "payment": null
+    },
+    {
+      "label": "hidden shipping",
+      "kind": "exploit",
+      "decision": "challenge",
+      "reason": "enforceMandate: $5080 > mandate $100",
+      "policy": "f5dc2c8ff6099bdd",
+      "replay": false,
+      "payment": null
+    },
+    {
+      "label": "honest purchase",
+      "kind": "honest",
+      "decision": "allow",
+      "reason": null,
+      "policy": "f5dc2c8ff6099bdd",
+      "replay": false,
+      "payment": {
+        "state": "captured",
+        "orderId": "5PS270862R089845E",
+        "captureId": "19209305DK488502D",
+        "amount": 80
+      }
+    },
+    {
+      "label": "the same purchase retried",
+      "kind": "retry",
+      "decision": "allow",
+      "reason": null,
+      "policy": "f5dc2c8ff6099bdd",
+      "replay": true,
+      "payment": {
+        "state": "captured",
+        "orderId": "5PS270862R089845E",
+        "captureId": "19209305DK488502D",
+        "amount": 80
+      }
+    }
+  ]
+}

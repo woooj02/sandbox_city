@@ -4,10 +4,13 @@ export type AttackKind =
   | 'refund_abuse'
   | 'card_testing'
   | 'impersonation'
-  | 'fraud_ring';
+  | 'fraud_ring'
+  | 'sleeper_store'
+  | 'subscription_trap'
+  | 'triangulation';
 
 export const ATTACK_KINDS: AttackKind[] = [
-  'prompt_injection', 'fake_store', 'refund_abuse', 'card_testing', 'impersonation', 'fraud_ring',
+  'prompt_injection', 'fake_store', 'refund_abuse', 'card_testing', 'impersonation', 'fraud_ring', 'sleeper_store', 'subscription_trap', 'triangulation',
 ];
 
 export const ATTACK_LABEL: Record<AttackKind, string> = {
@@ -17,6 +20,9 @@ export const ATTACK_LABEL: Record<AttackKind, string> = {
   card_testing: 'Stolen Card Testing',
   impersonation: 'Agent Impersonation',
   fraud_ring: 'Fraud Ring',
+  sleeper_store: 'Sleeper Store',
+  subscription_trap: 'Subscription Trap',
+  triangulation: 'Triangulation',
 };
 
 export type Decision = 'allow' | 'challenge' | 'block';
@@ -56,12 +62,16 @@ export interface Merchant extends Vec {
   shipRate: number;
   priceFactor: number;
   closed?: boolean;
+  /** A sleeper store still earning its record: it really ships, so its orders are ordinary commerce until it turns. */
+  warming?: boolean;
 }
 
 export interface Mandate {
   /** Max amount per order the human owner authorised (AP2-style intent mandate). */
   maxPerOrder: number;
   categories: string[];
+  /** Max units the owner asked for, when the mandate comes from one specific request. */
+  maxQty?: number;
 }
 
 /** KYA "agent passport": binds an agent key to a verified human owner (Log In with PayPal). */
@@ -179,19 +189,37 @@ export type SimEvent =
 
 export interface KindTally { attempts: number; attempted: number; prevented: number; leaked: number }
 
+/** Honest buyers grouped by who a blunt rule is most likely to hurt. */
+export type Cohort = 'new_store' | 'gift' | 'repeat' | 'regular';
+export const COHORTS: Cohort[] = ['new_store', 'gift', 'repeat', 'regular'];
+export interface CohortTally { attempts: number; completed: number; refused: number; value: number; refusedValue: number }
+
+/** One attack family's books. take: money it kept. cost: what it paid to get there (goods, parcels, fees). */
+export interface AttackerBook { take: number; cost: number }
+
 export interface Metrics {
   t: number;
   honest: { attempts: number; completed: number; blocked: number; abandoned: number; challenged: number; declined: number; gmv: number; blockedValue: number;
     /** Honest orders challenged to the owner and never approved. */
-    abandonedValue: number };
+    abandonedValue: number;
+    /** Honest value a carrier actually scanned and nobody refunded: commerce that finished, not just commerce that was paid for. */
+    fulfilledValue: number;
+    /** Honest money authorized and waiting on a scan, in dollar-minutes: the capital a hold locks up. */
+    heldDollarMinutes: number };
   fraud: { attempts: number; attempted: number; prevented: number; leaked: number; byKind: Record<AttackKind, KindTally> };
   refunds: { legitApproved: number; legitDenied: number; abuseApproved: number; abuseDenied: number };
   chaos: { faults: number; recovered: number; duplicateCharges: number; duplicateValue: number };
+  cohorts: Record<Cohort, CohortTally>;
+  attackers: Record<AttackKind, AttackerBook>;
+  /** The largest captured-and-unscanned balance any store reached, and the bound the rulebook set for it at that moment. */
+  exposure: { peak: number; worstOverBound: number };
+  /** True once every order has run to its terminal state (see World.settle). */
+  settled: boolean;
   /** % of attempted fraud $ stopped. */
   safety: number;
   /** % of honest purchase attempts that completed. */
   access: number;
-  /** honest GMV - leaked harm - friction cost. */
+  /** Honest GMV, minus money stolen, minus double charges. Sales the rules turned away never reach GMV, so they lower this too. */
   netValue: number;
   orders: number;
 }

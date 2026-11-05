@@ -1,0 +1,56 @@
+{
+  "policy": {
+    "name": "Frozen v2",
+    "requirePassport": false,
+    "verifySignatures": true,
+    "sigSkew": 30,
+    "enforceMandate": true,
+    "velocity": 8,
+    "newAgentCap": 110,
+    "newAgentAge": 360,
+    "merchantRepMin": 0,
+    "verifiedMerchantsOnly": false,
+    "escrowNewMerchants": 840,
+    "sanitizer": 0.15,
+    "shipLock": true,
+    "refundTrackingCheck": true,
+    "refundRatioCap": 0,
+    "ringDetection": 0,
+    "idempotencyKeys": true,
+    "softMode": true,
+    "strictOrders": true,
+    "exposureRatio": 0.05,
+    "exposureFloor": 0,
+    "independentCredit": true,
+    "releaseLag": 720
+  },
+  "policyId": "db609437ac0c792b",
+  "evaluator": "gate-2",
+  "tunedOn": {
+    "seeds": [
+      "dev-1",
+      "dev-2",
+      "dev-3",
+      "dev-4"
+    ],
+    "world": "DEV_WORLD_V2: DEV_WORLD with sleeper stores using wash 0.5 and empty box 0.5; owner mandate, ship lock, strict orders and idempotency fixed on",
+    "rulebooksTried": 140
+  },
+  "train": {
+    "key": "requirePassport=false&verifySignatures=true&enforceMandate=true&shipLock=true&velocity=8&newAgentCap=110&merchantRepMin=0&verifiedMerchantsOnly=false&escrowNewMerchants=840&sanitizer=0.15&refundTrackingCheck=true&refundRatioCap=0&ringDetection=0&idempotencyKeys=true&softMode=true&strictOrders=true&exposureRatio=0.05&exposureFloor=0&independentCredit=true&releaseLag=720",
+    "name": "Tuned",
+    "stolen": 6709.8,
+    "duplicate": 0,
+    "honestLost": 12531.59,
+    "gmv": 110978.02,
+    "net": 104268.23,
+    "safety": 0.8632814990258768,
+    "access": 0.9532090103491415,
+    "fraudAttempted": 48758.91,
+    "fulfilled": 102971.55,
+    "kept": 96261.76
+  },
+  "sources": {
+    "policy.ts": "ab5144a203ceb694"
+  }
+}

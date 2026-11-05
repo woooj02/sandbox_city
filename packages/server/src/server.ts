@@ -10,6 +10,7 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { SimRunner, round2, type FromSim, type SimEvent, type ToSim } from '@sandbox-city/core';
+import { registerCheckout } from './checkout-api';
 import { SandboxRails, type CallLog } from './paypal';
 
 export interface ServerOptions {
@@ -18,6 +19,8 @@ export interface ServerOptions {
   liveSample?: number;
   staticDir?: string;
   logger?: boolean;
+  /** Where durable payments are journaled. */
+  journalPath?: string;
 }
 
 /** What the sim says moved on the sandbox lane, summed the same way the twin ledger is. */
@@ -49,6 +52,16 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
   let sessions = 0, liveSessions = 0;
 
   await app.register(websocket);
+
+  const checkout = registerCheckout(app, {
+    rails: makeRails, journalPath: opts.journalPath ?? process.env.PAYMENT_JOURNAL ?? '.data/payments.log', webhookId: process.env.PAYPAL_WEBHOOK_ID,
+    log: (m) => app.log.info(m),
+  });
+  // whatever a previous process left open is finished before this one takes traffic
+  app.addHook('onReady', async () => {
+    const done = await checkout.recover();
+    if (done.length) app.log.info(`recovered ${done.length} payments: ${done.map((r) => `${r.key} ${r.state}`).join(', ')}`);
+  });
 
   app.get('/api/health', async () => {
     const probe = makeRails();

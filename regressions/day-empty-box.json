@@ -1,0 +1,118 @@
+{
+  "schema": "sandbox-city/regression@1",
+  "id": "day-empty-box",
+  "kind": "day",
+  "title": "A store ships empty parcels, so the carrier scan releases the hold. The first repair failed this case",
+  "threat": {
+    "victim": "Honest buyers at a store that scans empty parcels",
+    "asset": "Money released on a scan that proves nothing",
+    "attackerPowers": [
+      "Everything a sleeper store can do",
+      "Can ship an empty parcel the carrier really scans"
+    ],
+    "violatedRule": "Held money is released only after the buyer has had time to complain",
+    "consequence": "The exposure hold is released and the store takes the money"
+  },
+  "world": {
+    "seed": "empty-1",
+    "shoppers": 410,
+    "merchants": 6,
+    "attackers": {
+      "prompt_injection": 2,
+      "fake_store": 3,
+      "refund_abuse": 3,
+      "card_testing": 4,
+      "impersonation": 2,
+      "fraud_ring": 0,
+      "sleeper_store": 3
+    },
+    "ticks": 1440,
+    "chaos": 0,
+    "rising": 0,
+    "genomes": {
+      "sleeper_store": {
+        "emptyBox": 0.95
+      }
+    }
+  },
+  "family": "sleeper_store",
+  "vulnerable": {
+    "rulebook": {
+      "name": "Frozen v2",
+      "requirePassport": false,
+      "verifySignatures": true,
+      "sigSkew": 30,
+      "enforceMandate": true,
+      "velocity": 8,
+      "newAgentCap": 110,
+      "newAgentAge": 360,
+      "merchantRepMin": 0,
+      "verifiedMerchantsOnly": false,
+      "escrowNewMerchants": 840,
+      "sanitizer": 0.15,
+      "shipLock": true,
+      "refundTrackingCheck": true,
+      "refundRatioCap": 0,
+      "ringDetection": 0,
+      "idempotencyKeys": true,
+      "softMode": true,
+      "strictOrders": true,
+      "exposureRatio": 0.05,
+      "exposureFloor": 0,
+      "independentCredit": true,
+      "releaseLag": 720
+    },
+    "policy": "db609437ac0c792b",
+    "stolen": 8814.65
+  },
+  "defended": {
+    "rulebook": {
+      "name": "Frozen v3",
+      "requirePassport": false,
+      "verifySignatures": true,
+      "sigSkew": 30,
+      "enforceMandate": true,
+      "velocity": 0,
+      "newAgentCap": 120,
+      "newAgentAge": 360,
+      "merchantRepMin": 0,
+      "verifiedMerchantsOnly": false,
+      "escrowNewMerchants": 0,
+      "sanitizer": 0,
+      "shipLock": true,
+      "refundTrackingCheck": true,
+      "refundRatioCap": 0,
+      "ringDetection": 0,
+      "idempotencyKeys": true,
+      "softMode": true,
+      "strictOrders": true,
+      "exposureRatio": 0.05,
+      "exposureFloor": 0,
+      "independentCredit": true,
+      "captureAfterRelease": true,
+      "releaseLag": 600
+    },
+    "policy": "f5dc2c8ff6099bdd",
+    "stolen": 439.83
+  },
+  "provenance": {
+    "source": "minimizeDay over the held-out world that beat the first two rulebooks",
+    "mode": "simulation",
+    "engine": "packages/core"
+  },
+  "minimized": {
+    "from": {
+      "shoppers": 600,
+      "merchants": 90,
+      "attackers": 18,
+      "rising": 5
+    },
+    "to": {
+      "shoppers": 410,
+      "merchants": 6,
+      "attackers": 17,
+      "rising": 0
+    },
+    "runs": 147
+  }
+}

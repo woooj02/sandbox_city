@@ -35,6 +35,7 @@ export function TopBar() {
         </button>
       )}
       <ModelBadge />
+      <button className="rail-badge evidence" title="The failure, what stopping it costs, what still gets through, and the money across a crash (E)" onClick={() => useStore.setState({ showEvidence: true })}><i />EVIDENCE</button>
       <button className="rail-badge hijack" title="A real model talked into an attacker's order on the PayPal sandbox, and what the gate did (H)" onClick={() => useStore.setState({ showHijack: true })}><i />◆ THE HIJACK</button>
       <div className="clockbox">
         <div className="clock-big">DAY 1 · {clock(t)}</div>

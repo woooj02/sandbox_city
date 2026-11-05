@@ -1,0 +1,47 @@
+{
+  "mode": "paypal-sandbox",
+  "run": "crash-mw3sp98k",
+  "amount": 64.2,
+  "recordedAt": "2026-11-05T17:04:31.090Z",
+  "steps": [
+    {
+      "step": "process killed",
+      "detail": "signal SIGKILL, journal stops at \"capturing\", order 0PP58482TP8191448"
+    },
+    {
+      "step": "PayPal says",
+      "detail": "order COMPLETED, capture 77J27120C5875945R: the money moved and the process never learned it"
+    },
+    {
+      "step": "restart",
+      "detail": "read the order back by id, state captured, capture 77J27120C5875945R, no new charge"
+    },
+    {
+      "step": "control",
+      "detail": "a client with no journal retried: new order 03Y79905B01792233, new capture 81C16860CF7423612, the buyer is charged twice"
+    }
+  ],
+  "crash": {
+    "signal": "SIGKILL",
+    "lastOnDisk": "capturing",
+    "orderId": "0PP58482TP8191448"
+  },
+  "readBack": {
+    "status": "COMPLETED",
+    "captureId": "77J27120C5875945R"
+  },
+  "recovered": {
+    "state": "captured",
+    "captureId": "77J27120C5875945R",
+    "recovered": true
+  },
+  "charges": {
+    "before": 1,
+    "afterRecovery": 1,
+    "afterControl": 2
+  },
+  "control": {
+    "orderId": "03Y79905B01792233",
+    "captureId": "81C16860CF7423612"
+  }
+}

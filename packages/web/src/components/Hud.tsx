@@ -1,4 +1,7 @@
-import { ATTACK_KINDS, Metrics } from '@sandbox-city/core';
+import { ATTACK_KINDS, DEFAULT_CONFIG, Metrics } from '@sandbox-city/core';
+
+/** Families the default day runs. The others appear on the board only when a world has them. */
+const STOCK_ATTACKERS = DEFAULT_CONFIG.attackers;
 import { useStore } from '../store';
 import { ATTACK_CODE, ATTACK_SHORT, LANE_NAMES, money, pct } from './meta';
 
@@ -31,7 +34,7 @@ function AttackBoard({ m }: { m: Metrics }) {
   const max = Math.max(1, ...ATTACK_KINDS.map((k) => m.fraud.byKind[k].attempted));
   return (
     <div className="board">
-      {ATTACK_KINDS.map((k) => {
+      {ATTACK_KINDS.filter((k) => k in STOCK_ATTACKERS || m.fraud.byKind[k].attempted > 0).map((k) => {
         const t = m.fraud.byKind[k];
         const leakedW = (Math.max(0, t.leaked) / max) * 100, prevW = (t.prevented / max) * 100;
         return (

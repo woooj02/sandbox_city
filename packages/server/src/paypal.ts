@@ -15,6 +15,8 @@ export interface PayPalConfig {
   /** Sandbox business accounts that receive payments, assigned to city stores round-robin. */
   payeeEmails?: string[];
   card?: { number: string; expiry: string; securityCode: string };
+  /** Keeps idempotency keys and invoice ids stable across restarts. Durable payments must set this. */
+  runId?: string;
   maxConcurrent?: number;
   fetchImpl?: typeof fetch;
 }
@@ -31,7 +33,7 @@ export class SandboxRails implements Rails {
   readonly calls: CallLog[] = [];
   private f: typeof fetch;
   /** Namespaces idempotency keys and invoice ids per run, so replaying a seed never collides at PayPal. */
-  runId = `r${Date.now().toString(36)}`;
+  runId: string;
   onCall?: (c: CallLog) => void;
   /** Fired as a request leaves for PayPal, so a UI can show the call in flight. */
   onStart?: (c: { method: string; path: string; requestId?: string }) => void;
@@ -42,13 +44,14 @@ export class SandboxRails implements Rails {
 
   constructor(private cfg: PayPalConfig) {
     this.base = cfg.base ?? 'https://api-m.sandbox.paypal.com';
+    this.runId = cfg.runId ?? `r${Date.now().toString(36)}`;
     this.f = cfg.fetchImpl ?? fetch;
   }
 
   static fromEnv(env = process.env): SandboxRails | null {
     if (!env.PAYPAL_CLIENT_ID || !env.PAYPAL_CLIENT_SECRET) return null;
     return new SandboxRails({
-      clientId: env.PAYPAL_CLIENT_ID, clientSecret: env.PAYPAL_CLIENT_SECRET, base: env.PAYPAL_API_BASE,
+      clientId: env.PAYPAL_CLIENT_ID, clientSecret: env.PAYPAL_CLIENT_SECRET, base: env.PAYPAL_API_BASE, runId: env.PAYPAL_RUN_ID,
       payeeEmails: env.PAYPAL_PAYEE_EMAILS?.split(',').map((s) => s.trim()).filter(Boolean),
       card: env.PAYPAL_TEST_CARD ? { number: env.PAYPAL_TEST_CARD, expiry: env.PAYPAL_TEST_CARD_EXPIRY ?? '2030-12', securityCode: env.PAYPAL_TEST_CARD_CVV ?? '123' } : undefined,
     });
@@ -185,6 +188,56 @@ export class SandboxRails implements Rails {
     return { refundId: json.id, status: json.status };
   }
 
+  get isSandbox() { return this.base.includes('paypal.com'); }
+
+  // ── the durable path (payments.ts): create, confirm and capture are separate, so money only moves on a known order id ──
+
+  async createPending(input: CreateOrderInput, requestId: string) {
+    const { payment_source: _source, ...body } = SandboxRails.orderBody(input, this.payeeFor(input.payeeMerchantId), this.cfg.card, this.runId, requestId);
+    const { status, json } = await this.call<PayPalOrder & PayPalError>('POST', '/v2/checkout/orders', body, requestId);
+    if (status >= 300) throw new RailsError(status, json.details?.[0]?.issue ?? json.name ?? 'ERROR', status >= 500);
+    return { orderId: json.id };
+  }
+
+  /** The owner's wallet approves the order: the sandbox test card, confirmed as its payment source. */
+  async confirmSource(orderId: string, requestId: string) {
+    const card = this.cfg.card;
+    const { status, json } = await this.call<{ status?: string } & PayPalError>('POST', `/v2/checkout/orders/${orderId}/confirm-payment-source`, {
+      payment_source: { card: { number: card?.number ?? '4111111111111111', expiry: card?.expiry ?? '2030-12', security_code: card?.securityCode ?? '123', name: 'Agent Owner' } },
+    }, requestId);
+    if (status >= 300) throw new RailsError(status, json.details?.[0]?.issue ?? json.name ?? 'ERROR', status >= 500);
+    return { status: json.status ?? 'UNKNOWN' };
+  }
+
+  async captureOrder(orderId: string, requestId: string) {
+    const { status, json } = await this.call<PayPalOrder & PayPalError>('POST', `/v2/checkout/orders/${orderId}/capture`, {}, requestId);
+    if (status >= 300) throw new RailsError(status, json.details?.[0]?.issue ?? json.name ?? 'ERROR', status >= 500);
+    const cap = json.purchase_units?.[0]?.payments?.captures?.[0];
+    if (cap?.id && cap.status !== 'DECLINED') this.moves.set(cap.id, { kind: 'capture', id: cap.id, amount: Number(cap.amount?.value ?? 0) });
+    return { captureId: cap?.id, status: cap?.status ?? json.status, amount: cap?.amount ? Number(cap.amount.value) : undefined };
+  }
+
+  /** The order as PayPal has it now. This is what a restart believes. */
+  async readOrder(orderId: string) {
+    const { status, json } = await this.call<PayPalOrder>('GET', `/v2/checkout/orders/${orderId}`);
+    if (status === 404) return null;
+    if (status >= 300) throw new RailsError(status, 'READ_BACK_FAILED', status >= 500);
+    const cap = json.purchase_units?.[0]?.payments?.captures?.[0];
+    const value = json.purchase_units?.[0]?.amount?.value;
+    const captureCount = (json.purchase_units ?? []).flatMap((u) => u.payments?.captures ?? []).filter((c) => c.status === 'COMPLETED').length;
+    return { status: json.status, captureCount, orderAmount: value != null ? Number(value) : undefined, captureId: cap?.id, captureStatus: cap?.status, amount: cap?.amount ? Number(cap.amount.value) : undefined, customId: json.purchase_units?.[0]?.custom_id };
+  }
+
+  /** PayPal's own check of a webhook's signature. Nothing is applied to a payment unless this says SUCCESS. */
+  async verifyWebhook(headers: Record<string, string | string[] | undefined>, event: unknown, webhookId: string): Promise<boolean> {
+    const h = (k: string) => { const v = headers[k]; return Array.isArray(v) ? v[0] : v; };
+    const { status, json } = await this.call<{ verification_status?: string }>('POST', '/v1/notifications/verify-webhook-signature', {
+      auth_algo: h('paypal-auth-algo'), cert_url: h('paypal-cert-url'), transmission_id: h('paypal-transmission-id'), transmission_sig: h('paypal-transmission-sig'),
+      transmission_time: h('paypal-transmission-time'), webhook_id: webhookId, webhook_event: event,
+    });
+    return status < 300 && json.verification_status === 'SUCCESS';
+  }
+
   /** Read back a capture or refund straight from PayPal (no reporting lag). */
   async getPayment(kind: 'capture' | 'refund', id: string): Promise<{ id: string; status: string; amount: number } | null> {
     const { status, json } = await this.call<{ id: string; status: string; amount?: { value: string } }>('GET', `/v2/payments/${kind}s/${id}`);
@@ -220,6 +273,6 @@ const DECLINES = new Set(['INSTRUMENT_DECLINED', 'TRANSACTION_REFUSED', 'CARD_EX
 interface PayPalError { name?: string; message?: string; debug_id?: string; details?: { issue: string; description?: string }[] }
 interface PayPalOrder {
   id: string; status: string;
-  purchase_units?: { payments?: { captures?: { id: string; status: string; status_details?: { reason: string } }[]; authorizations?: { id: string; status: string }[] } }[];
+  purchase_units?: { custom_id?: string; amount?: { value: string }; payments?: { captures?: { id: string; status: string; amount?: { value: string }; status_details?: { reason: string } }[]; authorizations?: { id: string; status: string }[] } }[];
 }
 export interface TxnDetail { transaction_info: { transaction_id: string; transaction_event_code: string; transaction_amount: { value: string; currency_code: string }; custom_field?: string; invoice_id?: string; transaction_status: string } }

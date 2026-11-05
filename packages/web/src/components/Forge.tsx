@@ -57,7 +57,7 @@ const Gain = ({ data }: ICellRendererParams<KRow>) => {
 
 /** One row per attack family: what the stock crews stole, what the forged crews steal, and the tactics that did it. */
 function ForgeGrid({ best, base }: { best: ForgeScore; base: ForgeScore }) {
-  const rows = useMemo<KRow[]>(() => ATTACK_KINDS.map((k) => {
+  const rows = useMemo<KRow[]>(() => ATTACK_KINDS.filter((k) => base.byKind[k] || best.byKind[k]).map((k) => {
     const tactics = describeGenome(k, best.genomes[k] ?? {});
     return { kind: k, code: ATTACK_CODE[k], family: ATTACK_SHORT[k], was: base.byKind[k], now: best.byKind[k], gain: best.byKind[k] - base.byKind[k], tactics: tactics.length ? tactics.join(' · ') : 'no better tactic found' };
   }), [best, base]);

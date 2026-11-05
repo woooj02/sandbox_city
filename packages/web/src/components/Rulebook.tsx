@@ -52,7 +52,7 @@ export function Rulebook() {
               ) : (
                 <div className="slider">
                   <div className="slider-head"><span>{r.label}</span><b>{(v as number) === 0 ? 'off' : r.key === 'merchantRepMin' || r.key === 'sanitizer' || r.key === 'refundRatioCap' || r.key === 'ringDetection' ? (v as number).toFixed(2) : v}</b></div>
-                  <input type="range" min={r.min} max={r.max} step={r.step} value={v as number} onChange={(e) => update({ [r.key]: Number(e.target.value) } as Partial<Policy>)} />
+                  <input type="range" min={r.min} max={r.max} step={r.step} value={(v as number | undefined) ?? 0} onChange={(e) => update({ [r.key]: Number(e.target.value) } as Partial<Policy>)} />
                 </div>
               )}
               <div className="blurb">{r.blurb}</div>

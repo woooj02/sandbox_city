@@ -1,0 +1,55 @@
+{
+  "policy": {
+    "name": "Frozen",
+    "requirePassport": false,
+    "verifySignatures": true,
+    "sigSkew": 30,
+    "enforceMandate": false,
+    "velocity": 0,
+    "newAgentCap": 90,
+    "newAgentAge": 360,
+    "merchantRepMin": 0,
+    "verifiedMerchantsOnly": false,
+    "escrowNewMerchants": 840,
+    "sanitizer": 0,
+    "shipLock": true,
+    "refundTrackingCheck": true,
+    "refundRatioCap": 0,
+    "ringDetection": 0,
+    "idempotencyKeys": true,
+    "softMode": true,
+    "strictOrders": true,
+    "exposureRatio": 0.1,
+    "exposureFloor": 0,
+    "independentCredit": false
+  },
+  "policyId": "dbde3259db4a3156",
+  "evaluator": "gate-2",
+  "tunedOn": {
+    "seeds": [
+      "dev-1",
+      "dev-2",
+      "dev-3",
+      "dev-4"
+    ],
+    "world": "DEV_WORLD: six stock families, 3 sleeper stores, 5 rising stores",
+    "rulebooksTried": 148
+  },
+  "train": {
+    "key": "requirePassport=false&verifySignatures=true&enforceMandate=false&shipLock=true&velocity=0&newAgentCap=90&merchantRepMin=0&verifiedMerchantsOnly=false&escrowNewMerchants=840&sanitizer=0&refundTrackingCheck=true&refundRatioCap=0&ringDetection=0&idempotencyKeys=true&softMode=true&strictOrders=true&exposureRatio=0.1&exposureFloor=0&independentCredit=false",
+    "name": "Tuned",
+    "stolen": 6202.33,
+    "duplicate": 0,
+    "honestLost": 5491.39,
+    "gmv": 118915,
+    "net": 112712.68,
+    "safety": 0.8738845110305754,
+    "access": 0.9822292794561407,
+    "fraudAttempted": 49082.88,
+    "fulfilled": 110133.91,
+    "kept": 103931.58
+  },
+  "sources": {
+    "policy.ts": "9cea3835ffde93ee"
+  }
+}

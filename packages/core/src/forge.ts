@@ -22,6 +22,14 @@ export interface ForgeOptions {
   world?: Partial<WorldConfig>;
   /** Tactics to start from (e.g. the last forge round's), defaults otherwise. */
   start?: Genomes;
+  /** What the attackers want: money past the gate, or money kept after what the attack cost them. */
+  objective?: 'harm' | 'profit';
+  /** Run each day to its terminal state before scoring. */
+  settle?: boolean;
+  /** Genes the attackers may not change in this run: capabilities outside this round's declared threat model. */
+  locked?: string[];
+  /** 'evolve' keeps per-family champions and mutates them; 'random' draws fresh tactics, the baseline for a fair budget. */
+  strategy?: 'evolve' | 'random';
 }
 
 export interface ForgeScore { genomes: Genomes; stolen: number; byKind: KindHarm; attempted: number }
@@ -34,10 +42,21 @@ const BUDGET = new Set(['interval']);
 /** Genes that are counts or durations, not probabilities. */
 const isInt = (lo: number, hi: number) => Number.isInteger(lo) && Number.isInteger(hi) && hi > 1;
 
-export function mutateGenome(kind: AttackKind, g: Record<string, number>, r: Rng): Record<string, number> {
+/** Fresh tactics for one family, inside its declared space. */
+export function randomGenome(kind: AttackKind, g: Record<string, number>, r: Rng, locked: string[] = []): Record<string, number> {
+  const space = GENOME_SPACE[kind], q = { ...g };
+  for (const k of Object.keys(space)) {
+    if (BUDGET.has(k) || locked.includes(k)) continue;
+    const [lo, hi] = space[k], v = lo + r.next() * (hi - lo);
+    q[k] = isInt(lo, hi) ? Math.round(v) : round2(v);
+  }
+  return q;
+}
+
+export function mutateGenome(kind: AttackKind, g: Record<string, number>, r: Rng, locked: string[] = []): Record<string, number> {
   const space = GENOME_SPACE[kind];
   const q = { ...g };
-  const keys = Object.keys(space).filter((k) => !BUDGET.has(k));
+  const keys = Object.keys(space).filter((k) => !BUDGET.has(k) && !locked.includes(k));
   const n = 1 + r.int(0, 1);
   for (let i = 0; i < n; i++) {
     const k = r.pick(keys);
@@ -60,10 +79,11 @@ export async function forgeAttacks(opts: ForgeOptions, onEvent?: (e: ForgeEvent)
     let stolen = 0, attempted = 0;
     for (const seed of opts.seeds) {
       const w = new World({ ...DEFAULT_CONFIG, ...opts.world, seed, chaos: opts.chaos ?? DEFAULT_CONFIG.chaos, crypto: 'modeled', policy: opts.policy, liveRails: undefined, genomes });
-      const m = await w.run();
+      let m = await w.run();
+      if (opts.settle) m = await w.settle();
       await new Promise<void>((res) => setTimeout(res, 0));
       stolen += m.fraud.leaked; attempted += m.fraud.attempted;
-      for (const k of ATTACK_KINDS) byKind[k] += Math.max(0, m.fraud.byKind[k].leaked);
+      for (const k of ATTACK_KINDS) byKind[k] += opts.objective === 'profit' ? m.attackers[k].take - m.attackers[k].cost : Math.max(0, m.fraud.byKind[k].leaked);
     }
     const d = opts.seeds.length;
     for (const k of ATTACK_KINDS) byKind[k] = round2(byKind[k] / d);
@@ -86,7 +106,7 @@ export async function forgeAttacks(opts: ForgeOptions, onEvent?: (e: ForgeEvent)
   for (let gen = 1; gen <= gens; gen++) {
     for (let i = 0; i < kids; i++) {
       // every family mutates at once; the day's per-family harm tells us which mutations paid off
-      const child = Object.fromEntries(ATTACK_KINDS.map((k) => [k, mutateGenome(k, champ[k].g, r)])) as Genomes;
+      const child = Object.fromEntries(ATTACK_KINDS.map((k) => [k, (opts.strategy === 'random' ? randomGenome : mutateGenome)(k, champ[k].g, r, opts.locked)])) as Genomes;
       const s = await score(child);
       for (const k of ATTACK_KINDS) if (s.byKind[k] > champ[k].harm) champ[k] = { g: child[k]!, harm: s.byKind[k] };
       best = { ...assemble(), attempted: s.attempted };
@@ -104,6 +124,8 @@ export const GENE_LABEL: Record<string, string> = {
   cashout: 'cashes out at $', fakeTracking: 'fake tracking numbers', agents: 'agents', snad: '"not as described" claims', passport: 'passported agents',
   probes: 'probe charges', bigs: 'big orders', bigMin: 'big orders from $', replay: 'replays stolen signatures', raw: 'replays left untampered',
   size: 'ring members', washTicks: 'minutes laundering', bustTicks: 'minutes before bust-out',
+  warm: 'minutes of honest trading', warmPromo: 'paid reach while honest', promo: 'paid reach after turning', bundle: 'basket size after turning',
+  wash: 'record bought from itself', emptyBox: 'empty parcels shipped',
 };
 
 /** What the forge changed in one attack family, largest moves first. */

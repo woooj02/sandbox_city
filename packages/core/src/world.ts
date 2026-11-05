@@ -4,12 +4,12 @@
  */
 import { Rng, round2, clamp } from './rng';
 import type {
-  Attacker, AttackKind, KindTally, Merchant, Metrics, OrderIntent, Outcome, Passport, Product, RuleHit, Shopper, SignedRequest, SimEvent,
+  Attacker, AttackerBook, AttackKind, Cohort, CohortTally, GateResult, KindTally, Merchant, Metrics, OrderIntent, Outcome, Passport, Product, RuleHit, Shopper, SignedRequest, SimEvent,
 } from './types';
-import { ATTACK_KINDS } from './types';
+import { ATTACK_KINDS, COHORTS } from './types';
 import { CryptoMode, deriveKey, KeyPair, signRequest, SignatureVerifier } from './kya';
 import { ChaosRails, PayPalTwin, Rails, RailsError, CardRef } from './rails';
-import { Policy, evaluateOrder, evaluateRefund, AgentView, MerchantView } from './policy';
+import { Policy, evaluateOrder, evaluateRefund, observe, AgentView, GateContext, MerchantView } from './policy';
 import { CATEGORIES, DISTRICTS, DROPS, HANDLES, INJECTIONS, agentName, lookalike, makeMerchant, placeIn } from './gen';
 import { defaultGenome } from './genome';
 import { BrainCase, BrainConfig, caseKey, sameAddress } from './brain';
@@ -30,7 +30,34 @@ export interface WorldConfig {
   liveSample?: number;
   /** Model-driven shoppers and the tape of their decisions. */
   brain?: BrainConfig;
+  /** Sees every gate decision with its exact inputs; the checkout conformance test replays these. */
+  gateTap?: (o: OrderIntent, ctx: GateContext, gate: GateResult) => void;
+  /** Honest new stores that grow fast and look like a sleeper store from the outside. */
+  rising?: number;
+  /** Numbers the lab assumes rather than measures. The benchmark varies them to see which results depend on them. */
+  assumptions?: Partial<Assumptions>;
 }
+
+export interface Assumptions {
+  /** Cost of goods as a share of the price, a store's main cost of building a real record. */
+  cogs: number;
+  /** PayPal-style fee per captured payment. */
+  feeRate: number; feeFixed: number;
+  /** Cost of one parcel, for a store shipping to its own agents or shipping an empty box. */
+  parcel: number;
+  /** Chance an owner approves their own honest order when the gate asks. */
+  ownerApproves: number;
+  /** Chance an owner approves an order their hijacked agent placed. */
+  ownerApprovesHijack: number;
+  /** Multiplies how easily stock agents are fooled by a poisoned listing. */
+  gullibility: number;
+  /** What one paid impression costs a store. */
+  adCost: number;
+  /** Share of shoppers who come across a rising store on their own. */
+  buzz: number;
+}
+
+export const ASSUMPTIONS: Assumptions = { cogs: 0.6, feeRate: 0.0349, feeFixed: 0.49, parcel: 6, ownerApproves: 0.86, ownerApprovesHijack: 0.1, gullibility: 1, adCost: 0.4, buzz: 0.1 };
 
 export const DEFAULT_CONFIG: Omit<WorldConfig, 'policy'> = {
   seed: 'sandbox-city', shoppers: 600, merchants: 90,
@@ -39,22 +66,33 @@ export const DEFAULT_CONFIG: Omit<WorldConfig, 'policy'> = {
 };
 
 interface AgentStats { first: number; orders: number; refunds: number; times: number[]; merchants: Map<string, number> }
-interface MerchantStats { orders: number; fulfilled: number; refunds: number; buyers: Map<string, number> }
+interface MerchantStats {
+  orders: number; fulfilled: number; refunds: number; buyers: Map<string, number>;
+  /** $ captured and not yet scanned, $ scanned, and $ scanned for buyers independent of the store. */
+  exposure: number; scannedValue: number; independentValue: number;
+}
 interface OrderRec {
   r: Rng;
   /** The rails this order was paid on; its whole lifecycle (capture, void, refund) stays there. */
   lane: Rails;
   intent: OrderIntent; card: CardRef; payer: string; captureId?: string; authId?: string; amountHeld: number;
   shipped?: number; tracking?: string; carrierScan: boolean; delivered: boolean; refunded: boolean; leaked: number;
+  /** Paid while an honest (or still-honest) store was trading: this order's value is ordinary commerce. */
+  legit: boolean; paidAt: number; inExposure: boolean; disputed?: boolean;
+  /** The parcel the carrier scanned had nothing in it. */
+  empty?: boolean;
 }
 type Task =
   | { k: 'ship'; order: string }
   | { k: 'deliver'; order: string }
   | { k: 'refundCheck'; order: string }
   | { k: 'abuseRefund'; order: string }
-  | { k: 'escrowExpire'; order: string };
+  | { k: 'escrowExpire'; order: string }
+  | { k: 'release'; order: string }
+  | { k: 'reorder'; shopper: string; merchant: string; sku: string; attacker: string; left: number };
 
 const emptyTally = (): KindTally => ({ attempts: 0, attempted: 0, prevented: 0, leaked: 0 });
+const emptyCohort = (): CohortTally => ({ attempts: 0, completed: 0, refused: 0, value: 0, refusedValue: 0 });
 
 export class World {
   readonly cfg: WorldConfig;
@@ -87,10 +125,18 @@ export class World {
   private listeners: ((events: SimEvent[], w: World) => void)[] = [];
   m: Metrics;
   sale = false;
+  readonly assume: Assumptions;
+  private settling = false;
+  private risingAt = new Map<number, number[]>();
+  /** Stores that reach shoppers beyond chance: rising stores on their own, sleeper stores by paying for it. */
+  private reach = new Map<string, { share: number; paid: boolean }>();
+  /** Orders scheduled work wants placed this tick. */
+  private queued: OrderIntent[] = [];
 
   constructor(cfg: WorldConfig) {
     this.cfg = cfg;
     this.policy = cfg.policy;
+    this.assume = { ...ASSUMPTIONS, ...cfg.assumptions };
     this.rng = new Rng(cfg.seed);
     this.rWorld = this.rng.fork('world');
     this.rNonce = this.rng.fork('nonce');
@@ -106,13 +152,17 @@ export class World {
   // ───────────────────────────── setup ─────────────────────────────
   private freshMetrics(): Metrics {
     const byKind = {} as Record<AttackKind, KindTally>;
-    for (const k of ATTACK_KINDS) byKind[k] = emptyTally();
+    const attackers = {} as Record<AttackKind, AttackerBook>;
+    const cohorts = {} as Record<Cohort, CohortTally>;
+    for (const k of ATTACK_KINDS) { byKind[k] = emptyTally(); attackers[k] = { take: 0, cost: 0 }; }
+    for (const c of COHORTS) cohorts[c] = emptyCohort();
     return {
       t: 0, orders: 0,
-      honest: { attempts: 0, completed: 0, blocked: 0, abandoned: 0, challenged: 0, declined: 0, gmv: 0, blockedValue: 0, abandonedValue: 0 },
+      honest: { attempts: 0, completed: 0, blocked: 0, abandoned: 0, challenged: 0, declined: 0, gmv: 0, blockedValue: 0, abandonedValue: 0, fulfilledValue: 0, heldDollarMinutes: 0 },
       fraud: { attempts: 0, attempted: 0, prevented: 0, leaked: 0, byKind },
       refunds: { legitApproved: 0, legitDenied: 0, abuseApproved: 0, abuseDenied: 0 },
       chaos: { faults: 0, recovered: 0, duplicateCharges: 0, duplicateValue: 0 },
+      cohorts, attackers, exposure: { peak: 0, worstOverBound: 0 }, settled: false,
       safety: 1, access: 1, netValue: 0,
     };
   }
@@ -158,7 +208,7 @@ export class World {
     const id = opts.id ?? `M${this.merchants.size.toString(36).toUpperCase().padStart(4, '0')}`;
     const m = makeMerchant(rng, id, this.t, opts);
     this.merchants.set(id, m);
-    this.mStats.set(id, { orders: 0, fulfilled: 0, refunds: 0, buyers: new Map() });
+    this.mStats.set(id, { orders: 0, fulfilled: 0, refunds: 0, buyers: new Map(), exposure: 0, scannedValue: 0, independentValue: 0 });
     this.emit({ type: 'store_open', t: this.t, merchant: id, name: m.name, honest: m.honest, attacker: m.owner });
     return m;
   }
@@ -187,6 +237,8 @@ export class World {
       const st = this.mStats.get(m.id)!;
       st.orders = st.fulfilled = this.rWorld.int(5, 400);
       st.refunds = Math.floor(st.orders * this.rWorld.range(0.01, 0.05));
+      // an established store's past shipments are on the record: about $60 an order
+      st.scannedValue = st.independentValue = st.fulfilled * 60;
       // repeat customers create honest closed loops, a ring detector's false positives
       if (this.rWorld.chance(0.08)) {
         const regulars = [...this.shoppers.values()].filter(() => this.rWorld.chance(0.004));
@@ -196,6 +248,10 @@ export class World {
     let n = 0;
     for (const kind of ATTACK_KINDS) {
       for (let i = 0; i < (c.attackers[kind] ?? 0); i++) this.addAttacker(kind, n++);
+    }
+    for (let i = 0; i < (c.rising ?? 0); i++) {
+      const at = this.rng.fork(`rising:${i}`).int(30, 300);
+      this.risingAt.set(at, [...(this.risingAt.get(at) ?? []), i]);
     }
     this.flush();
   }
@@ -218,6 +274,7 @@ export class World {
     };
     if (kind === 'refund_abuse') for (let i = 0; i < genome.agents; i++) sock(true, r.int(300, 4000));
     if (kind === 'card_testing') for (let i = 0; i < genome.agents; i++) sock(r.chance(genome.passport));
+    if (kind === 'sleeper_store') for (let i = 0; i < 4; i++) sock(true);
     if (kind === 'fraud_ring') {
       for (let i = 0; i < genome.size; i++) sock(true);
       const m = this.addMerchant({ honest: false, owner: id, verified: r.chance(0.5), shipRate: 0, district: d }, r);
@@ -264,7 +321,7 @@ export class World {
       for (const v of bm.values()) all += v;
       if (n >= 3 && n / all > 0.6) loop += n;
     }
-    return { age: this.t - m.openedAt, verified: m.verified, rep, ring: total ? loop / total : 0, orders: total };
+    return { age: this.t - m.openedAt, verified: m.verified, rep, ring: total ? loop / total : 0, orders: total, exposure: st.exposure, fulfilled: st.scannedValue, independent: st.independentValue };
   }
 
   publicRating(m: Merchant) { return this.merchantView(m.id).rep; }
@@ -283,28 +340,53 @@ export class World {
     // scheduled lifecycle work
     const due = this.tasks.get(t);
     if (due) { this.tasks.delete(t); for (const task of due) await this.runTask(task); }
+    intents.push(...this.queued); this.queued = [];
 
-    // new honest stores open over time (false-positive bait for reputation rules)
-    if (this.rOpen.chance(1 / 90)) { const ro = this.r(`open:${t}`); this.addMerchant({ openedAt: t, verified: ro.chance(0.6) }, ro); }
+    if (!this.settling) {
+      // new honest stores open over time (false-positive bait for reputation rules)
+      if (this.rOpen.chance(1 / 90)) { const ro = this.r(`open:${t}`); this.addMerchant({ openedAt: t, verified: ro.chance(0.6) }, ro); }
+      for (const i of this.risingAt.get(t) ?? []) {
+        const ro = this.r(`rising:${i}`);
+        const rm = this.addMerchant({ openedAt: t, verified: ro.chance(0.4), priceFactor: ro.range(0.62, 0.72), shipRate: 1 }, ro);
+        this.reach.set(rm.id, { share: this.assume.buzz, paid: false });
+      }
 
-    // honest shoppers
-    for (const s of this.shoppers.values()) {
-      if (s.controlledBy) continue;
-      const boost = this.sale ? (s.bursty ? 9 : 2.2) : 1;
-      if (!this.rActivate.get(s.id)!.chance(s.rate * diurnal * boost)) continue;
-      const it = this.honestIntent(s);
-      if (it) intents.push(it);
-    }
-    // attackers
-    for (const a of this.attackers.values()) {
-      if (t >= a.nextActAt) intents.push(...this.attackerAct(a));
+      // honest shoppers
+      for (const s of this.shoppers.values()) {
+        if (s.controlledBy) continue;
+        const boost = this.sale ? (s.bursty ? 9 : 2.2) : 1;
+        if (!this.rActivate.get(s.id)!.chance(s.rate * diurnal * boost)) continue;
+        const it = this.honestIntent(s);
+        if (it) intents.push(it);
+      }
+      // attackers
+      for (const a of this.attackers.values()) {
+        if (t >= a.nextActAt) intents.push(...this.attackerAct(a));
+      }
     }
 
     // gate + rails: rails calls run concurrently, results applied in deterministic order
     await Promise.all(intents.map((it) => this.process(it)));
 
-    if (t % 10 === 0 || this.done) this.emit({ type: 'metrics', t, m: this.snapshot() });
+    if (!this.settling && (t % 10 === 0 || this.done)) this.emit({ type: 'metrics', t, m: this.snapshot() });
     return this.flush();
+  }
+
+  /**
+   * Runs every order to its terminal state. Trading stops; deliveries, refund claims, captures and escrow voids that
+   * were still pending when the day ended now happen, and scam stores still open vanish. A number read before this
+   * counts money that may yet come back or never arrive. Run it after run() whenever the result is evidence.
+   */
+  async settle(horizon = 1600): Promise<Metrics> {
+    this.settling = true;
+    for (const a of this.attackers.values()) {
+      const open = a.merchant ? this.merchants.get(a.merchant) : undefined;
+      if (open && !open.closed) { open.closed = true; open.warming = false; a.phase = 'vanished'; this.emit({ type: 'store_close', t: this.t, merchant: open.id, reason: 'gone by the end of the day' }); }
+    }
+    const end = this.cfg.ticks + horizon;
+    while (this.t < end) await this.step();
+    this.m.settled = true;
+    return this.snapshot();
   }
 
   async run(onTick?: (ev: SimEvent[]) => void): Promise<Metrics> {
@@ -333,6 +415,12 @@ export class World {
     const st = this.aStats.get(s.id)!;
     const pool: Merchant[] = [];
     for (let i = 0; i < 7; i++) pool.push(r.pick(all));
+    for (const [mid, reach] of this.reach) {
+      const rm = this.merchants.get(mid);
+      if (!rm || rm.closed || !r.chance(reach.share)) continue;
+      pool.push(rm);
+      if (reach.paid) this.book(this.scamKind(rm), 0, this.assume.adCost);
+    }
     for (const [mid, n] of st.merchants) if (n >= 3 && this.merchants.get(mid) && !this.merchants.get(mid)!.closed) pool.push(this.merchants.get(mid)!);
     const sells = pool.filter((m) => m.catalog.some((p) => p.category === category));
     const cands = sells.length ? sells : pool;
@@ -395,9 +483,14 @@ export class World {
         return this.buildIntent(s, m, product, qty, shipTo, truth);
       }
     }
+    const trap = m.owner ? this.attackers.get(m.owner) : undefined;
+    if (trap?.kind === 'subscription_trap' && r.chance(Math.min(1, s.gullibility * this.assume.gullibility))) {
+      // the agent signs its owner up: the first order is the one asked for, the repeats are not
+      this.schedule(this.t + Math.round(trap.genome.every), { k: 'reorder', shopper: s.id, merchant: m.id, sku: product.sku, attacker: trap.id, left: Math.round(trap.genome.repeats) });
+    }
     if (product.injected) {
       const inj = product.injected;
-      const hijacked = r.chance(s.gullibility);
+      const hijacked = r.chance(Math.min(1, s.gullibility * this.assume.gullibility));
       this.emit({ type: 'hijack', t: this.t, shopper: s.id, merchant: m.id, attacker: inj.by, resisted: !hijacked, sanitized: false });
       if (hijacked) {
         qty = inj.payload.qty;
@@ -522,6 +615,49 @@ export class World {
         out.push(intent);
         break;
       }
+      case 'sleeper_store': {
+        if (!a.merchant) {
+          if (a.phase !== 'recon') break;
+          const home = r.pick(honestMerchants);
+          const sm = this.addMerchant({ honest: false, owner: a.id, warming: true, district: home.district, verified: r.chance(0.5), shipRate: 1, priceFactor: r.range(0.62, 0.72), openedAt: t }, r);
+          a.merchant = sm.id; a.phase = 'warming';
+          this.reach.set(sm.id, { share: g.warmPromo, paid: true });
+          this.emit({ type: 'attack', t, attacker: a.id, kind: a.kind, note: `opened ${sm.name}, trading honestly for now` });
+          break;
+        }
+        const sm = this.merchants.get(a.merchant)!;
+        if (sm.closed) { a.nextActAt = Infinity; break; }
+        const age = t - sm.openedAt;
+        if (a.phase === 'warming' && age >= g.warm) {
+          a.phase = 'turned'; sm.warming = false; sm.shipRate = 0; sm.priceFactor *= 1 - g.discount;
+          sm.catalog.forEach((p) => (p.price = round2(p.price * g.bundle * (1 - g.discount))));
+          this.reach.set(sm.id, { share: g.promo, paid: true });
+          this.emit({ type: 'attack', t, attacker: a.id, kind: a.kind, note: `${sm.name} turns: ${Math.round(g.discount * 100)}% off, nothing ships` });
+        }
+        if (a.phase === 'turned' && age >= g.warm + g.bustTicks) {
+          sm.closed = true; a.phase = 'vanished'; a.nextActAt = Infinity;
+          this.emit({ type: 'store_close', t, merchant: sm.id, reason: 'took the money and vanished' });
+          this.emit({ type: 'attack', t, attacker: a.id, kind: a.kind, note: `${sm.name} vanished` });
+          break;
+        }
+        // its own agents buy from it and it ships to them: a record bought for a parcel and a fee, the money comes straight back
+        if (a.phase === 'warming' && r.chance(g.wash)) {
+          const s = this.shoppers.get(r.pick(a.agents))!;
+          const p = r.weighted(sm.catalog, (x) => x.price);
+          out.push(this.buildIntent(s, sm, p, 1, s.address, { malicious: true, attack: 'sleeper_store', attacker: a.id, harm: 0 }));
+        }
+        break;
+      }
+      case 'subscription_trap':
+      case 'triangulation': {
+        if (a.merchant) break;
+        const home = r.pick(honestMerchants);
+        const sm = this.addMerchant({ honest: false, owner: a.id, warming: true, district: home.district, verified: r.chance(0.5), shipRate: 1, priceFactor: r.range(0.8, 0.95), openedAt: t }, r);
+        a.merchant = sm.id; a.phase = 'trading';
+        if (a.kind === 'triangulation') this.reach.set(sm.id, { share: g.promo, paid: true });
+        this.emit({ type: 'attack', t, attacker: a.id, kind: a.kind, note: `opened ${sm.name}` });
+        break;
+      }
       case 'fraud_ring': {
         const rm = this.merchants.get(a.merchant!)!;
         if (rm.closed) { a.nextActAt = Infinity; break; }
@@ -573,15 +709,18 @@ export class World {
     const { verify, identity, passport } = this.resolveIdentity(o);
     const agent = this.agentView(identity);
     const merchant = this.merchantView(m.id);
-    const gate = evaluateOrder(this.policy, o, { verify, identity, passport, agent, merchant, claimsPassportHolder: this.byAgent.has(o.claimedAgent) });
+    const ctx: GateContext = { verify, identity, passport, agent, merchant, claimsPassportHolder: this.byAgent.has(o.claimedAgent) };
+    const gate = evaluateOrder(this.policy, observe(o), ctx);
+    this.cfg.gateTap?.(o, ctx, gate);
     const truth = o.truth;
     const honest = !truth.malicious;
     const r = this.r(`ord:${o.buyer}:${o.t}:${o.sku}:${o.truth.attacker ?? ''}`);
 
     // an honest shopper paying a scam store is a victim, not a customer: that order is scored as
     // an attack (stopping it is a save, not a false positive), never as honest access or GMV
-    const legit = honest && m.honest;
-    if (legit) this.m.honest.attempts++;
+    const legit = honest && (m.honest || !!m.warming);
+    const cohort = legit ? this.cohortOf(o, m) : undefined;
+    if (legit) { this.m.honest.attempts++; cohort!.attempts++; cohort!.value = round2(cohort!.value + o.amount); }
     else if (truth.harm > 0) this.tallyAttempt(truth.attack!, truth.harm);
     if (gate.decision === 'challenge' && legit) this.m.honest.challenged++;
 
@@ -604,6 +743,10 @@ export class World {
     const card: CardRef = this.cardFor(o);
 
     const lane = this.live && (this.shoppers.get(o.buyer)?.hero || r.chance(this.cfg.liveSample ?? 0)) ? this.live : this.rails;
+    // the exposure is reserved here, before the payment call yields: orders decided in the same moment must see each other
+    const ms = this.mStats.get(m.id)!;
+    const reserved = outcome === 'completed' && !gate.escrow;
+    if (reserved) ms.exposure = round2(ms.exposure + o.amount);
     if (outcome === 'completed') {
       const mockCode = card.state === 'stolen' && r.chance(0.3) ? 'INSTRUMENT_DECLINED' : undefined;
       const res = await this.pay(lane, {
@@ -624,13 +767,15 @@ export class World {
         if (pr.status === 'DECLINED') outcome = 'declined';
         else {
           outcome = gate.escrow ? 'escrowed' : 'completed';
-          const rec: OrderRec = { r, lane, intent: o, card, payer: o.buyer, captureId: pr.captureId, authId: pr.authorizationId, amountHeld: gate.escrow ? o.amount : 0, carrierScan: false, delivered: false, refunded: false, leaked: 0 };
+          const rec: OrderRec = { r, lane, intent: o, card, payer: o.buyer, captureId: pr.captureId, authId: pr.authorizationId, amountHeld: gate.escrow ? o.amount : 0, carrierScan: false, delivered: false, refunded: false, leaked: 0, legit, paidAt: this.t, inExposure: false };
           this.orders.set(o.id, rec);
+          if (!gate.escrow) this.captured(rec, m);
           this.recordStats(identity, m.id);
           this.afterPayment(rec, m);
         }
       }
     }
+    if (reserved && outcome !== 'completed') ms.exposure = round2(ms.exposure - o.amount);
     if (outcome === 'failed' && charges > 0 && this.policy.idempotencyKeys) {
       // money moved but the agent never learned it: a ghost charge
       this.m.chaos.duplicateCharges++;
@@ -639,13 +784,15 @@ export class World {
 
     // accounting
     if (legit) {
-      if (outcome === 'completed' || outcome === 'escrowed') { this.m.honest.completed++; this.m.honest.gmv = round2(this.m.honest.gmv + o.amount); }
+      if (outcome === 'completed' || outcome === 'escrowed') { this.m.honest.completed++; cohort!.completed++; this.m.honest.gmv = round2(this.m.honest.gmv + o.amount); }
       else if (outcome === 'blocked') { this.m.honest.blocked++; this.m.honest.blockedValue = round2(this.m.honest.blockedValue + o.amount); }
       else if (outcome === 'abandoned') { this.m.honest.abandoned++; this.m.honest.abandonedValue = round2(this.m.honest.abandonedValue + o.amount); }
       else this.m.honest.declined++;
+      if (outcome === 'blocked' || outcome === 'abandoned') { cohort!.refused++; cohort!.refusedValue = round2(cohort!.refusedValue + o.amount); }
     } else if (honest) {
       // honest money headed into a fake / ring store is the attack, whatever the rules did
-      const kind: AttackKind = m.owner && this.attackers.get(m.owner)?.kind === 'fraud_ring' ? 'fraud_ring' : 'fake_store';
+      const ownerKind = m.owner ? this.attackers.get(m.owner)?.kind : undefined;
+      const kind: AttackKind = ownerKind === 'fraud_ring' || ownerKind === 'sleeper_store' ? ownerKind : 'fake_store';
       o.truth = { malicious: true, attack: kind, attacker: m.owner, victim: o.buyer, harm: o.amount };
       this.tallyAttempt(kind, o.amount);
       if (outcome === 'completed') this.leak(o.id, kind, o.amount);
@@ -665,8 +812,8 @@ export class World {
 
   private challengePass(o: OrderIntent): number {
     const t = o.truth;
-    if (!t.malicious) return 0.86;
-    if (t.hijacked) return 0.1;       // owner sees "12 units to 77 Dock St" and says no
+    if (!t.malicious) return this.assume.ownerApproves;
+    if (t.hijacked) return this.assume.ownerApprovesHijack; // owner sees "12 units to 77 Dock St" and says no
     switch (t.attack) {
       case 'card_testing': return 0.06; // can't pass step-up on a stolen identity
       case 'impersonation': return 0.04; // the real owner gets the prompt
@@ -710,41 +857,146 @@ export class World {
     ms.buyers.set(agentId, (ms.buyers.get(agentId) ?? 0) + 1);
   }
 
+  private cohortOf(o: OrderIntent, m: Merchant): CohortTally {
+    const c = this.m.cohorts, s = this.shoppers.get(o.buyer);
+    if (this.t - m.openedAt < this.cfg.ticks) return c.new_store;
+    if (s && o.shipTo !== s.address) return c.gift;
+    return (this.aStats.get(o.buyer)?.merchants.get(m.id) ?? 0) >= 3 ? c.repeat : c.regular;
+  }
+
+  /** A buyer whose account predates the store and whose history is mostly elsewhere: a record a store cannot buy from itself. */
+  private independentBuyer(buyer: string, m: Merchant): boolean {
+    const st = this.aStats.get(buyer);
+    if (!st) return false;
+    const here = st.merchants.get(m.id) ?? 0;
+    return st.first <= m.openedAt && here / Math.max(1, st.orders) <= 0.5;
+  }
+
+  private book(kind: AttackKind | undefined, take: number, cost: number) {
+    if (!kind) return;
+    const b = this.m.attackers[kind];
+    b.take = round2(b.take + take); b.cost = round2(b.cost + cost);
+  }
+
+  /** Who owns this store's books, if an attacker does. */
+  private scamKind(m: Merchant): AttackKind | undefined {
+    const k = m.owner ? this.attackers.get(m.owner)?.kind : undefined;
+    return k === 'sleeper_store' || k === 'fake_store' || k === 'subscription_trap' || k === 'triangulation' ? k : undefined;
+  }
+
+  /** Money reached the store. Until a carrier scans the parcel it is exposure: paid for, not delivered. */
+  private captured(rec: OrderRec, m: Merchant) {
+    const o = rec.intent, kind = this.scamKind(m), ms = this.mStats.get(m.id)!;
+    const a = this.assume, own = m.owner ? this.attackers.get(m.owner)?.agents.includes(o.buyer) : false;
+    // a store paying itself keeps the money either way; only the fee is a real cost
+    this.book(kind, own ? 0 : o.amount, round2(o.amount * a.feeRate + a.feeFixed));
+    if (rec.carrierScan) return;
+    rec.inExposure = true;
+    const p = this.policy;
+    const credit = p.independentCredit ? ms.independentValue : ms.scannedValue;
+    if (ms.exposure > this.m.exposure.peak) this.m.exposure.peak = ms.exposure;
+    if (p.exposureRatio > 0) this.m.exposure.worstOverBound = Math.max(this.m.exposure.worstOverBound, round2(ms.exposure - (p.exposureFloor + p.exposureRatio * credit)));
+  }
+
+  /** The carrier scanned a parcel: the store has delivered on this order and it earns a record. */
+  private scanned(rec: OrderRec, m: Merchant, costOfGoods: number) {
+    const o = rec.intent;
+    const lag = this.policy.releaseLag ?? 0;
+    if (lag > 0) this.schedule(this.t + lag, { k: 'release', order: o.id });
+    else this.credit(rec, m);
+    this.book(this.scamKind(m), 0, round2(costOfGoods));
+    if (rec.legit) this.m.honest.fulfilledValue = round2(this.m.honest.fulfilledValue + o.amount);
+  }
+
+  /** Held money waits for the complaint window, not just the scan: an empty parcel scans like a full one. */
+  private get holdsToRelease() { return !!this.policy.captureAfterRelease && (this.policy.releaseLag ?? 0) > 0; }
+
+  private async captureHeld(rec: OrderRec, m: Merchant) {
+    const o = rec.intent;
+    const c = await this.lifecycle(() => rec.lane.captureAuthorization(rec.authId!, `cap-${o.id}`));
+    if (!c) return;
+    rec.captureId = c.captureId; rec.amountHeld = 0;
+    this.captured(rec, m);
+    if (rec.legit) this.m.honest.heldDollarMinutes = round2(this.m.honest.heldDollarMinutes + o.amount * (this.t - rec.paidAt));
+    this.emit({ type: 'capture', t: this.t, order: o.id, amount: o.amount, rail: rec.lane.name });
+    if (o.truth.malicious && o.truth.harm > 0) this.leak(o.id, o.truth.attack!, o.truth.harm);
+  }
+
+  private async voidHeld(rec: OrderRec) {
+    const o = rec.intent;
+    await this.lifecycle(() => rec.lane.voidAuthorization(rec.authId!, `void-${o.id}`));
+    if (rec.legit) this.m.honest.heldDollarMinutes = round2(this.m.honest.heldDollarMinutes + o.amount * (this.t - rec.paidAt));
+    rec.amountHeld = 0;
+    if (o.truth.malicious && o.truth.harm > 0) this.prevent(o.truth.attack!, o.truth.harm);
+  }
+
+  /** The delivery counts now: the store earns the record and the order stops being exposure. */
+  private credit(rec: OrderRec, m: Merchant) {
+    const o = rec.intent, ms = this.mStats.get(m.id)!;
+    ms.scannedValue = round2(ms.scannedValue + o.amount);
+    if (this.independentBuyer(o.buyer, m)) ms.independentValue = round2(ms.independentValue + o.amount);
+    if (rec.inExposure) { rec.inExposure = false; ms.exposure = round2(ms.exposure - o.amount); }
+  }
+
   private afterPayment(rec: OrderRec, m: Merchant) {
     const r = rec.r, t = this.t, o = rec.intent;
     const atk = m.owner ? this.attackers.get(m.owner) : undefined;
-    const ringWash = atk?.kind === 'fraud_ring' && atk.agents.includes(o.buyer);
-    if (m.honest) {
+    const ownAgent = !!atk?.agents.includes(o.buyer);
+    const ringWash = (atk?.kind === 'fraud_ring' || atk?.kind === 'sleeper_store') && ownAgent;
+    if (m.honest || rec.legit || atk?.kind === 'subscription_trap') {
       if (r.chance(m.shipRate)) this.schedule(t + r.int(20, 180), { k: 'ship', order: o.id });
     } else if (ringWash) {
       this.schedule(t + r.int(20, 120), { k: 'ship', order: o.id }); // fake "delivered" to pump rep
+    } else if (atk?.kind === 'sleeper_store' && r.chance(atk.genome.emptyBox)) {
+      // an empty parcel: the carrier really scans it, the buyer gets nothing
+      rec.empty = true;
+      this.schedule(t + r.int(20, 120), { k: 'ship', order: o.id });
     } else if (atk && r.chance(atk.genome.fakeTracking ?? 0)) {
       rec.tracking = `LBL${r.hex(10).toUpperCase()}`; // label printed, never scanned
       this.mStats.get(m.id)!.fulfilled++;
     }
-    if (rec.authId) this.schedule(t + 720, { k: 'escrowExpire', order: o.id });
+    if (rec.authId) this.schedule(t + 720 + (this.holdsToRelease ? this.policy.releaseLag! : 0), { k: 'escrowExpire', order: o.id });
     const s = this.shoppers.get(o.buyer);
     if (o.truth.attack === 'refund_abuse') this.schedule(t + r.int(380, 560), { k: 'abuseRefund', order: o.id });
     else if (s && !s.controlledBy && !o.truth.hijacked) this.schedule(t + r.int(360, 520), { k: 'refundCheck', order: o.id });
   }
 
+  private reorder(task: Extract<Task, { k: 'reorder' }>) {
+    const m = this.merchants.get(task.merchant), s = this.shoppers.get(task.shopper), p = m?.catalog.find((x) => x.sku === task.sku);
+    if (!m || m.closed || !s || !p || this.settling) return;
+    const every = this.attackers.get(task.attacker)!.genome.every;
+    this.queued.push(this.buildIntent(s, m, p, 1, s.address, { malicious: true, attack: 'subscription_trap', attacker: task.attacker, hijacked: true, victim: s.id, harm: p.price }));
+    if (task.left > 1) this.schedule(this.t + Math.round(every), { ...task, left: task.left - 1 });
+  }
+
   private async runTask(task: Task) {
+    if (task.k === 'reorder') { this.reorder(task); return; }
     const rec = this.orders.get(task.order);
     if (!rec) return;
     const o = rec.intent, m = this.merchants.get(o.merchant)!, r = rec.r;
     switch (task.k) {
+      // a disputed order earns nothing, and stays exposure until it is refunded
+      case 'release': {
+        if (rec.authId && rec.amountHeld > 0) {
+          if (rec.disputed) { await this.voidHeld(rec); break; }
+          await this.captureHeld(rec, m);
+        }
+        if (!rec.disputed && !rec.refunded) this.credit(rec, m);
+        break;
+      }
       case 'ship': {
         rec.shipped = this.t; rec.tracking = `1Z${r.hex(14).toUpperCase()}`; rec.carrierScan = true;
         this.mStats.get(m.id)!.fulfilled++;
+        const atk = m.owner ? this.attackers.get(m.owner) : undefined;
+        if (atk?.kind === 'triangulation') {
+          // the goods were bought with a stolen card: the buyer is fine, a stranger paid
+          const stolen = round2(o.amount * this.assume.cogs);
+          this.tallyAttempt('triangulation', stolen);
+          this.leak(o.id, 'triangulation', stolen);
+          this.scanned(rec, m, 0);
+        } else this.scanned(rec, m, rec.legit ? o.amount * this.assume.cogs : this.assume.parcel);
         this.emit({ type: 'ship', t: this.t, order: o.id, merchant: m.id, buyer: o.buyer, tracking: rec.tracking });
-        if (rec.authId && rec.amountHeld > 0) {
-          const c = await this.lifecycle(() => rec.lane.captureAuthorization(rec.authId!, `cap-${o.id}`));
-          if (c) {
-            rec.captureId = c.captureId; rec.amountHeld = 0;
-            this.emit({ type: 'capture', t: this.t, order: o.id, amount: o.amount, rail: rec.lane.name });
-            if (o.truth.malicious && o.truth.harm > 0) this.leak(o.id, o.truth.attack!, o.truth.harm);
-          }
-        }
+        if (rec.authId && rec.amountHeld > 0 && !this.holdsToRelease) await this.captureHeld(rec, m);
         const lost = !m.honest ? false : r.chance(0.015);
         if (!lost) this.schedule(this.t + r.int(60, 240), { k: 'deliver', order: o.id });
         break;
@@ -752,16 +1004,15 @@ export class World {
       case 'deliver': rec.delivered = true; break;
       case 'escrowExpire': {
         if (!rec.authId || rec.amountHeld <= 0) break;
-        await this.lifecycle(() => rec.lane.voidAuthorization(rec.authId!, `void-${o.id}`));
-        rec.amountHeld = 0;
-        if (o.truth.malicious && o.truth.harm > 0) this.prevent(o.truth.attack!, o.truth.harm);
+        await this.voidHeld(rec);
         break;
       }
       case 'refundCheck': {
+        if (rec.empty) { await this.refund(rec, 'not as described (empty box)', false); break; }
         const porchPirate = rec.delivered && r.chance(0.02);
         const remorse = rec.delivered && r.chance(this.shoppers.get(o.buyer)?.refundRate ?? 0);
         if (rec.delivered && !porchPirate && !remorse) break;
-        if (rec.authId && rec.amountHeld > 0) break; // nothing captured, nothing to refund
+        if (rec.authId && rec.amountHeld > 0) { if (this.holdsToRelease) rec.disputed = true; break; } // nothing captured, nothing to refund
         await this.refund(rec, porchPirate ? 'delivered but stolen from porch' : remorse ? 'return' : 'item not received', false);
         break;
       }
@@ -780,6 +1031,7 @@ export class World {
     const o = rec.intent, m = this.merchants.get(o.merchant)!;
     const agent = this.agentView(o.buyer);
     const remorse = reason === 'return';
+    if (!remorse) rec.disputed = true;
     const snad = reason.startsWith('not as described');
     const decision = remorse ? { approved: true, hits: [] as RuleHit[] } : evaluateRefund(this.policy, { trackingDelivered: rec.delivered && !snad, agent });
     let approved = decision.approved && !rec.refunded && !!rec.captureId;
@@ -787,7 +1039,13 @@ export class World {
     if (!m.honest && m.closed) approved = false;
     if (approved) {
       const ok = await this.lifecycle(() => rec.lane.refundCapture(rec.captureId!, o.amount, `rf-${o.id}`));
-      if (ok) rec.refunded = true; else approved = false;
+      if (ok) {
+        rec.refunded = true;
+        const ms = this.mStats.get(m.id)!;
+        if (rec.inExposure) { rec.inExposure = false; ms.exposure = round2(ms.exposure - o.amount); }
+        if (rec.legit && rec.carrierScan) this.m.honest.fulfilledValue = round2(this.m.honest.fulfilledValue - o.amount);
+        this.book(this.scamKind(m), -o.amount, 0);
+      } else approved = false;
     }
     const st = this.aStats.get(o.buyer);
     if (approved && st) st.refunds++;
@@ -821,6 +1079,7 @@ export class World {
     this.m.fraud.attempts++; this.m.fraud.attempted = round2(this.m.fraud.attempted + harm);
   }
   private leak(_order: string, kind: AttackKind, harm: number) {
+    if (kind === 'prompt_injection' || kind === 'refund_abuse' || kind === 'card_testing' || kind === 'impersonation' || kind === 'fraud_ring') this.book(kind, harm, 0);
     this.m.fraud.byKind[kind].leaked = round2(this.m.fraud.byKind[kind].leaked + harm);
     this.m.fraud.leaked = round2(this.m.fraud.leaked + harm);
   }

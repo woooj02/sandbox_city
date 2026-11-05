@@ -21,6 +21,14 @@ export interface SearchOptions {
   minSafety?: number;
   seed?: string;
   world?: Partial<WorldConfig>;
+  /** Run each day to its terminal state and score what was delivered and kept, not what was paid for. */
+  settle?: boolean;
+  /** 'evolve' breeds from the best so far; 'random' draws every candidate fresh, the baseline for a fair budget. */
+  strategy?: 'evolve' | 'random';
+  /** Rules the search may not turn off: they are not up for statistical trade. */
+  floor?: Partial<Policy>;
+  /** Stop after this many evaluated rulebooks, so two strategies can be compared on the same budget. */
+  budget?: number;
 }
 
 export interface Scored { policy: Policy; score: number; days: DaySummary[]; mean: DaySummary }
@@ -42,6 +50,7 @@ function mean(days: DaySummary[], key: string, name: string): DaySummary {
   return {
     key, name, stolen: avg((d) => d.stolen), duplicate: avg((d) => d.duplicate), honestLost: avg((d) => d.honestLost), gmv: avg((d) => d.gmv),
     net: avg((d) => d.net), safety: raw((d) => d.safety), access: raw((d) => d.access), fraudAttempted: avg((d) => d.fraudAttempted),
+    fulfilled: avg((d) => d.fulfilled), kept: avg((d) => d.kept),
   };
 }
 
@@ -52,7 +61,7 @@ export function mutate(p: Policy, r: Rng, n = 1 + r.int(0, 2)): Policy {
     if (rule.kind === 'bool') (q[rule.key] as boolean) = !(q[rule.key] as boolean);
     else {
       const min = rule.min ?? 0, max = rule.max ?? 1, step = rule.step ?? 1;
-      const cur = q[rule.key] as number;
+      const cur = (q[rule.key] as number | undefined) ?? 0;
       let next: number;
       const roll = r.next();
       if (roll < 0.2) next = cur === 0 ? min + step * r.int(1, Math.round((max - min) / step)) : 0; // switch on / off
@@ -60,6 +69,19 @@ export function mutate(p: Policy, r: Rng, n = 1 + r.int(0, 2)): Policy {
       else next = cur + step * r.int(-3, 3);                                                   // nudge
       (q[rule.key] as number) = Math.round(clamp(next, min, max) / step) * step;
       (q[rule.key] as number) = round2(q[rule.key] as number);
+    }
+  }
+  return q;
+}
+
+/** Every switch and dial drawn uniformly: what a search with no memory would try. */
+export function randomPolicy(r: Rng): Policy {
+  const q: Policy = { ...PRESETS.open };
+  for (const rule of TUNABLE) {
+    if (rule.kind === 'bool') (q[rule.key] as boolean) = r.chance(0.5);
+    else {
+      const step = rule.step ?? 1, min = rule.min ?? 0, max = rule.max ?? 1;
+      (q[rule.key] as number) = r.chance(0.5) ? 0 : round2(min + step * r.int(0, Math.round((max - min) / step)));
     }
   }
   return q;
@@ -81,11 +103,12 @@ export async function searchRulebook(opts: SearchOptions & { label?: string }, o
 
   const day = async (policy: Policy, seed: string) => {
     const w = new World({ ...DEFAULT_CONFIG, ...opts.world, seed, chaos: opts.chaos ?? DEFAULT_CONFIG.chaos, crypto: 'modeled', policy, liveRails: undefined });
-    const m = await w.run();
+    let m = await w.run();
+    if (opts.settle) m = await w.settle();
     await new Promise<void>((res) => setTimeout(res, 0));
     return summarize(seed, policy.name, m);
   };
-  const score = (d: DaySummary) => d.net
+  const score = (d: DaySummary) => (opts.settle ? d.kept : d.net)
     - (d.access < minAccess ? (minAccess - d.access) * d.gmv * 4 : 0)
     - (d.safety < minSafety ? (minSafety - d.safety) * d.fraudAttempted * 4 : 0);
 
@@ -107,16 +130,18 @@ export async function searchRulebook(opts: SearchOptions & { label?: string }, o
 
   let pop: Scored[] = [];
   // presets as shipped, so they plot where they really are; every candidate after them retries safely
-  for (const p of Object.values(PRESETS)) pop.push(await evaluate(p, 0));
+  for (const p of Object.values(PRESETS)) pop.push(await evaluate({ ...p, ...opts.floor }, 0));
   pop.sort((a, b) => b.score - a.score);
 
-  for (let g = 1; g <= gens; g++) {
+  const spent = () => opts.budget != null && evals >= opts.budget;
+  for (let g = 1; g <= gens && !spent(); g++) {
     const parents = pop.slice(0, keep);
-    for (let i = 0; i < kids; i++) {
+    for (let i = 0; i < kids && !spent(); i++) {
       const a = r.pick(parents).policy;
-      const child = r.chance(0.3) ? mutate(crossover(a, r.pick(parents).policy, r), r, 1) : mutate(a, r);
+      const child = opts.strategy === 'random' ? randomPolicy(r) : r.chance(0.3) ? mutate(crossover(a, r.pick(parents).policy, r), r, 1) : mutate(a, r);
       child.name = 'Tuned';
       child.idempotencyKeys = true;
+      Object.assign(child, opts.floor);
       pop.push(await evaluate(child, g));
     }
     const seen = new Set<string>();

@@ -20,6 +20,7 @@ export function Welcome() {
     setTimeout(() => director.roll(1), 200);
   };
   const hijack = () => { explore(); useStore.setState({ showHijack: true }); };
+  const evidence = () => { explore(); useStore.setState({ showEvidence: true }); };
   return (
     <div className="report-wrap welcome-wrap" onClick={explore}>
       <div className="welcome panel" ref={panel} tabIndex={-1} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Welcome to Sandbox City">
@@ -38,6 +39,7 @@ export function Welcome() {
         </button>
         <div className="wl-actions">
           <button className="btn hot" onClick={film}>▶ WATCH THE FILM <small>about 9 min · Esc to stop</small></button>
+          <button className="btn" onClick={evidence}>SEE THE EVIDENCE</button>
           <button className="btn" onClick={explore}>EXPLORE THE LAB</button>
         </div>
         <p className="wl-keys">Keys: <kbd>C</kbd> cinema · <kbd>R</kbd> roll the film · <kbd>1</kbd>–<kbd>5</kbd> jump to an act · <kbd>H</kbd> the hijack</p>
