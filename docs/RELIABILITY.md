@@ -62,6 +62,6 @@ Without keys they run on the local mock and print `contract-mock`. With `--sandb
 
 - The recorded receipts are from the PayPal sandbox, not production. Each receipt is one run. The script counts charges by reading the orders back from PayPal: one capture on the recovered order, and a second order and capture for the client with no journal.
 - The unit tests use the mock. It enforces PayPal's documented rules; it is not PayPal.
-- `verifyWebhook` sends the parsed event back to PayPal. PayPal checks the signature against the original bytes, so a real deployment may need the raw request body. This path has not run against the sandbox.
+- `verifyWebhook` sends the parsed event back to PayPal, not the original bytes. That passed for a real capture event on the sandbox, but other event types have not been tried, and a re-serialised body could fail on one.
 - A journal on one disk is one machine's durability. Several workers would need a shared store and a lock per key.
 - A payment left `unresolved` needs a person.

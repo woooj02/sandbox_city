@@ -61,5 +61,5 @@ Both rulebooks start from the record earned under Lab-Tuned, so the rulebook is 
 - **One payee.** Every store settles to one sandbox business account, so a store's id is checked by the journal, not by PayPal.
 - **A PayPal authorization has limits.** PayPal honours one for a set period and it can expire. Nothing here tests a hold running past that.
 - **The caller states the mandate.** This is a lab: anyone calling the API writes their own owner and budget. In production the mandate must come from something the owner signed.
-- **Webhooks** have only run against the mock.
-- **The hosted app is a demo.** `POST /api/checkout` is open and limited to 20 a minute per address by nginx, not by the app. The lab route is off there, so held orders stay held.
+- **Webhooks.** One signed `PAYMENT.CAPTURE.COMPLETED` from the sandbox verified on the hosted app, and a forged event got a 401. The other event types have only run against the mock.
+- **The hosted app is a demo.** `POST /api/checkout` is open and limited to 20 a minute per address by nginx, not by the app. The lab route's token stays on the server, so a visitor's held order stays held.

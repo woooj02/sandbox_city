@@ -4,7 +4,7 @@ Sandbox City helps developers test payment-capable agents before release: reprod
 
 Try it: https://sandbox-city.91.99.162.43.sslip.io (press **E** for the evidence).
 
-[![verify](https://github.com/woooj02/Sandbox-City/actions/workflows/verify.yml/badge.svg)](https://github.com/woooj02/Sandbox-City/actions/workflows/verify.yml)
+[![verify](https://github.com/woooj02/sandbox_city/actions/workflows/verify.yml/badge.svg)](https://github.com/woooj02/sandbox_city/actions/workflows/verify.yml)
 
 ## In two minutes
 
@@ -92,7 +92,7 @@ Your agent is any command that reads a case as JSON on stdin and prints its orde
 
 - **Simulated economics.** The days are simulated. Fees, cost of goods and owner approval rates are stated assumptions, not measurements. PayPal's own protections are not modelled.
 - **One author.** The attacks, the held-out mechanisms and the defense come from the same team. No outside builder has tried it yet: [docs/EXTERNAL_TEST.md](docs/EXTERNAL_TEST.md).
-- **Sandbox, not production.** The crash recovery, the checkout and the holds below ran on the PayPal sandbox, as did the hijack and the refund. Webhooks have only run against the mock.
+- **Sandbox, not production.** The crash recovery, the checkout and the holds below ran on the PayPal sandbox, as did the hijack and the refund. A real signed capture webhook verified on the hosted app, and a forged one got a 401.
 - **A script plays the carrier.** Deliveries, complaints and closing windows reach the checkout through an adapter, and in this lab a script sends them. Every store settles to one sandbox account.
 - **One paid hijack.** The 41% comes from plans put through the gate; one hijacked order was actually paid.
 - **Closer work exists.** See [docs/PRIOR_ART.md](docs/PRIOR_ART.md).
@@ -163,7 +163,6 @@ Fill in `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` and a sandbox test card, then
 | --- | --- | --- |
 | `HOST` | 0.0.0.0 | Address the server binds. Use 127.0.0.1 behind a proxy |
 | `LAB_TOKEN` | off | Lets a caller report deliveries and complaints, which can release held money |
-| `PAYPAL_WEBHOOK_ID` | off | Turns on `POST /webhooks/paypal` |
 | `MAX_SESSIONS` | 8 | Cities that can run on the server at once |
 | `MAX_LIVE` | 2 | Of those, how many pay on the PayPal sandbox |
 | `LIVE_SAMPLE` | 0.02 | Share of ordinary shoppers whose payments also go to the sandbox |
