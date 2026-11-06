@@ -52,6 +52,8 @@ An outside review pointed out that v1 left the owner mandate off, so comparing i
 
 **What it costs.** v3 stops $878 a day more ($750 to $1,013). Held out, a store shipping empty boxes takes $2,953 a day under v4 and $48 under v3, and v3 is the only rulebook that stops it. Those stores are not on these days, so this table alone would hide that. v4 holds 84% less honest money than v3.
 
+**Empty boxes, priced in full.** On the held-out days that contain those stores, v3 is worth $98,677 a day and v4 $96,171, so v3 leads there at plain prices. These columns were added by rerunning the same days with no retuning, and all 224 values recorded the first time came back identical.
+
 **Where one is better than the other depends on your prices.** v3 passes v4 once a stolen dollar costs more than $1.50. **Is it worth it?** in the app prices every rulebook this way.
 
 **A correction.** Earlier versions of this page put 17.5 step-ups per 100 down to v3, against 5.3 for v1. Here every arm but Fortress is between 17.2 and 18.1, so nearly all of that gap was the owner mandate. Safeguards cost step-ups. v3's own cost is the money it holds.

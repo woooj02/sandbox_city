@@ -6,7 +6,7 @@ declare const __BUILD__: string;
 export function Scope({ experiment, title }: { experiment?: Experiment | null; title?: string }) {
   return <aside className="scope-banner" aria-label="Experiment scope">
     <b>{title ?? (experiment?.source === 'recorded-benchmark' ? 'Recorded benchmark · terminal outcomes' : experiment?.source === 'recorded-proof' ? 'Recorded payment proof' : 'Local answer check · one case')}</b>
-    {experiment && <><span>{experiment.paymentMode} · {experiment.scenario.id}{experiment.scenario.approximation ? ' · APPROXIMATION' : ''} · {experiment.phase}</span>
+    {experiment && <><span>{experiment.paymentMode} · {experiment.scenario.id} · {experiment.phase}</span>
       <details><summary>Input and provenance</summary><p>Experiment {experiment.id} · {experiment.inputRef} · {experiment.seedOrDataset} · version {experiment.scenario.version}{experiment.candidatePolicyHash ? ` · policy ${experiment.candidatePolicyHash}` : ''}</p></details></>}
     <small>Build {typeof __BUILD__ === 'undefined' ? 'local development' : __BUILD__}</small>
   </aside>;

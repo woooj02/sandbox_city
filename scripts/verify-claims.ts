@@ -168,6 +168,8 @@ const box = fourth.heldOut.find((h: { label: string }) => h.label === 'Empty box
 const boxOf = (name: string) => box.find((a: { name: string }) => a.name === name).stolen.mean;
 claim('round four', 'empty boxes', [whole(boxOf('Frozen v3')), whole(boxOf('Frozen v4'))], ['$48', '$2,953'], '$48 a day against $2,953 under v4');
 claim('round four', 'only v3 stops empty boxes', box.filter((a: { name: string; stolen: Ci }) => a.stolen.mean < 500 && a.name !== 'Fortress').map((a: { name: string }) => a.name), ['Frozen v3']);
+const scenarioNet = (name: string) => { const s = box.find((a: { name: string }) => a.name === name).scenario; return s.fulfilled - s.stolen; };
+claim('round four', 'priced in full on the empty-box days', [whole(scenarioNet('Frozen v3')), whole(scenarioNet('Frozen v4'))], ['$98,677', '$96,171'], 'v3 is worth $98,677 a day and v4 $96,171');
 const priced = (k: string): DefenseArm => { const a = four(k); return { key: k, name: a.name, fulfilled: a.fulfilled.mean, stolen: a.stolen.mean, access: a.exact.access, heldDollarHours: a.heldDollarHours.mean, stepUps: (a.challengedPer100 / 100) * a.ordersPerDay }; };
 claim('round four', 'where v3 passes v4', `$${breakEven(priced('frozen'), priced('frozen_v3'), 'stolenDollar', DEFAULT_PRICES)!.toFixed(2)}`, '$1.50', 'more than $1.50');
 const steps = fourth.arms.filter((a: { key: string }) => a.key !== 'fortress').map((a: { challengedPer100: number }) => a.challengedPer100);

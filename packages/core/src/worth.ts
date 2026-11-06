@@ -46,3 +46,17 @@ export function breakEven(a: DefenseArm, b: DefenseArm, knob: PriceKnob, p: Pric
   const x = -at0 / slope;
   return x > 0 && Number.isFinite(x) ? x : null;
 }
+
+/**
+ * The nearest price at which the current winner loses, and who to. Net is linear in each price, so the first rulebook to
+ * overtake the winner is the true next winner. That need not be the runner-up, which is why this looks at all of them.
+ */
+export function nextWinner(ranked: Priced[], knob: PriceKnob, p: Prices, min = 0): { arm: DefenseArm; price: number } | null {
+  const [top, ...rest] = ranked;
+  if (!top || top.out) return null;
+  const crossings = rest.filter((r) => !r.out).flatMap((r) => {
+    const price = breakEven(top.arm, r.arm, knob, p);
+    return price !== null && price >= min ? [{ arm: r.arm, price }] : [];
+  });
+  return crossings.sort((a, b) => Math.abs(a.price - p[knob]) - Math.abs(b.price - p[knob]))[0] ?? null;
+}

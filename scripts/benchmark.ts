@@ -69,7 +69,9 @@ if (sections.includes('heldout')) {
     const results: unknown[] = [];
     for (const [k, p] of contenders) {
       const a = await runArm(k, p, seeds, h.world);
-      results.push({ key: k, name: a.name, stolen: bootstrap(col(a, (d) => d.attacks[family].leaked), tag(`${key}:${k}:s`)), profit: bootstrap(col(a, (d) => d.attacks[family].profit), tag(`${key}:${k}:p`)), kept: bootstrap(col(a, (d) => d.kept), tag(`${key}:${k}:k`)), access: bootstrap(col(a, (d) => d.access), tag(`${key}:${k}:a`)), overBound: Math.max(...col(a, (d) => d.overBound)) });
+      results.push({ key: k, name: a.name, stolen: bootstrap(col(a, (d) => d.attacks[family].leaked), tag(`${key}:${k}:s`)), profit: bootstrap(col(a, (d) => d.attacks[family].profit), tag(`${key}:${k}:p`)), kept: bootstrap(col(a, (d) => d.kept), tag(`${key}:${k}:k`)), access: bootstrap(col(a, (d) => d.access), tag(`${key}:${k}:a`)), overBound: Math.max(...col(a, (d) => d.overBound)),
+        /** The whole scenario, so a price can be put on these days without borrowing from the standard ones. */
+        scenario: { fulfilled: mean(col(a, (d) => d.fulfilled)), stolen: mean(col(a, (d) => d.stolen)), access: mean(col(a, (d) => d.access)), heldDollarHours: mean(col(a, (d) => d.heldDollarHours)), stepUps: mean(col(a, (d) => d.challenged)) } });
     }
     rows.push({ key, label: h.label, blindSpot: h.blindSpot, family, arms: results });
     console.log(`heldout ${h.label}: done`);

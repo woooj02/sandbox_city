@@ -42,6 +42,6 @@ The existing eight-case release gate is the local integration path. A careful sc
 
 Run `npm run verify`, then `npm run agent-test -- "python3 examples/agents/careful.py"` or the obedient control. Model-backed adapters are opt-in local commands, never arbitrary public-server execution.
 
-The app displays its build revision and whether it contains local changes. Production builds also emit `/build.json` with revision, dirty status, source hash and build time. A displayed dirty build is not an attestation of a clean published commit. The recorded artifacts retain their own versions and dates regardless of the UI build.
+The app displays its build revision and whether it contains local changes. Production builds also emit `/build.json` with revision, dirty status, source hash and build time. A displayed dirty build is not an attestation of a clean published commit. A copy with no git, such as a ZIP download, still builds: its revision comes from a `REVISION` file if there is one, and dirty status is unknown. The recorded artifacts retain their own versions and dates regardless of the UI build.
 
-The standard-world comparison remains round four, with its declared safeguards and terminal metric. Empty-box risk is a separately labelled estimator until a complete scenario is measured. No benchmark was retuned for the workflow.
+The standard-world comparison remains round four, with its declared safeguards and terminal metric. Empty-box risk is priced as its own scenario, from the held-out days that contain those stores. No benchmark was retuned for the workflow.

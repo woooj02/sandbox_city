@@ -70,7 +70,7 @@ The first repair for empty parcels failed. It delayed the store's credit, but he
 
 `npm audit` reports 12 affected packages: 11 high and one moderate, down from 15. The static-file branch is fixed by `@fastify/static` 10.1.10, with `glob` 14.0.3 and `minimatch` 11.0.5 in the lockfile. See the [plugin release](https://github.com/fastify/fastify-static/releases/tag/v10.1.10) and [glob fix](https://github.com/isaacs/node-glob/releases/tag/v14.0.2).
 
-All remaining entries come through `@paypal/agent-toolkit` 1.11.0, which the entry uses. This is a review of the calls in this repo, not a claim that installed code is safe:
+All remaining entries come through `@paypal/agent-toolkit` 1.11.0, the latest release, which the entry uses. `npm audit` offers only a downgrade to 1.3.5, and most fixes need a new major version of something the toolkit depends on, so we did not force them. This is a review of the calls in this repo, not a claim that installed code is safe:
 
 - The public HTTP server uses `SandboxRails` and the durable checkout. It does not import the toolkit. The toolkit runs through `scripts/toolkit-shop.ts`, with sandbox credentials, and the code selects its `/openai` adapter.
 - **Zod is reached:** the toolkit parses a model's `create_order` arguments with it. Oversized collections are a [memory-exhaustion risk](https://github.com/colinhacks/zod/pull/6652). These calls are in the local recording script, not a public toolkit endpoint. The toolkit's Zod 3 dependency cannot take the Zod 4 fix as a compatible update.
