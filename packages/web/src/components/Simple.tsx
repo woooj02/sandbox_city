@@ -1,0 +1,64 @@
+import { PRESETS, type Policy } from '@sandbox-city/core';
+import { useStore } from '../store';
+import { client } from '../sim/client';
+import { money } from './meta';
+import raw from '../data/evidence.json';
+
+/** The rulebooks the evidence is about. The presets on their own would leave them out of the first screen. */
+const ev = raw as unknown as { third: { frozen: { rules: Policy } } | null; fourth: { frozen: { rules: Policy } } | null };
+
+const CHOICES: { policy: Policy; plain: string }[] = [
+  { policy: PRESETS.open, plain: 'No checks. Every order is paid.' },
+  { policy: PRESETS.passport, plain: 'Agents must show a passport. Nothing else is checked.' },
+  { policy: PRESETS.kya, plain: 'Checks the agent, its signature and what its owner allowed.' },
+  { policy: PRESETS.tuned, plain: 'Tuned in the lab to stop fraud and keep honest buyers.' },
+  { policy: PRESETS.fortress, plain: 'Every check, set strict. Honest buyers pay for it.' },
+  ...(ev.third ? [{ policy: { ...ev.third.frozen.rules, name: 'Frozen v3' }, plain: 'Stops the most theft of the top rulebooks, and holds the most money.' }] : []),
+  ...(ev.fourth ? [{ policy: { ...ev.fourth.frozen.rules, name: 'Frozen v4' }, plain: 'Keeps the most value. Picked by a rule written before the test.' }] : []),
+];
+
+const replay = (p: Policy) => { client.start([p]); setTimeout(() => client.send({ cmd: 'play' }), 300); };
+
+/** The first screen's left panel: one decision, in words. Every rule and slider is one click away in the full lab. */
+export function SimpleRules() {
+  const current = useStore((s) => s.policies[0]?.name.replace('*', ''));
+  return (
+    <aside className="rulebook panel simple-rules">
+      <h2 className="simple-h"><i>1</i>Pick a rulebook</h2>
+      <div className="choices" role="radiogroup" aria-label="Rulebook">
+        {CHOICES.map(({ policy, plain }) => (
+          <button key={policy.name} role="radio" aria-checked={current === policy.name} className={`choice ${current === policy.name ? 'on' : ''}`} onClick={() => replay(policy)}>
+            <b>{policy.name}</b><span>{plain}</span>
+          </button>
+        ))}
+      </div>
+      <p className="simple-note">Same shoppers, same attackers, every time. Only the rules change.</p>
+      <button className="simple-link" onClick={() => useStore.setState({ fullLab: true })}>Change individual rules →</button>
+    </aside>
+  );
+}
+
+/** The first screen's right panel: three numbers and one sentence. */
+export function SimpleHud() {
+  const m = useStore((s) => s.lanes[0]?.metrics);
+  if (!m) return <aside className="hud panel simple-hud"><h2 className="simple-h"><i>2</i>Read the result</h2><p className="simple-note">The city is starting…</p></aside>;
+  const held = m.honest.heldDollarMinutes / Math.max(m.t, 60);
+  return (
+    <aside className="hud panel simple-hud">
+      <h2 className="simple-h"><i>2</i>Read the result</h2>
+      <div className="stat bad"><label>Money stolen</label><b>{money(m.fraud.leaked)}</b><span>{(m.safety * 100).toFixed(0)}% of attempted fraud stopped</span></div>
+      <div className="stat good"><label>Value delivered</label><b>{money(m.honest.fulfilledValue)}</b><span>honest orders that arrived and stayed paid</span></div>
+      <div className="stat"><label>Honest purchases accepted</label><b>{(m.access * 100).toFixed(1)}%</b><span>{m.honest.completed.toLocaleString('en-US')} of {m.honest.attempts.toLocaleString('en-US')}. Accepted is not yet delivered</span></div>
+      <div className="stat warnc"><label>Honest money on hold</label><b>{money(held)}</b><span>average tied up, counting holds that have ended</span></div>
+      <button className="simple-cta" onClick={() => useStore.setState({ showWorth: true })}>Is it worth it? →</button>
+      <button className="simple-link" onClick={() => useStore.setState({ showEvidence: true })}>See the evidence →</button>
+    </aside>
+  );
+}
+
+/** One line under the city, so what is happening can be read without the event feed. */
+export function Caption() {
+  const f = useStore((s) => s.feed[0]);
+  if (!f) return null;
+  return <div className={`caption tone-${f.tone}`} aria-live="off">{f.text}</div>;
+}

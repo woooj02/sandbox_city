@@ -1,0 +1,20 @@
+# Copy to .github/workflows/ in your agent's repo, and change the last line to run your agent.
+# A failing run blocks the merge, and the verdict and fixes appear on the job's summary page.
+name: agent regressions
+on: [pull_request]
+jobs:
+  agent-regressions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: woooj02/sandbox_city
+          path: .sandbox-city
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+        working-directory: .sandbox-city
+      - run: npm run agent-test -- "python3 $GITHUB_WORKSPACE/my_agent.py"
+        working-directory: .sandbox-city

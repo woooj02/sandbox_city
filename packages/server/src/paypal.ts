@@ -39,7 +39,8 @@ export class SandboxRails implements Rails {
   onStart?: (c: { method: string; path: string; requestId?: string }) => void;
   /** Every capture and refund PayPal reported back to this adapter, keyed by PayPal id, so idempotent replays count once.
    *  Includes responses the sim never saw (e.g. a timeout after PayPal had already committed). */
-  readonly moves = new Map<string, { kind: 'capture' | 'refund'; id: string; amount: number }>();
+  /** Every money movement PayPal reported, with the state it reported it in. Only COMPLETED is money. */
+  readonly moves = new Map<string, { kind: 'capture' | 'refund'; id: string; amount: number; status: string }>();
   private authAmount = new Map<string, number>();
 
   constructor(private cfg: PayPalConfig) {
@@ -158,11 +159,11 @@ export class SandboxRails implements Rails {
     const pu = json.purchase_units?.[0];
     const cap = pu?.payments?.captures?.[0];
     const auth = pu?.payments?.authorizations?.[0];
-    const declined = cap?.status === 'DECLINED' || json.status === 'DECLINED' || auth?.status === 'DENIED';
-    if (cap?.id && cap.status !== 'DECLINED') this.moves.set(cap.id, { kind: 'capture', id: cap.id, amount: input.amount });
+    const declined = cap?.status === 'DECLINED' || cap?.status === 'FAILED' || json.status === 'DECLINED' || auth?.status === 'DENIED';
+    if (cap?.id && !declined) this.moves.set(cap.id, { kind: 'capture', id: cap.id, amount: input.amount, status: cap.status ?? 'UNKNOWN' });
     if (auth?.id) this.authAmount.set(auth.id, input.amount);
     return {
-      id: json.id, status: declined ? 'DECLINED' : 'COMPLETED', captureId: cap?.id, captureStatus: cap?.status as OrderResult['captureStatus'],
+      id: json.id, status: declined ? 'DECLINED' : cap && cap.status !== 'COMPLETED' ? 'PENDING' : 'COMPLETED', captureId: cap?.id, captureStatus: cap?.status as OrderResult['captureStatus'],
       authorizationId: auth?.id, debugId: debugId ?? '', rail: 'sandbox', issue: declined ? cap?.status_details?.reason ?? 'DECLINED' : undefined,
     };
   }
@@ -171,7 +172,7 @@ export class SandboxRails implements Rails {
     const { status, json } = await this.call<{ id: string; status: string; amount?: { value: string } } & PayPalError>('POST', `/v2/payments/authorizations/${authId}/capture`, {}, requestId);
     if (status >= 300) throw new RailsError(status, json.details?.[0]?.issue ?? json.name ?? 'ERROR', status >= 500);
     const amount = json.amount ? Number(json.amount.value) : this.authAmount.get(authId);
-    if (amount !== undefined) this.moves.set(json.id, { kind: 'capture', id: json.id, amount });
+    if (amount !== undefined) this.moves.set(json.id, { kind: 'capture', id: json.id, amount, status: json.status });
     return { captureId: json.id, status: json.status, amount };
   }
 
@@ -184,7 +185,7 @@ export class SandboxRails implements Rails {
   async refundCapture(captureId: string, amount: number, requestId: string) {
     const { status, json } = await this.call<{ id: string; status: string } & PayPalError>('POST', `/v2/payments/captures/${captureId}/refund`, { amount: { value: amount.toFixed(2), currency_code: 'USD' } }, requestId);
     if (status >= 300) throw new RailsError(status, json.details?.[0]?.issue ?? json.name ?? 'ERROR', status >= 500);
-    this.moves.set(json.id, { kind: 'refund', id: json.id, amount });
+    this.moves.set(json.id, { kind: 'refund', id: json.id, amount, status: json.status ?? 'UNKNOWN' });
     return { refundId: json.id, status: json.status };
   }
 
@@ -213,7 +214,7 @@ export class SandboxRails implements Rails {
     const { status, json } = await this.call<PayPalOrder & PayPalError>('POST', `/v2/checkout/orders/${orderId}/capture`, {}, requestId);
     if (status >= 300) throw new RailsError(status, json.details?.[0]?.issue ?? json.name ?? 'ERROR', status >= 500);
     const cap = json.purchase_units?.[0]?.payments?.captures?.[0];
-    if (cap?.id && cap.status !== 'DECLINED') this.moves.set(cap.id, { kind: 'capture', id: cap.id, amount: Number(cap.amount?.value ?? 0) });
+    if (cap?.id && cap.status !== 'DECLINED') this.moves.set(cap.id, { kind: 'capture', id: cap.id, amount: Number(cap.amount?.value ?? 0), status: cap.status ?? 'UNKNOWN' });
     return { captureId: cap?.id, status: cap?.status ?? json.status, amount: cap?.amount ? Number(cap.amount.value) : undefined };
   }
 
@@ -259,10 +260,13 @@ export class SandboxRails implements Rails {
   }
 
   observed() {
-    let captured = 0, refunded = 0, captures = 0, refunds = 0;
-    for (const m of this.moves.values()) m.kind === 'capture' ? (captured += m.amount, captures++) : (refunded += m.amount, refunds++);
+    let captured = 0, refunded = 0, captures = 0, refunds = 0, unfinished = 0;
+    for (const m of this.moves.values()) {
+      if (m.status !== 'COMPLETED') unfinished++;
+      else if (m.kind === 'capture') { captured += m.amount; captures++; } else { refunded += m.amount; refunds++; }
+    }
     const r2 = (n: number) => Math.round(n * 100) / 100;
-    return { captured: r2(captured), refunded: r2(refunded), net: r2(captured - refunded), captures, refunds };
+    return { captured: r2(captured), refunded: r2(refunded), net: r2(captured - refunded), captures, refunds, unfinished };
   }
 
   /** Transaction Search (Reporting API) for reconciliation. Windows are limited to 31 days. */

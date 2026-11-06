@@ -22,6 +22,8 @@ declined and unresolved can follow any step
 - **A hold is a PayPal authorization.** No money moves until it is released, and a hold survives a restart as a hold.
 - **The read-back compares the whole order:** amount, currency, quantity, identity and every address field. The address is sent as the gate read it.
 - **A torn last line is cut off when the journal opens,** so the next record cannot join it and be lost.
+- **A webhook and its effect are one journal line.** A crash leaves both or neither, so a redelivered event is either applied or truly a repeat.
+- **Refunds add up.** A record keeps the dollars refunded and the refund ids, and it is `refunded` only when the whole amount is back.
 - **The journal also holds the decision behind each payment and what happened to the goods.** A receipt, a mandate and a store's record come back with it after a restart.
 
 Recovery does not depend on how long PayPal remembers a `PayPal-Request-Id`, which its documentation gives only as "a period of time". The ids are still stable across restarts, because the run id lives next to the journal.
@@ -43,6 +45,13 @@ Recovery does not depend on how long PayPal remembers a `PayPal-Request-Id`, whi
 | Retry under another rulebook | 409, and the original decision is named | `audit-regressions.test.ts` |
 | Torn journal tail, then a new payment | Both kept right | `audit-regressions.test.ts` |
 | Address differs at PayPal | Unresolved, no capture | `audit-regressions.test.ts` |
+| Malformed command on the public socket | An error back, the server keeps serving | `reaudit-regressions.test.ts` |
+| Live adapter gets a `PENDING` capture | Reported pending, no money counted | `reaudit-regressions.test.ts` |
+| Reconciling a pending capture, every total equal | Not matched | `reaudit-regressions.test.ts` |
+| $1 refunded on $80 | Stays captured, $79 at stake | `reaudit-regressions.test.ts` |
+| One refund delivered twice, under one id or two | Counted once | `reaudit-regressions.test.ts` |
+| Refund event with no amount | Changes nothing, can come again | `reaudit-regressions.test.ts` |
+| Crash before, during or after a webhook's write | Redelivery leaves the right state | `reaudit-regressions.test.ts` |
 | Read-back disagrees with the intent | Unresolved | `payments.test.ts` |
 | Journal line torn by the crash | Ignored, the rest loads | `payments.test.ts` |
 | Webhook repeated, or late after a refund | No change | `payments.test.ts` |

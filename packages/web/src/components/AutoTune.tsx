@@ -119,6 +119,7 @@ export function AutoTune() {
           <div>
             <h2>AUTO-TUNE</h2>
             <p>Evolving rulebooks on {['', 'one other day', 'two other days', 'three other days', 'four other days', 'five other days'][tune.trainDays ?? 2]}{forged ? ', against the forged attackers' : ''}. The day on screen stays unseen, so the replay is a fair test.</p>
+            <p>Owner mandate, shipping lock, order checks and idempotency stay on, and each day runs to its end, as in the benchmark. Only the number of days is smaller.</p>
           </div>
         </div>
         <div className="tune-modes">

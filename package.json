@@ -13,6 +13,7 @@
     "test": "vitest run",
     "typecheck": "tsc -p packages/core && tsc -p packages/server && tsc -p packages/web",
     "claims": "tsx scripts/verify-claims.ts",
+    "agent-test": "tsx scripts/regress.ts regressions --kind=agent --agent",
     "verify": "npm run typecheck && npm test && npm run claims && npm run build"
   },
   "devDependencies": {

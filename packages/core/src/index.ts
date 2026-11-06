@@ -16,4 +16,5 @@ export * from './checkout';
 export * from './experiment';
 export * from './regression';
 export * from './policy-patch';
+export * from './worth';
 export * from './history';

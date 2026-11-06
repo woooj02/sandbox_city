@@ -64,4 +64,4 @@ The first repair for empty parcels failed. It delayed the store's credit, but he
 - **Claiming a good record.** The store and agent ids in a request are looked up, never believed. Unknown means new, so its orders are held. Ids are not authenticated yet, so a caller can name another party's id. Production needs them bound to a signed identity.
 - **Faking delivery.** Delivery events can release money, so they need `LAB_TOKEN`, and imported records must state a source.
 - **Retrying under a softer rulebook.** A key stays bound to its first decision. Anything else gets a 409.
-
+- **Breaking the demo.** Every socket command passes one check in `runner.ts`, and a rulebook from outside is rebuilt from known rules. A bad command gets an error. No search can switch off an invariant, whoever calls it.

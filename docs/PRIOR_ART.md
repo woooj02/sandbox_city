@@ -5,16 +5,19 @@ The closest work we have read, what it does, and where this project differs. Not
 | | Agentic Commerce Bench / gordonguard | APort Vault | AIP-Bench | Sandbox City |
 | --- | --- | --- | --- | --- |
 | Reference | arXiv 2609.35886 | arXiv 2609.22076 | arXiv 2607.21824 | this repository |
-| Main question | Can a guard classify fraud in agent commerce? | Can attackers get past a pre-action check? | Agent payment benchmark | What does a rulebook cost, and does the attacker still profit? |
-| Scale | 20 fraud classes | 4,371 CTF attacks, 14 models | Not read in depth | One simulated city, 30 frozen test days per round |
-| Check | Offline replay and inline guard | Deterministic check on recipients | Not read in depth | Deterministic evaluator, shared by simulation and checkout |
-| Reported honest cost | 6.5% clean flag rate | Not read in depth | Not read in depth | Honest access, by cohort, with intervals |
+| Main question | Can a guard classify fraud in agent commerce? | Can attackers get past a pre-action check? | Are commerce protocols exploitable whatever the model? | What does a rulebook cost, and does the attacker still profit? |
+| Scale | 20 fraud classes | 4,371 CTF attacks, 14 models, 225,964 evaluations | 33 vulnerabilities, 3 platforms, 5 classes | One simulated city, 30 frozen test days per round |
+| Check | Offline replay and inline guard | Deterministic check on recipients | Deterministic benchmark, plus a defense called PCAT | Deterministic evaluator, shared by simulation and checkout |
+| Reported honest cost | 6.5% clean flag rate | No rate in the abstract; 25,370 payments went through behind the check | None in the abstract | Honest access, by cohort, with intervals |
 
 Agentic Commerce Bench also reports that 8 of 20 classes do no better than chance. It is broader than this project on fraud classes. APort Vault has far more real attack attempts. Our attacks are written by the same author as the defense.
+
+The APort Vault and AIP-Bench cells come from their abstracts. We have not read the full papers, so "none in the abstract" does not mean the paper has none. Both work on questions this project does not: APort Vault tests a real payment agent at a scale we do not approach, and AIP-Bench finds flaws in the protocol itself, which we do not test.
 
 ## What this project adds, for a reader to judge
 
 - Attacker books: take, costs and profit after warm-up, not only a detection rate.
+- A defense priced in the developer's own terms: the same days, ranked by what theft, step-ups and held money cost them.
 - A stated exposure bound, checked as an invariant on every simulated day.
 - Mechanisms held out from tuning, with misses reported.
 - Failures exported as reduced, replayable regressions.

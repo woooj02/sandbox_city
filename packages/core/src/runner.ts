@@ -10,7 +10,8 @@ import type { Rails } from './rails';
 import { whatIf } from './whatif';
 import { searchRulebook } from './search';
 import { forgeAttacks } from './forge';
-import { PRESETS } from './policy';
+import { PRESETS, type Policy } from './policy';
+import { INVARIANT_FLOOR } from './policy-patch';
 
 export const mLite = (m: Merchant): MerchantLite => ({
   id: m.id, name: m.name, x: m.x, y: m.y, district: m.district, honest: m.honest, verified: m.verified, owner: m.owner, category: m.catalog[0]?.category ?? 'home',
@@ -37,6 +38,46 @@ function clampBrain(b: BrainConfig | undefined): BrainConfig | undefined {
 }
 
 const clampN = (v: number | undefined, lo: number, hi: number) => (v === undefined || !Number.isFinite(v) ? undefined : Math.max(lo, Math.min(hi, Math.round(v))));
+
+/** A rulebook from outside: only known rules, of the right type, in a sane range. Anything else is not a rulebook. */
+function cleanPolicy(p: unknown): Policy | null {
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return null;
+  const clean = { ...PRESETS.open } as unknown as Record<string, unknown>;
+  const given = p as Record<string, unknown>;
+  for (const k of [...Object.keys(PRESETS.open), 'releaseLag', 'captureAfterRelease']) {
+    const v = given[k];
+    if (v === undefined) continue;
+    const want = typeof (PRESETS.open as unknown as Record<string, unknown>)[k];
+    if (k === 'name') { if (typeof v !== 'string') return null; clean.name = v.slice(0, 80); continue; }
+    if (k === 'captureAfterRelease' || want === 'boolean') { if (typeof v !== 'boolean') return null; clean[k] = v; continue; }
+    if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 1e6) return null;
+    clean[k] = v;
+  }
+  return clean as unknown as Policy;
+}
+
+const COMMANDS = new Set(['init', 'play', 'pause', 'speed', 'whatif', 'tune', 'tune_stop', 'forge', 'forge_stop']);
+
+/** The one door into the runner. Says what is wrong with a command, or returns a clean copy of it. */
+function checkMsg(raw: unknown): { msg: ToSim } | { problem: string } {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { problem: 'a command is an object' };
+  const m = raw as Record<string, unknown>;
+  if (typeof m.cmd !== 'string' || !COMMANDS.has(m.cmd)) return { problem: 'unknown command' };
+  if (m.cmd === 'init') {
+    if (typeof m.seed !== 'string' || !m.seed || m.seed.length > 120) return { problem: 'init needs a seed' };
+    if (!Array.isArray(m.lanes) || m.lanes.length < 1) return { problem: 'init needs at least one lane' };
+    const lanes = m.lanes.slice(0, 2).map((l: { policy?: unknown } | null) => cleanPolicy(l?.policy));
+    if (lanes.some((p) => !p)) return { problem: 'a lane needs a valid rulebook' };
+    if (m.genomes !== undefined && (!m.genomes || typeof m.genomes !== 'object' || Array.isArray(m.genomes))) return { problem: 'genomes must be an object' };
+    return { msg: { ...m, lanes: lanes.map((policy) => ({ policy: policy! })) } as unknown as ToSim };
+  }
+  if (m.cmd === 'forge') {
+    const policy = cleanPolicy(m.policy);
+    if (!policy) return { problem: 'forge needs a valid rulebook' };
+    return { msg: { ...m, policy } as unknown as ToSim };
+  }
+  return { msg: m as unknown as ToSim };
+}
 
 /** Requests can come from anyone on a public lab server: keep every size inside what the lab itself ever asks for. */
 function clampMsg(msg: ToSim): ToSim {
@@ -65,8 +106,14 @@ export class SimRunner {
     this.post({ type: 'status', running: this.running, tps: this.tps, mode: this.opts.mode, paypal: this.worlds.some((w) => w.cfg.liveRails) ? 'sandbox' : 'twin' });
   }
 
-  handle(raw: ToSim) {
-    const msg = clampMsg(raw);
+  /** Never throws: one bad command gets one error back, and the process and every other client carry on. */
+  handle(raw: unknown) {
+    const checked = checkMsg(raw);
+    if ('problem' in checked) { this.post({ type: 'error', message: `bad command: ${checked.problem}` }); return; }
+    try { this.dispatch(clampMsg(checked.msg)); } catch (e) { this.post({ type: 'error', message: `command failed: ${(e as Error).message}` }); }
+  }
+
+  private dispatch(msg: ToSim) {
     if (msg.cmd === 'init') {
       this.lastInit = msg;
       this.gen++;
@@ -109,7 +156,9 @@ export class SimRunner {
       // trained on other days; the day on screen stays held out for the replay
       searchRulebook({
         trainSeeds: Array.from({ length: Math.max(1, Math.min(5, msg.trainDays ?? 2)) }, (_, i) => `${init.seed}~train-${i + 1}`), testSeeds: [], chaos: init.chaos,
-        generations: msg.generations ?? 6, children: msg.children ?? 8, minSafety: msg.minSafety, minAccess: msg.minAccess,
+        generations: msg.generations ?? 6, children: msg.children ?? 8, minSafety: Number(msg.minSafety) || undefined, minAccess: Number(msg.minAccess) || undefined,
+        // the benchmark's protocol: invariants stay on and each day runs to its end. What differs is the number of days
+        floor: INVARIANT_FLOOR, settle: true,
         seed: `${init.seed}~search`, label: msg.minSafety ? `Tuned ≥${Math.round(msg.minSafety * 100)}%` : 'Tuned · max value',
         world: { ...(init.shoppers ? { shoppers: init.shoppers } : {}), genomes: init.genomes, brain: init.brain },
       }, (e) => {
@@ -175,6 +224,7 @@ export class SimRunner {
       }
     } catch (e) {
       this.post({ type: 'error', message: (e as Error).message });
+      this.running = false; this.status(); return;
     }
     if (this.worlds.every((w) => w.done)) { this.running = false; this.status(); return; }
     const interval = batch > 1 ? 1000 / 30 : 1000 / this.tps;

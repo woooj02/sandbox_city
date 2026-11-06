@@ -35,7 +35,8 @@ export interface CreateOrderInput {
 
 export interface OrderResult {
   id: string;
-  status: 'COMPLETED' | 'DECLINED';
+  /** COMPLETED means the money moved, or a hold was placed. PENDING means PayPal has not finished the capture. */
+  status: 'COMPLETED' | 'DECLINED' | 'PENDING';
   captureId?: string;
   captureStatus?: 'COMPLETED' | 'DECLINED' | 'PENDING';
   authorizationId?: string;

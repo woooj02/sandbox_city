@@ -6,14 +6,14 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import {
-  BASELINES, bootstrap, DEFAULT_CONFIG, DEV_WORLD, evaluateOrder, FINAL_SEEDS, LAST_SEEDS, EVALUATOR_VERSION, forgeAttacks, HELD_OUT, mean, observe, pairedDifference, policyId, PRESETS, runArm, searchRulebook,
+  BASELINES, bootstrap, FAIR_SEEDS, INVARIANT_FLOOR, DEFAULT_CONFIG, DEV_WORLD, evaluateOrder, FINAL_SEEDS, LAST_SEEDS, EVALUATOR_VERSION, forgeAttacks, HELD_OUT, mean, observe, pairedDifference, policyId, PRESETS, runArm, searchRulebook,
   TEST_SEEDS, TRAIN_SEEDS, World, type Arm, type DayResult, type GateContext, type OrderIntent, type Policy, type WorldConfig,
 } from '@sandbox-city/core';
 
 const flag = (name: string, fallback: string) => process.argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1] ?? fallback;
 const sections = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const frozenPath = flag('frozen', 'evidence/frozen.json');
-const seeds = flag('seeds', '') === 'final' ? FINAL_SEEDS : flag('seeds', '') === 'last' ? LAST_SEEDS : flag('seeds', '') ? flag('seeds', '').split(',') : TEST_SEEDS;
+const seeds = flag('seeds', '') === 'fair' ? FAIR_SEEDS : flag('seeds', '') === 'final' ? FINAL_SEEDS : flag('seeds', '') === 'last' ? LAST_SEEDS : flag('seeds', '') ? flag('seeds', '').split(',') : TEST_SEEDS;
 const outFile = new URL(`../packages/web/src/data/${flag('out', 'benchmark')}.json`, import.meta.url);
 
 const frozen = JSON.parse(readFileSync(frozenPath, 'utf8'));
@@ -25,7 +25,9 @@ out.frozen = { policyId: frozen.policyId, evaluator: EVALUATOR_VERSION, tunedOn:
 out.protocol = { testDays: seeds.length, trainDays: TRAIN_SEEDS.length, unit: 'one simulated day, run to its terminal state', interval: '95% percentile bootstrap over days, paired where compared', mode: 'simulation on the PayPal twin' };
 
 const earlier = (flag('compare', '') ? flag('compare', '').split(',') : []).map((f, i): [string, Policy] => [`frozen_v${i + 1}`, { ...JSON.parse(readFileSync(f, 'utf8')).policy, name: `Frozen v${i + 1}` }]);
-const arms = (): [string, Policy][] => [...Object.entries(BASELINES), ...earlier, ['frozen', { ...policy, name: policy.name ?? 'Frozen' }]];
+/** --floor gives every arm the same mandatory safeguards, so a comparison is about the defense and nothing else. */
+const floored = (p: Policy): Policy => (process.argv.includes('--floor') ? { ...p, ...INVARIANT_FLOOR } : p);
+const arms = (): [string, Policy][] => [...Object.entries(BASELINES), ...earlier, ['frozen', { ...policy, name: policy.name ?? 'Frozen' }] as [string, Policy]].map(([k, p]) => [k, floored(p)]);
 const col = (a: Arm, f: (d: DayResult) => number) => a.days.map(f);
 const tag = (s: string) => `${frozen.policyId}:${s}`;
 
@@ -39,6 +41,8 @@ function summary(a: Arm, ref: Arm) {
     key: a.key, name: a.name, policy: a.policy,
     stolen: bootstrap(col(a, (d) => d.stolen), tag(`${a.key}:stolen`)), fulfilled: bootstrap(col(a, (d) => d.fulfilled), tag(`${a.key}:ful`)), kept: bootstrap(col(a, (d) => d.kept), tag(`${a.key}:kept`)),
     access: bootstrap(col(a, (d) => d.access), tag(`${a.key}:acc`)), refusedValue: bootstrap(col(a, (d) => d.refusedValue), tag(`${a.key}:ref`)),
+    exact: { access: mean(col(a, (d) => d.access)), fraudStopped: mean(col(a, (d) => d.safety)) },
+    ordersPerDay: Math.round(a.days.reduce((s, d) => s + d.orders, 0) / a.days.length),
     challengedPer100: Math.round(1000 * a.days.reduce((s, d) => s + d.challenged, 0) / a.days.reduce((s, d) => s + d.orders, 0)) / 10,
     heldDollarHours: bootstrap(col(a, (d) => d.heldDollarHours), tag(`${a.key}:held`)),
     sleeper: { stolen: bootstrap(col(a, (d) => d.attacks.sleeper_store.leaked), tag(`${a.key}:sl`)), profit: bootstrap(col(a, (d) => d.attacks.sleeper_store.profit), tag(`${a.key}:slp`)) },

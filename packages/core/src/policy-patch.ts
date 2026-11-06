@@ -6,6 +6,8 @@ import { RULES, type Policy } from './policy';
 
 /** Owner authority and payment integrity. No score trades these away, so no proposal may switch them off. */
 export const INVARIANTS = ['enforceMandate', 'shipLock', 'strictOrders', 'idempotencyKeys'] as const;
+/** The same invariants as a floor for any search over rulebooks. */
+export const INVARIANT_FLOOR = Object.fromEntries(INVARIANTS.map((k) => [k, true])) as Partial<Policy>;
 export const MAX_CHANGES = 4;
 
 export type PatchResult = { ok: true; policy: Policy; changed: string[] } | { ok: false; reason: string };

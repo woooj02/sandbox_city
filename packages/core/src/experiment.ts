@@ -22,6 +22,9 @@ export const FINAL_SEEDS = Array.from({ length: 30 }, (_, i) => `final-${String(
 /** Fresh days for the third frozen rulebook: the final days above were read and showed the empty-box repair had failed. */
 export const LAST_SEEDS = Array.from({ length: 30 }, (_, i) => `last-${String(i + 1).padStart(2, '0')}`);
 
+/** Fresh days for round four, declared in evidence/round-four.md: same safeguards on every arm, corrected value measure. */
+export const FAIR_SEEDS = Array.from({ length: 30 }, (_, i) => `fair-${String(i + 1).padStart(2, '0')}`);
+
 /** The world the defense is developed on: the six stock attack families, three sleeper stores and five honest rising stores. */
 export const DEV_WORLD: Partial<WorldConfig> = {
   crypto: 'modeled',
@@ -74,6 +77,8 @@ export interface DayResult {
   /** Share of honest attempts that completed, and honest $ refused by the rules. */
   access: number; refusedValue: number;
   challenged: number; orders: number;
+  /** Unrounded, for gates that sit near a threshold: share of attempted fraud dollars stopped. */
+  safety: number;
   /** Honest money held waiting on a scan, in dollar-hours. */
   heldDollarHours: number;
   duplicates: number;
@@ -95,7 +100,7 @@ export async function runDay(policy: Policy, seed: string, world: Partial<WorldC
   const cohorts = Object.fromEntries(COHORTS.map((c) => [c, { attempts: m.cohorts[c].attempts, refused: m.cohorts[c].refused, refusedValue: m.cohorts[c].refusedValue }])) as DayResult['cohorts'];
   return {
     seed, stolen: m.fraud.leaked, fulfilled: m.honest.fulfilledValue, kept: round2(m.honest.fulfilledValue - m.fraud.leaked - m.chaos.duplicateValue), gmv: m.honest.gmv,
-    access: m.access, refusedValue: round2(m.honest.blockedValue + m.honest.abandonedValue), challenged: m.honest.challenged, orders: m.orders,
+    access: m.access, safety: m.safety, refusedValue: round2(m.honest.blockedValue + m.honest.abandonedValue), challenged: m.honest.challenged, orders: m.orders,
     heldDollarHours: round2(m.honest.heldDollarMinutes / 60), duplicates: m.chaos.duplicateValue, attacks, cohorts,
     exposurePeak: m.exposure.peak, overBound: m.exposure.worstOverBound,
   };

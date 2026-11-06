@@ -42,16 +42,16 @@ export interface Policy {
 }
 
 export const RULES: { key: keyof Policy; label: string; kind: 'bool' | 'num'; min?: number; max?: number; step?: number; blurb: string }[] = [
-  { key: 'requirePassport', label: 'Require agent passport', kind: 'bool', blurb: 'Only agents with a KYA passport bound to a verified PayPal owner may pay.' },
+  { key: 'requirePassport', label: 'Require agent passport', kind: 'bool', blurb: 'Only agents with a passport tied to their owner may pay. Passports are simulated in this lab.' },
   { key: 'verifySignatures', label: 'Verify Web Bot Auth signatures', kind: 'bool', blurb: 'RFC 9421 signature, expiry and nonce replay check on every request.' },
-  { key: 'enforceMandate', label: 'Enforce owner mandate', kind: 'bool', blurb: 'Orders over the owner-signed per-order cap or outside allowed categories go to the owner.' },
+  { key: 'enforceMandate', label: 'Enforce owner mandate', kind: 'bool', blurb: 'Orders over the owner\'s per-order cap or outside allowed categories go to the owner.' },
   { key: 'shipLock', label: 'Lock shipping to owner address', kind: 'bool', blurb: 'Shipping anywhere but the passport address needs owner approval.' },
   { key: 'velocity', label: 'Velocity limit (orders / hr)', kind: 'num', min: 0, max: 20, step: 1, blurb: 'Too many orders per agent per hour.' },
   { key: 'newAgentCap', label: 'New-agent spend cap ($)', kind: 'num', min: 0, max: 500, step: 10, blurb: 'Young agents can only spend so much per order.' },
   { key: 'merchantRepMin', label: 'Min merchant reputation', kind: 'num', min: 0, max: 0.9, step: 0.05, blurb: 'Refuse to pay low-reputation stores.' },
   { key: 'verifiedMerchantsOnly', label: 'Verified merchants only', kind: 'bool', blurb: 'Payee must be a business verified through Log In with PayPal.' },
-  { key: 'escrowNewMerchants', label: 'Escrow new merchants (ticks)', kind: 'num', min: 0, max: 1440, step: 60, blurb: 'Authorize only; capture when the carrier scans the parcel. Void otherwise.' },
-  { key: 'sanitizer', label: 'Listing injection filter', kind: 'num', min: 0, max: 1, step: 0.05, blurb: 'Quarantine listings that try to instruct AI agents.' },
+  { key: 'escrowNewMerchants', label: 'Hold new merchants (minutes)', kind: 'num', min: 0, max: 1440, step: 60, blurb: 'A PayPal authorization, not escrow: capture when the carrier scans the parcel, void otherwise.' },
+  { key: 'sanitizer', label: 'Listing injection filter', kind: 'num', min: 0, max: 1, step: 0.05, blurb: 'Quarantine listings that try to instruct AI agents. Simulated: the lab knows which ones are poisoned.' },
   { key: 'refundTrackingCheck', label: 'Refunds check tracking', kind: 'bool', blurb: 'Deny "not received" claims when the carrier shows delivered.' },
   { key: 'refundRatioCap', label: 'Refund ratio cap', kind: 'num', min: 0, max: 1, step: 0.05, blurb: 'Agents who refund too often are cut off.' },
   { key: 'ringDetection', label: 'Fraud-ring detector', kind: 'num', min: 0, max: 1, step: 0.05, blurb: 'Block stores whose revenue comes from a closed loop of buyers.' },

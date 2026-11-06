@@ -2,6 +2,18 @@
 
 The hijack runs: a real model, poisoned listings and the PayPal Agent Toolkit. Every number here is rechecked by `npm run claims`.
 
+## Three kinds of agent
+
+These are three separate things, and a result from one says nothing about the others.
+
+| What | Who decides | Payment |
+| --- | --- | --- |
+| The default city | Scripted shoppers, no model | The twin, or the sandbox with keys |
+| Model shoppers (`?brain=1`) | Decisions a model made earlier, replayed from a recording | The twin |
+| The toolkit run, below | A model, live, calling the toolkit's tools | The PayPal sandbox |
+
+The listing filter in the city is simulated too. The lab knows which listings are poisoned, and the chance of a catch comes from the filter's strictness and the listing's subtlety. Honest listings written as commands are sometimes caught too. It shows what a filter of that strength would be worth. It is not a working detector.
+
 ## The paid run
 
 ```bash

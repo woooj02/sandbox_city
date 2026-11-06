@@ -42,6 +42,8 @@ export interface DecisionContext {
 export interface PayRecord {
   key: string; state: PayState; input: CreateOrderInput;
   orderId?: string; captureId?: string; authorizationId?: string; refundId?: string;
+  /** Dollars refunded so far, and the refunds counted, so a repeated event cannot count twice. */
+  refunded?: number; refundIds?: string[];
   /** Set when a restart resolved this payment by reading it back. */
   recovered?: boolean;
   context?: DecisionContext;
@@ -101,12 +103,14 @@ export class PaymentJournal {
     }
     for (const line of raw.subarray(0, end).toString('utf8').split('\n')) {
       if (!line.trim()) continue;
-      let entry: { event?: string; import?: ImportedRecord } & Partial<PayRecord>;
+      let entry: { event?: string; import?: ImportedRecord; eventId?: string } & Partial<PayRecord>;
       try { entry = JSON.parse(line); } catch { continue; } // written by an older version that joined lines
       if (entry.event) { this.seenEvents.add(entry.event); continue; }
       if (entry.import) { this.imports.set(`${entry.import.kind}:${entry.import.id}`, entry.import); continue; }
+      const { eventId, ...change } = entry;
+      if (eventId) this.seenEvents.add(eventId);
       const prev = this.records.get(entry.key!);
-      this.records.set(entry.key!, { ...prev, ...entry } as PayRecord);
+      this.records.set(entry.key!, { ...prev, ...change } as PayRecord);
     }
   }
 
@@ -119,10 +123,12 @@ export class PaymentJournal {
 
   private write(line: string) { writeSync(this.fd, line + '\n'); fsyncSync(this.fd); }
 
-  put(key: string, change: Partial<PayRecord> & { state: PayState }): PayRecord {
+  /** With `eventId`, the event and its effect are one line, so a crash leaves both or neither. */
+  put(key: string, change: Partial<PayRecord> & { state: PayState }, eventId?: string): PayRecord {
     const next = { ...this.records.get(key), ...change, key, at: new Date().toISOString() } as PayRecord;
-    this.write(JSON.stringify(next));
+    this.write(JSON.stringify(eventId ? { ...next, eventId } : next));
     this.records.set(key, next);
+    if (eventId) this.seenEvents.add(eventId);
     return next;
   }
 
@@ -333,13 +339,22 @@ export class PaymentWorker {
     const orderId = e.resource.supplementary_data?.related_ids?.order_id;
     const r = (e.resource.id && (this.journal.byCapture(e.resource.id) ?? this.journal.byAuthorization(e.resource.id))) || (refundOf && this.journal.byCapture(refundOf)) || this.journal.all().find((x) => orderId && x.orderId === orderId);
     if (!to || !r) return 'unknown';
-    this.journal.markEvent(e.id);
-    if (RANK[to] <= RANK[r.state] && to !== 'declined' && to !== 'voided') return 'stale';
-    if (r.state === 'declined' || r.state === 'unresolved' || r.state === 'voided') return 'stale';
-    if (to === 'declined' && !['pending', 'capturing', 'releasing'].includes(r.state)) return 'stale';
-    if (to === 'voided' && !['held', 'voiding'].includes(r.state)) return 'stale';
-    if (to === 'captured' && e.resource.amount?.value != null && cents(Number(e.resource.amount.value)) !== cents(r.input.amount)) return 'stale';
-    this.journal.put(r.key, to === 'captured' ? { state: to, captureId: e.resource.id } : to === 'refunded' ? { state: to, refundId: e.resource.id } : { state: to, reason: e.event_type });
+    // a refund event must say how much: guessing would either erase exposure or invent it. Left unmarked, so it can come again
+    if (to === 'refunded' && e.resource.amount?.value == null) return 'unknown';
+    const stale = () => { this.journal.markEvent(e.id); return 'stale' as const; };
+    if (RANK[to] <= RANK[r.state] && to !== 'declined' && to !== 'voided') return stale();
+    if (r.state === 'declined' || r.state === 'unresolved' || r.state === 'voided') return stale();
+    if (to === 'declined' && !['pending', 'capturing', 'releasing'].includes(r.state)) return stale();
+    if (to === 'voided' && !['held', 'voiding'].includes(r.state)) return stale();
+    if (to === 'captured' && e.resource.amount?.value != null && cents(Number(e.resource.amount.value)) !== cents(r.input.amount)) return stale();
+    if (to === 'refunded') {
+      if (e.resource.id && r.refundIds?.includes(e.resource.id)) return stale();
+      const paid = cents(r.input.amount)!, total = Math.min(paid, cents(r.refunded ?? 0)! + cents(Number(e.resource.amount!.value))!);
+      const whole = total >= paid;
+      this.journal.put(r.key, { state: whole ? 'refunded' : r.state, refunded: total / 100, refundId: e.resource.id, refundIds: [...(r.refundIds ?? []), ...(e.resource.id ? [e.resource.id] : [])] }, e.id);
+      return 'applied';
+    }
+    this.journal.put(r.key, to === 'captured' ? { state: to, captureId: e.resource.id } : { state: to, reason: e.event_type }, e.id);
     return 'applied';
   }
 }

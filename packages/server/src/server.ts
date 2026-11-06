@@ -91,12 +91,16 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
     const observed = rails.observed();
     const checks = await Promise.all([...rails.moves.values()].map(async (m) => ({ m, got: await rails.getPayment(m.kind, m.id).catch(() => null) })));
     let captured = 0, refunded = 0;
-    const missing: string[] = [];
+    const missing: string[] = [], unfinished: { id: string; status: string }[] = [];
     for (const { m, got } of checks) {
-      if (!got || (m.kind === 'refund' && got.status !== 'COMPLETED')) { missing.push(m.id); continue; }
+      if (!got || round2(got.amount) !== round2(m.amount)) { missing.push(m.id); continue; }
+      // equal totals prove nothing unless the money finished moving
+      // and a refunded capture did finish: PayPal reports the refund on the capture's own status
+      const finished = m.kind === 'capture' ? ['COMPLETED', 'REFUNDED', 'PARTIALLY_REFUNDED'] : ['COMPLETED'];
+      if (!finished.includes(got.status)) { unfinished.push({ id: m.id, status: got.status }); continue; }
       if (m.kind === 'capture') captured += got.amount; else refunded += got.amount;
     }
-    const paypal = { captured: round2(captured), refunded: round2(refunded), net: round2(captured - refunded), transactions: checks.length - missing.length, missing };
+    const paypal = { captured: round2(captured), refunded: round2(refunded), net: round2(captured - refunded), transactions: checks.length - missing.length - unfinished.length, missing, unfinished };
     let search: { available: boolean; net?: number; transactions?: number; reason?: string };
     try {
       const txns = (await rails.searchTransactions(new Date(ledger.startedAt - 60_000), new Date(Date.now() + 60_000))).filter((t) => t.transaction_info.custom_field?.startsWith(`${ledger.runId}:`));
@@ -106,7 +110,7 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
       search = { available: false, reason: (e as Error).message };
     }
     const delta = round2(sim.net - paypal.net);
-    return { runId: ledger.runId, sim, observed, paypal, search, delta, matched: delta === 0 && observed.net === paypal.net && missing.length === 0 };
+    return { runId: ledger.runId, sim, observed, paypal, search, delta, matched: delta === 0 && observed.net === paypal.net && missing.length === 0 && unfinished.length === 0 };
   });
 
   app.get('/ws', { websocket: true }, (socket) => {
@@ -144,10 +148,10 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
       },
     });
     socket.on('message', (raw: Buffer) => {
-      let msg: ToSim;
-      try { msg = JSON.parse(raw.toString()) as ToSim; } catch { return send({ type: 'error', message: 'bad message' }); }
+      let msg: unknown;
+      try { msg = JSON.parse(raw.toString()); } catch { return send({ type: 'error', message: 'bad message' }); }
       runner.handle(msg);
-      if (msg.cmd === 'init' && current) send({ type: 'run', runId: current.ledger.runId });
+      if ((msg as { cmd?: unknown } | null)?.cmd === 'init' && current) send({ type: 'run', runId: current.ledger.runId });
     });
     socket.on('close', () => { runner.stop(); releaseLive(); sessions--; });
   });

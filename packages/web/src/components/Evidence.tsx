@@ -30,7 +30,7 @@ interface SleeperCheckout { mode: string; seed: string; policy: string; bound: n
 interface Reg { id: string; kind: string; title: string; minimized: { from?: Record<string, number>; to?: Record<string, number> } | null }
 interface AgentTally { n: number; bought: number; breached: number; noAnswer: number }
 const ev = raw as unknown as {
-  first: Bench | null; second: Bench | null; third: Bench | null; recovery: Recovery | null; checkout: Checkout | null; sleeperCheckout: SleeperCheckout | null; regressions: Reg[]; sleeperCase: unknown;
+  first: Bench | null; second: Bench | null; third: Bench | null; fourth: Bench | null; recovery: Recovery | null; checkout: Checkout | null; sleeperCheckout: SleeperCheckout | null; regressions: Reg[]; sleeperCase: unknown;
   agents: Record<string, { poisoned: AgentTally; clean: AgentTally }> | null;
   defender: { model: string; budget: number; rows: { kind: string; rejected: number; accepted: number }[] } | null;
 };
@@ -47,10 +47,10 @@ function Incident({ b }: { b: Bench }) {
   if (!tuned || !fz || !open) return null;
   return (
     <ol className="hj-story">
-      <li className="hj-step s-page"><div className="hj-n">01 · THE RECORD</div><h4>A store sells honestly</h4><p>It ships real goods. A good record is what unlocks <b>instant capture</b>: money reaches the store when the buyer pays, not when the parcel moves.</p></li>
+      <li className="hj-step s-page"><div className="hj-n">01 · THE RECORD</div><h4>A store sells honestly</h4><p>It ships what it sells. A good record is what unlocks <b>instant capture</b>: money reaches the store when the buyer pays, not when the parcel moves.</p></li>
       <li className="hj-step s-plan"><div className="hj-n">02 · THE TURN</div><h4>Then it stops shipping</h4><p>It buys reach, discounts and bundles, and takes orders for goods that will never leave. It breaks no rule at the gate: every order is a normal order.</p></li>
       <li className="hj-step s-gate"><div className="hj-n">03 · THE LOSS</div><h4>Buyers pay, the store is gone</h4><p>The rule it breaks: no store may hold more unfulfilled money than its delivered record supports. Under Lab-Tuned it takes <b>{money(tuned.sleeper.stolen.mean)}</b> a day and clears <b>{money(tuned.sleeper.profit.mean)}</b> after warm-up and ad costs.</p></li>
-      <li className="hj-step s-audit"><div className="hj-n">04 · THE BOUND</div><h4>Exposure is capped by record</h4><p>Past the bound, capture waits for proof of delivery. The frozen rulebook takes the attacker to <b>{money(fz.sleeper.stolen.mean)}</b> stolen and <b>{money(fz.sleeper.profit.mean)}</b> profit a day, over {b.protocol.testDays} simulated days. What profit remains is margin on goods it really delivered.</p></li>
+      <li className="hj-step s-audit"><div className="hj-n">04 · THE BOUND</div><h4>Exposure is capped by record</h4><p>Past the bound, capture waits for proof of delivery. The frozen rulebook takes the attacker to <b>{money(fz.sleeper.stolen.mean)}</b> stolen and <b>{money(fz.sleeper.profit.mean)}</b> profit a day, over {b.protocol.testDays} simulated days. What profit remains is margin on goods it delivered.</p></li>
     </ol>
   );
 }
@@ -85,13 +85,27 @@ function Frontier({ b }: { b: Bench }) {
               <circle cx={px} cy={py} r={16} fill="transparent" />
               {slot.has(a.key)
                 ? <><line x1={px} y1={py} x2={columnX - 4} y2={slot.get(a.key)! - 4} className="ev-leader" /><text x={columnX} y={slot.get(a.key)} className={mine ? 'ev-label mine' : 'ev-label'}>{a.name}</text></>
-                : <text x={px + (left ? -11 : 11)} y={py - 8} textAnchor={left ? 'end' : 'start'} className={mine ? 'ev-label mine' : 'ev-label'}>{a.name}</text>}
+                : <text x={px + (left ? -11 : 11)} y={left ? py + 20 : py - 8} textAnchor={left ? 'end' : 'start'} className={mine ? 'ev-label mine' : 'ev-label'}>{a.name}</text>}
             </g>
           );
         })}
       </svg>
       {hover && <div className="ev-tip"><b>{hover.name}</b> kept {ci(hover.kept)} · stolen {ci(hover.stolen)} · honest access {(hover.access.mean * 100).toFixed(1)}%</div>}
     </div>
+  );
+}
+
+/** The declared winner, and in the same breath what it does not do. */
+function FairPick({ b }: { b: Bench }) {
+  const v4 = b.arms.find((a) => a.key === 'frozen'), v3 = b.arms.find((a) => a.key === 'frozen_v3');
+  const box = b.heldOut?.find((h) => h.label === 'Empty box')?.arms;
+  if (!v4 || !v3 || !box) return null;
+  const stolen = (n: string) => money(box.find((a) => a.name === n)?.stolen.mean ?? 0);
+  return (
+    <>
+      <p className="ev-p"><b>The declared rule picks Frozen v4:</b> the most value among rulebooks that meet the bar, {money(v4.kept.mean - v3.kept.mean)} a day more than v3, holding {Math.round(100 * (1 - v4.heldDollarHours.mean / v3.heldDollarHours.mean))}% less honest money. <b>It is not the safest.</b> v3 stops {money(v4.stolen.mean - v3.stolen.mean)} a day more, and it is the only rulebook that stops empty boxes: {stolen('Frozen v3')} a day against {stolen('Frozen v4')}. Those stores are not on these days. Which to use depends on what these things cost you.</p>
+      <p className="ev-p"><button className="btn" onClick={() => useStore.setState({ showEvidence: false, showWorth: true })}>PRICE THEM WITH MY NUMBERS</button></p>
+    </>
   );
 }
 
@@ -240,7 +254,8 @@ export function Evidence() {
   const panel = useModal<HTMLDivElement>(open, close);
   if (!open) return null;
   const b = ev.third ?? ev.second ?? ev.first;
-  const flips = b?.sensitivity?.rows.filter((r) => r.ranking[0] !== 'frozen') ?? [];
+  const f = ev.fourth ?? b;
+  const flips = f?.sensitivity?.rows.filter((r) => r.ranking[0] !== 'frozen') ?? [];
   return createPortal(
     <div className="report-wrap" onClick={close}>
       <div className="report panel hijack" ref={panel} tabIndex={-1} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="The evidence">
@@ -258,10 +273,11 @@ export function Evidence() {
             ))}
           </nav>
           <Incident b={b} />
-          <h3 className="hj-h" id="ev-cost">THE COST OF STOPPING IT · <span>{b.protocol.testDays} unread simulated days, rulebook {b.frozen.policyId} frozen before they ran</span></h3>
-          <Frontier b={b} />
-          <CostTable b={b} />
-          <p className="ev-p">{b.sensitivity ? (flips.length ? `The frozen rulebook lost first place under ${flips.length} of ${b.sensitivity.rows.length} changed assumptions: ${flips.map((f) => f.label).join('; ')}.` : `The frozen rulebook kept first place under all ${b.sensitivity.rows.length} changed assumptions.`) : ''} Fees, cost of goods and owner approval rates are stated assumptions, not measurements.</p>
+          <h3 className="hj-h" id="ev-cost">THE COST OF STOPPING IT · <span>{f!.protocol.testDays} fresh simulated days, the same safeguards on every rulebook, the rule for a winner written first</span></h3>
+          <Frontier b={f!} />
+          <CostTable b={f!} />
+          <FairPick b={f!} />
+          <p className="ev-p">{f!.sensitivity ? (flips.length === f!.sensitivity.rows.length ? `On value kept, this rulebook did not come first under any of ${f!.sensitivity.rows.length} changed assumptions. Frozen v1 keeps more; v3 stops more.` : flips.length ? `The frozen rulebook lost first place under ${flips.length} of ${f!.sensitivity.rows.length} changed assumptions: ${flips.map((f) => f.label).join('; ')}.` : `The frozen rulebook kept first place under all ${f!.sensitivity.rows.length} changed assumptions.`) : ''} Fees, cost of goods and owner approval rates are stated assumptions, not measurements.</p>
           <h3 className="hj-h" id="ev-missed">WHAT IT WAS NOT TUNED ON · <span>stolen per day. A miss is reported as a miss. Each round ran on its own days, so compare within a round, not across them</span></h3>
           {ev.third ? <HeldOut first={ev.first} second={ev.second} third={ev.third} /> : <Missing what="the third frozen rulebook" />}
           <h3 className="hj-h">AN ATTACKER THAT ADAPTS · <span>a search for the most profitable sleeper against the frozen rulebook</span></h3>

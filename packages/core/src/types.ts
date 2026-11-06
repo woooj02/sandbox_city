@@ -203,6 +203,7 @@ export interface Metrics {
     /** Honest orders challenged to the owner and never approved. */
     abandonedValue: number;
     /** Honest value a carrier actually scanned and nobody refunded: commerce that finished, not just commerce that was paid for. */
+    /** Honest orders that arrived and stayed paid: not refunded, not voided, and not an empty box. A scan alone does not count. */
     fulfilledValue: number;
     /** Honest money authorized and waiting on a scan, in dollar-minutes: the capital a hold locks up. */
     heldDollarMinutes: number };

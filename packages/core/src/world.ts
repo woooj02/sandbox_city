@@ -82,6 +82,10 @@ interface OrderRec {
   legit: boolean; paidAt: number; inExposure: boolean; disputed?: boolean;
   /** The parcel the carrier scanned had nothing in it. */
   empty?: boolean;
+  /** The hold on this order was voided, so the store was never paid. */
+  voided?: boolean;
+  /** This order is in the honest value delivered right now. */
+  valued?: boolean;
 }
 type Task =
   | { k: 'ship'; order: string }
@@ -753,7 +757,7 @@ export class World {
         card, item: { name: o.sku, sku: o.sku, unit: o.unit, qty: o.qty }, shipTo: o.shipTo, customId: o.id, mockCode,
       }, o.id);
       retries = res.retries;
-      charges = gate.escrow || res.result?.status === 'DECLINED' ? 0 : res.charges;
+      charges = gate.escrow || res.result?.status !== 'COMPLETED' ? 0 : res.charges;
       duplicateCharge = res.duplicates > 0;
       if (res.duplicates > 0) {
         this.m.chaos.duplicateCharges += res.duplicates;
@@ -764,6 +768,7 @@ export class World {
         const pr = res.result;
         paypal = { orderId: pr.id, captureId: pr.captureId, authId: pr.authorizationId, status: pr.status, rail: pr.rail, debugId: pr.debugId };
         if (pr.status === 'DECLINED') outcome = 'declined';
+        else if (pr.status === 'PENDING') outcome = 'failed'; // not paid yet: the lab books nothing until PayPal says so
         else {
           outcome = gate.escrow ? 'escrowed' : 'completed';
           const rec: OrderRec = { r, lane, intent: o, card, payer: o.buyer, captureId: pr.captureId, authId: pr.authorizationId, amountHeld: gate.escrow ? o.amount : 0, carrierScan: false, delivered: false, refunded: false, leaked: 0, legit, paidAt: this.t, inExposure: false };
@@ -903,7 +908,20 @@ export class World {
     if (lag > 0) this.schedule(this.t + lag, { k: 'release', order: o.id });
     else this.credit(rec, m);
     this.book(this.scamKind(m), 0, round2(costOfGoods));
-    if (rec.legit) this.m.honest.fulfilledValue = round2(this.m.honest.fulfilledValue + o.amount);
+  }
+
+  /** The goods reached an honest buyer. Value counts here, not at the scan, and leaves again if the money does. */
+  private arrived(rec: OrderRec) {
+    rec.delivered = true;
+    if (!rec.legit || rec.empty || rec.refunded || rec.voided) return;
+    rec.valued = true;
+    this.m.honest.fulfilledValue = round2(this.m.honest.fulfilledValue + rec.intent.amount);
+  }
+
+  private unvalue(rec: OrderRec) {
+    if (!rec.valued) return;
+    rec.valued = false;
+    this.m.honest.fulfilledValue = round2(this.m.honest.fulfilledValue - rec.intent.amount);
   }
 
   /** Held money waits for the complaint window, not just the scan: an empty parcel scans like a full one. */
@@ -913,6 +931,7 @@ export class World {
     const o = rec.intent;
     const c = await this.lifecycle(() => rec.lane.captureAuthorization(rec.authId!, `cap-${o.id}`));
     if (!c) return;
+    if (c.status === 'PENDING') { rec.amountHeld = 0; return; } // PayPal has not finished: the lab books nothing yet
     rec.captureId = c.captureId; rec.amountHeld = 0;
     this.captured(rec, m);
     if (rec.legit) this.m.honest.heldDollarMinutes = round2(this.m.honest.heldDollarMinutes + o.amount * (this.t - rec.paidAt));
@@ -925,6 +944,8 @@ export class World {
     await this.lifecycle(() => rec.lane.voidAuthorization(rec.authId!, `void-${o.id}`));
     if (rec.legit) this.m.honest.heldDollarMinutes = round2(this.m.honest.heldDollarMinutes + o.amount * (this.t - rec.paidAt));
     rec.amountHeld = 0;
+    rec.voided = true;
+    this.unvalue(rec);
     if (o.truth.malicious && o.truth.harm > 0) this.prevent(o.truth.attack!, o.truth.harm);
   }
 
@@ -999,7 +1020,7 @@ export class World {
         if (!lost) this.schedule(this.t + r.int(60, 240), { k: 'deliver', order: o.id });
         break;
       }
-      case 'deliver': rec.delivered = true; break;
+      case 'deliver': this.arrived(rec); break;
       case 'escrowExpire': {
         if (!rec.authId || rec.amountHeld <= 0) break;
         await this.voidHeld(rec);
@@ -1041,7 +1062,7 @@ export class World {
         rec.refunded = true;
         const ms = this.mStats.get(m.id)!;
         if (rec.inExposure) { rec.inExposure = false; ms.exposure = round2(ms.exposure - o.amount); }
-        if (rec.legit && rec.carrierScan) this.m.honest.fulfilledValue = round2(this.m.honest.fulfilledValue - o.amount);
+        this.unvalue(rec);
         this.book(this.scamKind(m), -o.amount, 0);
       } else approved = false;
     }

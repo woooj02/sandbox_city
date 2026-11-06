@@ -1,55 +1,111 @@
 /**
- * Runs portable regressions.
- *   npx tsx scripts/regress.ts [case.json | dir] [--agent "<command>"] [--json]
- * Agent cases need --agent: any command that reads a case as JSON on stdin and prints {"buy", "qty", "ship_to"}.
- * Gate and day cases need nothing. Exits 1 if any case fails, so it fits in CI.
+ * Runs portable regressions, and says what they mean for a release.
+ *   npx tsx scripts/regress.ts [case.json | dir] [--agent "<command>" | --agent-url <url>] [--kind=agent] [--timeout=60] [--report=out.md] [--json]
+ * Agent cases need an agent: a command that reads a case as JSON on stdin and prints {"buy", "qty", "ship_to"},
+ * or an HTTP endpoint that takes the same JSON as a POST and answers with the same object.
+ * Gate and day cases need nothing. Exits 1 if the run should block a release, so it fits in CI.
  */
 import { spawn } from 'node:child_process';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { appendFileSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { checkAgentAnswer, checkDayCase, checkGateCase, REGRESSION_SCHEMA, type AgentAnswer, type AgentRegression, type CaseResult, type Regression } from '@sandbox-city/core';
+import { agentVerdict, checkAgentAnswer, checkDayCase, checkGateCase, REGRESSION_SCHEMA, type AgentRegression, type AgentRow, type CaseResult, type Regression } from '@sandbox-city/core';
 
 const args = process.argv.slice(2);
-const flagAt = args.indexOf('--agent');
-const agent = flagAt >= 0 ? args[flagAt + 1] : undefined;
+const valueOf = (name: string) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : args.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3); };
+const agent = valueOf('agent'), agentUrl = valueOf('agent-url'), kind = valueOf('kind'), report = valueOf('report');
+const timeoutMs = Number(valueOf('timeout') ?? 60) * 1000;
 const asJson = args.includes('--json');
-const target = args.find((a, i) => !a.startsWith('--') && i !== flagAt + 1 || (flagAt < 0 && !a.startsWith('--'))) ?? 'regressions';
+const taken = new Set([agent, agentUrl, report]);
+const target = args.find((a) => !a.startsWith('--') && !taken.has(a)) ?? 'regressions';
 const files = statSync(target).isDirectory() ? readdirSync(target).filter((f) => f.endsWith('.json')).sort().map((f) => join(target, f)) : [target];
 
-export function askAgent(command: string, input: unknown): Promise<AgentAnswer> {
+const parseAnswer = (out: string): unknown => {
+  try { return JSON.parse(out.slice(out.indexOf('{'), out.lastIndexOf('}') + 1)); } catch { throw new Error(`the agent printed something that is not JSON: ${out.slice(0, 120).trim() || '(nothing)'}`); }
+};
+
+function askCommand(command: string, input: unknown): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const p = spawn('sh', ['-c', command], { stdio: ['pipe', 'pipe', 'inherit'] });
+    const timer = setTimeout(() => { p.kill('SIGKILL'); reject(new Error(`the agent gave no answer in ${timeoutMs / 1000}s`)); }, timeoutMs);
     let out = '';
     p.stdout.on('data', (d) => { out += d; });
-    p.on('error', reject);
+    p.stdin.on('error', () => undefined); // an agent that quits without reading is reported by its exit code
+    p.on('error', (e) => { clearTimeout(timer); reject(e); });
     p.on('close', (code) => {
+      clearTimeout(timer);
       if (code !== 0) return reject(new Error(`the agent exited with ${code}`));
-      try { resolve(JSON.parse(out.slice(out.indexOf('{'), out.lastIndexOf('}') + 1))); } catch { reject(new Error(`the agent printed something that is not JSON: ${out.slice(0, 120)}`)); }
+      try { resolve(parseAnswer(out)); } catch (e) { reject(e); }
     });
     p.stdin.end(JSON.stringify(input));
   });
 }
 
-async function runCase(c: Regression): Promise<CaseResult & { skipped?: boolean; answer?: AgentAnswer }> {
+async function askUrl(url: string, input: unknown): Promise<unknown> {
+  const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input), signal: AbortSignal.timeout(timeoutMs) });
+  if (!res.ok) throw new Error(`the agent answered HTTP ${res.status}`);
+  return parseAnswer(await res.text());
+}
+
+const ask = (input: unknown) => (agentUrl ? askUrl(agentUrl, input) : askCommand(agent as string, input));
+
+type Result = CaseResult & { skipped?: boolean; answer?: unknown };
+
+async function runCase(c: Regression): Promise<Result> {
   if (c.schema !== REGRESSION_SCHEMA) return { pass: false, violations: [`unknown schema ${c.schema}`] };
   if (c.kind === 'gate') return checkGateCase(c);
   if (c.kind === 'day') return checkDayCase(c);
-  if (!agent) return { pass: true, violations: [], skipped: true };
-  const answer = await askAgent(agent, (c as AgentRegression).input);
-  return { ...checkAgentAnswer(c, answer), answer };
-}
-
-const results = [];
-for (const f of files) {
-  const c = JSON.parse(readFileSync(f, 'utf8')) as Regression;
-  const r = await runCase(c);
-  results.push({ id: c.id, kind: c.kind, ...r });
-  if (!asJson) {
-    console.log(`${r.skipped ? '–' : r.pass ? '✓' : '✕'} ${c.kind.padEnd(5)} ${c.id}${r.skipped ? '  (needs --agent)' : ''}`);
-    for (const v of r.violations) console.log(`        ${v}`);
+  if (!agent && !agentUrl) return { pass: true, violations: [], skipped: true };
+  try {
+    const answer = await ask((c as AgentRegression).input);
+    return { ...checkAgentAnswer(c as AgentRegression, answer), answer };
+  } catch (e) {
+    // one bad call is that case's result, not the end of the run
+    return { pass: false, invalid: true, violations: [e instanceof Error ? e.message : String(e)], fixes: ['Make the agent answer every case: exit 0 and print one JSON object.'] };
   }
 }
+
+const mark = (r: Result, control?: boolean) => (r.skipped ? '–' : r.invalid ? '?' : !r.pass ? '✕' : r.declined && control ? '!' : '✓');
+const results: (Result & { id: string; kind: string; title: string; control?: boolean })[] = [];
+for (const f of files) {
+  const c = JSON.parse(readFileSync(f, 'utf8')) as Regression;
+  if (kind && c.kind !== kind) continue;
+  const r = await runCase(c);
+  const control = c.kind === 'agent' ? c.control : undefined;
+  results.push({ id: c.id, kind: c.kind, title: c.title, control, ...r });
+  if (asJson) continue;
+  console.log(`${mark(r, control)} ${c.kind.padEnd(5)} ${c.id}${r.skipped ? '  (needs --agent)' : r.declined && control ? '  (declined an honest listing)' : ''}`);
+  for (const v of r.violations) console.log(`        ${v}`);
+  for (const x of new Set(r.fixes)) console.log(`        fix: ${x}`);
+}
+
+const ranAgent = results.filter((r) => r.kind === 'agent' && !r.skipped);
+const verdict = ranAgent.length ? agentVerdict(ranAgent as AgentRow[]) : null;
+const otherFailed = results.filter((r) => r.kind !== 'agent' && !r.pass).length;
 const failed = results.filter((r) => !r.pass).length, ran = results.filter((r) => !r.skipped).length;
-if (asJson) console.log(JSON.stringify(results, null, 2));
-else console.log(`\n${ran - failed} of ${ran} passed${results.length > ran ? `, ${results.length - ran} need an agent` : ''}.`);
-process.exit(failed ? 1 : 0);
+const blocked = verdict?.verdict === 'block' || otherFailed > 0;
+const LABEL = { block: 'BLOCK THIS RELEASE', review: 'REVIEW BEFORE RELEASE', pass: 'NO FAILURE FOUND' };
+
+function markdown() {
+  const v = verdict!;
+  const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\n/g, ' ');
+  const rows = ranAgent.map((r) => {
+    const what = r.declined ? (r.control ? 'Declined an honest listing' : 'Declined') : r.pass ? (r.control ? 'Bought it' : 'Kept to the mandate') : r.violations.join('; ');
+    return `| ${mark(r, r.control)} | ${cell(r.title)} | ${cell(what)} | ${cell([...new Set(r.fixes)].join(' '))} |`;
+  });
+  return [
+    `## Agent regressions: ${LABEL[v.verdict]}`, '', v.why, '',
+    `- Attack listings: ${v.attacks}, breaches: ${v.breaches}, unjudged answers: ${v.invalid}`,
+    `- Honest listings bought: ${v.cleanBought} of ${v.cleanTotal}`, '',
+    '| | Case | What the agent did | Fix |', '| --- | --- | --- | --- |', ...rows, '',
+    'Checked by plain code against the owner\'s mandate, no model. A clean run covers these cases only.', '',
+  ].join('\n');
+}
+
+if (asJson) console.log(JSON.stringify({ verdict, results }, null, 2));
+else {
+  console.log(`\n${ran - failed} of ${ran} passed${results.length > ran ? `, ${results.length - ran} need an agent` : ''}.`);
+  if (verdict) console.log(`${LABEL[verdict.verdict]}: ${verdict.why}\nHonest listings bought: ${verdict.cleanBought} of ${verdict.cleanTotal}.`);
+}
+if (verdict && report) writeFileSync(report, markdown());
+if (verdict && process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, markdown());
+process.exit(blocked ? 1 : 0);

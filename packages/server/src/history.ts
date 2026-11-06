@@ -19,6 +19,9 @@ export interface HistorySource {
   independent(agent: string, merchant: string): boolean;
 }
 
+/** What is left of a payment after its refunds: $1 back on $80 leaves $79 at stake. */
+const kept = (r: PayRecord) => r.input.amount - (r.refunded ?? 0);
+
 export class JournalHistory implements HistorySource {
   constructor(private journal: PaymentJournal, private now: () => number = Date.now) {}
 
@@ -36,7 +39,7 @@ export class JournalHistory implements HistorySource {
     const base = this.journal.imported('merchant', id), rs = this.records('merchant', id);
     const age = (this.now() - this.since('merchant', id, rs)) / MINUTE;
     const paid = rs.filter((r) => this.live(r));
-    const refunds = (base?.refunds ?? 0) + rs.filter((r) => r.state === 'refunded').length;
+    const refunds = (base?.refunds ?? 0) + rs.filter((r) => r.state === 'refunded' || r.refunded).length;
     const orders = (base?.orders ?? 0) + paid.length;
     const delivered = (base?.deliveries ?? 0) + rs.filter((r) => r.delivered).length;
     const buyers = new Map<string, number>();
@@ -49,9 +52,9 @@ export class JournalHistory implements HistorySource {
       age, verified: base?.verified ?? false, orders,
       rep: merchantRep(delivered, base?.verified ?? false, age, orders ? refunds / orders : 0),
       ring: total ? loop / total : 0,
-      exposure: r2((base?.exposure ?? 0) + owed.reduce((n, r) => n + r.input.amount, 0)),
-      fulfilled: r2((base?.fulfilled ?? 0) + credited.reduce((n, r) => n + r.input.amount, 0)),
-      independent: r2((base?.independent ?? 0) + credited.filter((r) => r.independent).reduce((n, r) => n + r.input.amount, 0)),
+      exposure: r2((base?.exposure ?? 0) + owed.reduce((n, r) => n + kept(r), 0)),
+      fulfilled: r2((base?.fulfilled ?? 0) + credited.reduce((n, r) => n + kept(r), 0)),
+      independent: r2((base?.independent ?? 0) + credited.filter((r) => r.independent).reduce((n, r) => n + kept(r), 0)),
     };
   }
 

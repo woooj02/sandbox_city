@@ -28,8 +28,8 @@ export function Welcome() {
         <h2>SANDBOX CITY</h2>
         <p className="wl-lede">Test an agent that can spend money before you ship it. Reproduce a financial failure, compare defenses and what they cost honest buyers, then carry the result into checkout and CI.</p>
         <ol className="wl-steps">
-          <li><b>A whole city trades for one day.</b> AI shoppers, stores and six crews of attackers, every payment on PayPal rails.</li>
-          <li><b>You set the rules at the gate.</b> Passports, signatures, spend caps, escrow, idempotency keys.</li>
+          <li><b>A simulated city trades for one day.</b> Scripted shoppers, stores and six crews of attackers, on a twin of PayPal's API.</li>
+          <li><b>You set the rules at the gate.</b> Passports, signatures, spend caps, payment holds, idempotency keys.</li>
           <li><b>The lab keeps score.</b> Fraud stopped, honest buyers let through, and net value, on the same day every time.</li>
         </ol>
         <button className="wl-hijack" onClick={hijack}>
@@ -39,10 +39,12 @@ export function Welcome() {
         </button>
         <div className="wl-actions">
           <button className="btn hot" onClick={evidence}>SEE THE EVIDENCE <small>start here · two minutes</small></button>
+          <button className="btn" onClick={() => { explore(); useStore.setState({ showAgent: true }); }}>TEST MY AGENT</button>
+          <button className="btn" onClick={() => { explore(); useStore.setState({ showWorth: true }); }}>IS IT WORTH IT?</button>
           <button className="btn" onClick={explore}>EXPLORE THE LAB</button>
-          <button className="btn" onClick={film}>THE LONG FILM <small>about 9 min</small></button>
         </div>
-        <p className="wl-keys">Keys: <kbd>C</kbd> cinema · <kbd>R</kbd> roll the film · <kbd>1</kbd>–<kbd>5</kbd> jump to an act · <kbd>H</kbd> the hijack</p>
+        <button className="simple-link" onClick={film}>Or watch the long film, about 9 minutes →</button>
+        <p className="wl-keys">Keys: <kbd>C</kbd> cinema · <kbd>R</kbd> roll the film · <kbd>1</kbd>–<kbd>5</kbd> jump to an act · <kbd>H</kbd> the hijack · <kbd>L</kbd> the full lab</p>
       </div>
     </div>
   );

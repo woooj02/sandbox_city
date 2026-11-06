@@ -1,3 +1,4 @@
+import { INVARIANT_FLOOR } from '../src/policy-patch';
 import { describe, expect, it } from 'vitest';
 import { World, DEFAULT_CONFIG, PRESETS, whatIf, summarize, samePolicy, searchRulebook } from '../src/index';
 
@@ -18,12 +19,12 @@ describe('what-if replays', () => {
 });
 
 describe('rulebook search', () => {
-  it('never does worse than the best starting preset, and is reproducible', async () => {
+  it('never does worse than the best preset with the invariants on, and is reproducible', async () => {
     const opts = { trainSeeds: ['s1'], testSeeds: [], generations: 2, children: 3, world: { shoppers: 120, merchants: 30, ticks: 480 } };
     const a = await searchRulebook(opts);
     const b = await searchRulebook(opts);
     expect(a.best.policy).toEqual(b.best.policy);
-    const presets = await Promise.all(Object.values(PRESETS).map((p) => new World({ ...DEFAULT_CONFIG, ...opts.world, seed: 's1', crypto: 'modeled', policy: p }).run()));
+    const presets = await Promise.all(Object.values(PRESETS).map((p) => new World({ ...DEFAULT_CONFIG, ...opts.world, seed: 's1', crypto: 'modeled', policy: { ...p, ...INVARIANT_FLOOR } }).run()));
     expect(a.best.score).toBeGreaterThanOrEqual(Math.max(...presets.map((m) => m.netValue)) - 0.01);
   });
 

@@ -17,7 +17,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { canonicalAddress, CheckoutSession, policyId, PRESETS, settlement, type CheckoutArgs, type CreateOrderInput, type Policy, type PostalAddress, type Verdict } from '@sandbox-city/core';
+import { canonicalAddress, CheckoutSession, policyId, PRESETS, settlement, type CheckoutArgs, type CreateOrderInput, type Policy, type PostalAddress, type Verdict, INVARIANT_FLOOR } from '@sandbox-city/core';
 import { JournalHistory, type HistorySource } from './history';
 import { PaymentJournal, PaymentWorker, type DecisionContext, type PayRecord } from './payments';
 import type { SandboxRails } from './paypal';
@@ -46,13 +46,15 @@ const ID = /^[\w-]{1,64}$/;
 /** The frozen rulebooks by name, read from the files the benchmark checked. */
 export function frozenRulebooks(): Record<string, Policy> {
   const out: Record<string, Policy> = { open: PRESETS.open, fortress: PRESETS.fortress, tuned: PRESETS.tuned };
-  for (const [name, file] of [['frozen-v1', 'frozen.json'], ['frozen-v2', 'frozen-v2.json'], ['frozen-v3', 'frozen-v3.json']] as const) {
+  for (const [name, file] of [['frozen-v1', 'frozen.json'], ['frozen-v2', 'frozen-v2.json'], ['frozen-v3', 'frozen-v3.json'], ['frozen-v4', 'frozen-v4.json']] as const) {
     const url = new URL(`../../../evidence/${file}`, import.meta.url);
     if (!existsSync(url)) continue;
     const f = JSON.parse(readFileSync(url, 'utf8')) as { policy: Policy; policyId: string };
     if (policyId(f.policy) !== f.policyId) throw new Error(`${file} does not match its hash`);
     out[name] = f.policy;
   }
+  // v1 as benchmarked in round four: the same rulebook with the mandatory safeguards on
+  if (out['frozen-v1']) out['frozen-v1-safeguards'] = { ...out['frozen-v1'], ...INVARIANT_FLOOR };
   return out;
 }
 
@@ -102,7 +104,7 @@ export function registerCheckout(app: FastifyInstance, opts: CheckoutOptions) {
 
   const view = (r: PayRecord | null | undefined) => r && {
     key: r.key, state: r.state, intent: r.input.intent, amount: r.input.amount, orderId: r.orderId, captureId: r.captureId, authorizationId: r.authorizationId,
-    recovered: r.recovered, reason: r.reason, delivered: !!r.delivered, disputed: !!r.disputed, credited: !!r.credited,
+    recovered: r.recovered, reason: r.reason, refunded: r.refunded ?? 0, delivered: !!r.delivered, disputed: !!r.disputed, credited: !!r.credited,
   };
 
   /** A session's memory comes from the journal, so a restart or an eviction cannot refill a spent mandate. */

@@ -3,6 +3,7 @@
  * training days, then check it on held-out days it never saw (different city layout, shoppers,
  * attacker placement and timing).
  */
+import { INVARIANT_FLOOR } from './policy-patch';
 import { World, DEFAULT_CONFIG, type WorldConfig } from './world';
 import { PRESETS, RULES, type Policy } from './policy';
 import { Rng, round2, clamp } from './rng';
@@ -128,9 +129,11 @@ export async function searchRulebook(opts: SearchOptions & { label?: string }, o
     return sc;
   };
 
+  // no caller can search its way past these, and the floor is applied last so a mutation cannot undo it
+  const floor = { ...opts.floor, ...INVARIANT_FLOOR };
   let pop: Scored[] = [];
   // presets as shipped, so they plot where they really are; every candidate after them retries safely
-  for (const p of Object.values(PRESETS)) pop.push(await evaluate({ ...p, ...opts.floor }, 0));
+  for (const p of Object.values(PRESETS)) pop.push(await evaluate({ ...p, ...floor }, 0));
   pop.sort((a, b) => b.score - a.score);
 
   const spent = () => opts.budget != null && evals >= opts.budget;
@@ -141,7 +144,7 @@ export async function searchRulebook(opts: SearchOptions & { label?: string }, o
       const child = opts.strategy === 'random' ? randomPolicy(r) : r.chance(0.3) ? mutate(crossover(a, r.pick(parents).policy, r), r, 1) : mutate(a, r);
       child.name = 'Tuned';
       child.idempotencyKeys = true;
-      Object.assign(child, opts.floor);
+      Object.assign(child, floor);
       pop.push(await evaluate(child, g));
     }
     const seen = new Set<string>();

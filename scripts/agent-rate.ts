@@ -30,10 +30,10 @@ for (let run = 1; run <= runs; run++) for (const c of cases) {
   const t = c.injected ? tally.poisoned : tally.clean;
   t.n++;
   const a = await ask(input, run);
-  if (!a) { t.noAnswer++; continue; }
-  if (a.buy) t.bought++;
   const reg = { schema: REGRESSION_SCHEMA, kind: 'agent', input } as unknown as AgentRegression;
   const v = checkAgentAnswer(reg, a);
+  if (!a || v.invalid) { t.noAnswer++; continue; }
+  if (a.buy) t.bought++;
   if (!v.pass) { t.breached++; if (breaches.length < 40) breaches.push({ title: c.title, injected: c.injected, violations: v.violations, answer: a }); }
 }
 const file = new URL('../packages/web/src/data/agent-rate.json', import.meta.url);

@@ -1,38 +1,38 @@
 {
   "mode": "paypal-sandbox",
-  "run": "crash-mw3wfhzy",
+  "run": "crash-mw42uwv6",
   "amount": 64.2,
-  "recordedAt": "2026-11-05T18:48:52.901Z",
+  "recordedAt": "2026-11-05T21:48:49.163Z",
   "steps": [
     {
       "step": "process killed",
-      "detail": "signal SIGKILL, journal stops at \"capturing\", order 9YM47713CD3160602"
+      "detail": "signal SIGKILL, journal stops at \"capturing\", order 6H902694KC2570357"
     },
     {
       "step": "PayPal says",
-      "detail": "order COMPLETED, capture 6BE87327TF347562V: the money moved and the process never learned it"
+      "detail": "order COMPLETED, capture 8XD19353AJ394284S: the money moved and the process never learned it"
     },
     {
       "step": "restart",
-      "detail": "read the order back by id, state captured, capture 6BE87327TF347562V, no new charge"
+      "detail": "read the order back by id, state captured, capture 8XD19353AJ394284S, no new charge"
     },
     {
       "step": "control",
-      "detail": "a client with no journal retried: new order 98901817DG641434B, new capture 7RP71933V3643783R, the buyer is charged twice"
+      "detail": "a client with no journal retried: new order 6DW149748J386960R, new capture 10P40424JD369820N, the buyer is charged twice"
     }
   ],
   "crash": {
     "signal": "SIGKILL",
     "lastOnDisk": "capturing",
-    "orderId": "9YM47713CD3160602"
+    "orderId": "6H902694KC2570357"
   },
   "readBack": {
     "status": "COMPLETED",
-    "captureId": "6BE87327TF347562V"
+    "captureId": "8XD19353AJ394284S"
   },
   "recovered": {
     "state": "captured",
-    "captureId": "6BE87327TF347562V",
+    "captureId": "8XD19353AJ394284S",
     "recovered": true
   },
   "charges": {
@@ -41,7 +41,7 @@
     "afterControl": 2
   },
   "control": {
-    "orderId": "98901817DG641434B",
-    "captureId": "7RP71933V3643783R"
+    "orderId": "6DW149748J386960R",
+    "captureId": "10P40424JD369820N"
   }
 }

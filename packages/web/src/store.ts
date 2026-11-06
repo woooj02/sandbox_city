@@ -51,6 +51,12 @@ interface State {
   showHijack: boolean;
   /** The evidence exhibit: the benchmark, the proofs and the regressions. */
   showEvidence: boolean;
+  /** Prices a developer's own costs against the measured rulebooks. */
+  showWorth: boolean;
+  /** The bring-your-own-agent page. */
+  showAgent: boolean;
+  /** Every rule, the ledger and the wire. The first screen shows one decision and three numbers instead. */
+  fullLab: boolean;
   paypal: 'twin' | 'sandbox';
   runId: string | null;
   paypalCalls: PayPalCall[];
@@ -92,6 +98,9 @@ export const useStore = create<State>((set, get) => ({
   showReport: false,
   showHijack: new URLSearchParams(location.search).has('hijack'),
   showEvidence: new URLSearchParams(location.search).has('evidence'),
+  showAgent: new URLSearchParams(location.search).has('agent'),
+  showWorth: new URLSearchParams(location.search).has('worth'),
+  fullLab: new URLSearchParams(location.search).has('lab'),
   paypal: 'twin',
   runId: null,
   paypalCalls: [],

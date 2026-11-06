@@ -116,7 +116,7 @@ describe('POST /webhooks/paypal', () => {
 
   it('a forged event changes nothing', async () => {
     const paid = (await post(app, { key: 'k13', args: honest })).json();
-    const event = { id: 'WH-1', event_type: 'PAYMENT.CAPTURE.REFUNDED', resource: { id: 'R1', links: [{ rel: 'up', href: `/x/${paid.payment.captureId}` }] } };
+    const event = { id: 'WH-1', event_type: 'PAYMENT.CAPTURE.REFUNDED', resource: { id: 'R1', amount: { value: String(paid.payment.amount) }, links: [{ rel: 'up', href: `/x/${paid.payment.captureId}` }] } };
     const res = await app.inject({ method: 'POST', url: '/webhooks/paypal', headers: headers('forged'), payload: event });
     expect(res.statusCode).toBe(401);
     expect((await app.inject({ url: '/api/payments/k13' })).json().state).toBe('captured');

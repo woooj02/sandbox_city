@@ -6,9 +6,11 @@ import { clock } from './meta';
 
 const SPEEDS = [2, 8, 24, 80, 240];
 const SPEED_LABEL: Record<number, string> = { 2: '¼×', 8: '1×', 24: '3×', 80: '10×', 240: 'MAX' };
+const SIMPLE_SPEEDS = [8, 80, 240];
 
 export function TopBar() {
-  const { running, tps, xray, policies, paypal } = useStore();
+  const { running, tps, xray, policies, paypal, fullLab } = useStore();
+  const full = fullLab || policies.length > 1;
   const forged = useStore((s) => s.genomes !== null);
   const lane0 = useStore((s) => s.lanes[0]);
   const t = lane0?.t ?? 0, total = lane0?.world?.ticks ?? 1440;
@@ -23,20 +25,22 @@ export function TopBar() {
         <div className="logo-mark">⌬</div>
         <div className="logo-text">
           <div className="logo-title glitch" data-text="SANDBOX CITY">SANDBOX CITY</div>
-          <div className="logo-sub">crash-test lab for AI commerce</div>
+          <div className="logo-sub">test payment agents before release</div>
         </div>
       </div>
       <div className={`rail-badge ${paypal}`} title={paypal === 'sandbox' ? 'Lane A moves real money on the PayPal sandbox' : 'All payments run on the in-browser PayPal twin'}>
-        <i />{paypal === 'sandbox' ? 'LIVE · PAYPAL SANDBOX' : 'PAYPAL TWIN'}
+        <i />{paypal === 'sandbox' ? 'LIVE · PAYPAL SANDBOX' : 'SIMULATION'}
       </div>
       {forged && (
         <button className="rail-badge forged" title="Attackers in this city use tactics evolved by the forge. Click to go back to the stock attackers." onClick={() => { useStore.setState({ genomes: null }); client.start(useStore.getState().policies); setTimeout(() => client.send({ cmd: 'play' }), 300); }}>
           <i />☠ FORGED ATTACKERS
         </button>
       )}
-      <ModelBadge />
+      {full && <ModelBadge />}
       <button className="rail-badge evidence" title="The failure, what stopping it costs, what still gets through, and the money across a crash (E)" onClick={() => useStore.setState({ showEvidence: true })}><i />EVIDENCE</button>
-      <button className="rail-badge hijack" title="A real model talked into an attacker's order on the PayPal sandbox, and what the gate did (H)" onClick={() => useStore.setState({ showHijack: true })}><i />◆ THE HIJACK</button>
+      {full && <button className="rail-badge hijack" title="A real model talked into an attacker's order on the PayPal sandbox, and what the gate did (H)" onClick={() => useStore.setState({ showHijack: true })}><i />◆ THE HIJACK</button>}
+      <button className="rail-badge agent" title="Run a case that fooled a real model against your own agent" onClick={() => useStore.setState({ showAgent: true })}>TEST MY AGENT</button>
+      <button className="rail-badge worth-badge" title="Price every rulebook with your own costs" onClick={() => useStore.setState({ showWorth: true })}>IS IT WORTH IT?</button>
       <div className="clockbox">
         <div className="clock-big">DAY 1 · {clock(t)}</div>
         <div className="progress"><i style={{ width: `${(t / total) * 100}%` }} /></div>
@@ -44,11 +48,12 @@ export function TopBar() {
       <div className="controls">
         <button className={`btn play ${running ? 'on' : ''}`} onClick={() => client.send({ cmd: running ? 'pause' : 'play' })}>{running ? '❚❚ PAUSE' : '▶ RUN'}</button>
         <div className="seg">
-          {SPEEDS.map((s) => <button key={s} className={tps === s ? 'on' : ''} onClick={() => client.send({ cmd: 'speed', tps: s })}>{SPEED_LABEL[s]}</button>)}
+          {(full ? SPEEDS : SIMPLE_SPEEDS).map((s) => <button key={s} className={tps === s ? 'on' : ''} onClick={() => client.send({ cmd: 'speed', tps: s })}>{SPEED_LABEL[s]}</button>)}
         </div>
-        <button className={`btn ${xray ? 'on' : ''}`} title="Show the ground truth the gate can't see" onClick={() => useStore.setState({ xray: !xray })}>◉ X-RAY</button>
-        <button className={`btn fork ${policies.length > 1 ? 'on' : ''}`} onClick={fork}>⑂ {policies.length > 1 ? 'UNFORK' : 'FORK'}</button>
+        {full && <button className={`btn ${xray ? 'on' : ''}`} title="Show the ground truth the gate can't see" onClick={() => useStore.setState({ xray: !xray })}>◉ X-RAY</button>}
+        {full && <button className={`btn fork ${policies.length > 1 ? 'on' : ''}`} onClick={fork}>⑂ {policies.length > 1 ? 'UNFORK' : 'FORK'}</button>}
         <button className="btn" onClick={() => { client.start(useStore.getState().policies); setTimeout(() => client.send({ cmd: 'play' }), 300); }}>↺ RERUN</button>
+        <button className={`btn lab-toggle ${fullLab ? 'on' : ''}`} title="Show or hide every rule, the ledger and the event wire (L)" onClick={() => useStore.setState({ fullLab: !fullLab })}>{fullLab ? 'SIMPLE VIEW' : 'FULL LAB'}</button>
       </div>
     </header>
   );

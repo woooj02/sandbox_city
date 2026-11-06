@@ -10,9 +10,10 @@
  * - Regressions: every gate and day case is run again. Receipts are checked against the rulebook they name.
  * Each claim must also appear, word for word, in README.md or docs/. Exits 1 if anything disagrees.
  */
+import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
-import { checkDayCase, checkGateCase, DEFAULT_CONFIG, DEV_WORLD, INJECTIONS, policyId, PRESETS, runDay, World, type BrainCase, type BrainChoice, type DayRegression, type GateRegression, type Policy, type Regression } from '@sandbox-city/core';
-import { adaptiveRows, armRows, heldRows } from './benchmark-tables.ts';
+import { BASELINES, breakEven, checkDayCase, checkGateCase, DEFAULT_CONFIG, DEFAULT_PRICES, DEV_WORLD, INVARIANT_FLOOR, type DefenseArm, INJECTIONS, policyId, PRESETS, runDay, World, type BrainCase, type BrainChoice, type DayRegression, type GateRegression, type Policy, type Regression } from '@sandbox-city/core';
+import { adaptiveRows, armRows, heldRows, type Ci } from './benchmark-tables.ts';
 import { gatePlan, goesElsewhere, probePlans } from '../packages/server/src/toolkit-shop.ts';
 import rate from '../packages/web/src/data/hijack-rate.json' with { type: 'json' };
 import toolkit from '../packages/web/src/data/toolkit-proof.json' with { type: 'json' };
@@ -111,17 +112,17 @@ claim('model shoppers', 'Lab-Tuned, fooled agent: net value', whole(plainTuned.n
 claim('model shoppers', 'Wild West, careful agent: net value', whole(guardedOpen.net), '$108,099', 'Wild West with the careful one ($108,099)');
 
 // ── Benchmark: hashes, exact replays, tables ──
-const frozen1 = json('../evidence/frozen.json'), frozen2 = json('../evidence/frozen-v2.json'), frozen3 = json('../evidence/frozen-v3.json');
-const first = json('../packages/web/src/data/benchmark.json'), second = json('../packages/web/src/data/benchmark-v2.json'), third = json('../packages/web/src/data/benchmark-v3.json');
-for (const [name, f, b] of [['first', frozen1, first], ['second', frozen2, second], ['third', frozen3, third]] as const) {
+const frozen1 = json('../evidence/frozen.json'), frozen2 = json('../evidence/frozen-v2.json'), frozen3 = json('../evidence/frozen-v3.json'), frozen4 = json('../evidence/frozen-v4.json');
+const first = json('../packages/web/src/data/benchmark.json'), second = json('../packages/web/src/data/benchmark-v2.json'), third = json('../packages/web/src/data/benchmark-v3.json'), fourth = json('../packages/web/src/data/benchmark-v4.json');
+for (const [name, f, b] of [['first', frozen1, first], ['second', frozen2, second], ['third', frozen3, third], ['fourth', frozen4, fourth]] as const) {
   claim('benchmark', `${name} frozen rulebook matches its hash`, policyId(f.policy), f.policyId, f.policyId);
   claim('benchmark', `${name} results name that rulebook`, b.frozen.policyId, f.policyId);
   claim('benchmark', `${name} round ran 30 days`, b.protocol.testDays, 30);
 }
 claim('benchmark', 'the first rulebook left the mandate off', frozen1.policy.enforceMandate, false, 'left the mandate off');
-for (const f of [frozen2, frozen3]) claim('benchmark', `${f.policy.name} holds every invariant`, ['enforceMandate', 'shipLock', 'strictOrders', 'idempotencyKeys'].map((k) => f.policy[k]), [true, true, true, true]);
+for (const f of [frozen2, frozen3, frozen4]) claim('benchmark', `${f.policy.name} holds every invariant`, ['enforceMandate', 'shipLock', 'strictOrders', 'idempotencyKeys'].map((k) => f.policy[k]), [true, true, true, true]);
 const seedsOf = (b: { arms: { days: { seeds: string[] } }[] }) => b.arms[0].days.seeds;
-claim('benchmark', 'no day is used in two rounds', new Set([...seedsOf(first), ...seedsOf(second), ...seedsOf(third)]).size, 90);
+claim('benchmark', 'no day is used in two rounds', new Set([...seedsOf(first), ...seedsOf(second), ...seedsOf(third), ...seedsOf(fourth)]).size, 120);
 for (const [label, b, policy, armKey, world] of [['first', first, frozen1.policy, 'frozen', DEV_WORLD], ['second', second, frozen2.policy, 'frozen', DEV_WORLD], ['third', third, frozen3.policy, 'frozen', DEV_WORLD]] as const) {
   const a = b.arms.find((x: { key: string }) => x.key === armKey);
   for (const i of [0, 17]) {
@@ -129,21 +130,50 @@ for (const [label, b, policy, armKey, world] of [['first', first, frozen1.policy
     claim('benchmark', `${label} round, ${a.days.seeds[i]} replays exactly`, [d.kept, d.stolen], [a.days.kept[i], a.days.stolen[i]]);
   }
 }
-const worst = Math.max(...[...first.arms, ...second.arms, ...third.arms].map((a: { overBound: number }) => a.overBound));
+const worst = Math.max(...[...first.arms, ...second.arms, ...third.arms, ...fourth.arms].map((a: { overBound: number }) => a.overBound));
 claim('benchmark', 'no arm passed the exposure bound on any day', worst, 0, 'never passed on any test day');
-for (const row of [...armRows(third), ...armRows(second), ...armRows(first), ...heldRows(third, first), ...adaptiveRows(third)]) claim('benchmark', `table row ${row.split('|')[1].trim()}`, true, true, row);
+for (const row of [...armRows(fourth), ...armRows(third), ...armRows(second), ...armRows(first), ...heldRows(third, first), ...adaptiveRows(third)]) claim('benchmark', `table row ${row.split('|')[1].trim()}`, true, true, row);
 
 // the README's own table and its headline numbers, against the raw results
 const onlyReadme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
-for (const row of armRows(third).filter((r) => /Wild West|Simple limits|Fortress|Lab-Tuned|Frozen v1|Frozen v3/.test(r))) rows.push({ area: 'benchmark', claim: `README row ${row.split('|')[1].trim()}`, ok: onlyReadme.includes(row), why: onlyReadme.includes(row) ? undefined : 'the README table is out of date' });
+for (const row of armRows(fourth).filter((r) => /Wild West|Fortress|Lab-Tuned|Frozen v1|Frozen v3|Frozen v4/.test(r))) rows.push({ area: 'benchmark', claim: `README row ${row.split('|')[1].trim()}`, ok: onlyReadme.includes(row), why: onlyReadme.includes(row) ? undefined : 'the README table is out of date' });
 const v = (k: string) => third.arms.find((a: { key: string }) => a.key === k);
 const ref = third.arms.find((a: { key: string }) => a.key === 'frozen_v1').vsFrozen;
-claim('benchmark', 'v3 keeps the same value as v1', [whole(ref.kept.mean), ref.kept.lo < 0 && ref.kept.hi > 0], ['$29', true], 'the difference is $29 a day');
+claim('benchmark', 'v3 keeps less value than v1', [whole(-ref.kept.mean), ref.kept.hi < 0], ['$4,935', true], 'keeps $4,935 a day less');
 claim('benchmark', 'v3 stops more than v1', whole(-ref.stolen.mean), '$1,429', 'stops $1,429 more a day');
 claim('benchmark', 'friction against v1', [v('frozen').challengedPer100, v('frozen_v1').challengedPer100, Math.round(v('frozen').heldDollarHours.mean / v('frozen_v1').heldDollarHours.mean)], [17.5, 5.3, 15], '17.5 step-ups per 100 orders');
 claim('benchmark', 'sleeper theft under v3', whole(v('frozen').sleeper.stolen.mean), '$54', 'to $54');
-claim('benchmark', 'who led under changed assumptions', ['frozen_v1', 'frozen'].map((k) => third.sensitivity.rows.filter((r: { ranking: string[] }) => r.ranking[0] === k).length), [7, 5], 'Frozen v1 came first under 7 and Frozen v3 under 5');
-claim('benchmark', 'the top two led every assumption', third.sensitivity.rows.every((r: { ranking: string[] }) => ['frozen', 'frozen_v1'].includes(r.ranking[0]) && ['frozen', 'frozen_v1'].includes(r.ranking[1])), true);
+claim('benchmark', 'who led under changed assumptions', ['frozen_v1', 'frozen'].map((k) => third.sensitivity.rows.filter((r: { ranking: string[] }) => r.ranking[0] === k).length), [12, 0], 'Frozen v1 came first under all 12');
+claim('benchmark', 'v3 came second under 11 of 12', third.sensitivity.rows.filter((r: { ranking: string[] }) => r.ranking[1] === 'frozen').length, 11, 'Frozen v3 came second under 11');
+const evolved = first.search.rows.filter((r: { strategy: string }) => r.strategy === 'evolve').map((r: { testKept: number }) => r.testKept);
+claim('benchmark', 'evolution against random search', [whole(evolved.reduce((a: number, b: number) => a + b, 0) / evolved.length), [...new Set(first.search.rows.filter((r: { strategy: string }) => r.strategy === 'random').map((r: { testKept: number }) => whole(r.testKept)))]], ['$100,012', ['$96,560']], 'evolution kept $100,012 a day');
+// round four: the rule was declared first, so the claim is that the rule, applied to the results, says what the docs say
+claim('round four', 'the protocol is the one declared before the run', createHash('sha256').update(readFileSync(new URL('../evidence/round-four.md', import.meta.url))).digest('hex').slice(0, 16), '28c443079bc68f3a', null);
+const four = (k: string) => fourth.arms.find((a: { key: string }) => a.key === k);
+// the arms store a name, not their rules, so rebuild each from its source: a replay to the cent proves what actually ran
+const fourthRules: Record<string, Policy> = { ...BASELINES, frozen_v1: frozen1.policy, frozen_v2: frozen2.policy, frozen_v3: frozen3.policy, frozen: frozen4.policy };
+claim('round four', 'every arm is accounted for', Object.keys(fourthRules).sort(), fourth.arms.map((a: { key: string }) => a.key).sort());
+for (const a of fourth.arms) {
+  const d = await runDay({ ...fourthRules[a.key], ...INVARIANT_FLOOR }, a.days.seeds[7], DEV_WORLD);
+  claim('round four', `${a.name} with the safeguards, ${a.days.seeds[7]} replays exactly`, [d.kept, d.stolen], [a.days.kept[7], a.days.stolen[7]]);
+}
+const bar = fourth.arms.filter((a: { exact: { access: number; fraudStopped: number }; overBound: number }) => a.exact.access >= 0.95 && a.exact.fraudStopped >= 0.85 && a.overBound === 0)
+  .sort((p: { kept: Ci }, q: { kept: Ci }) => q.kept.mean - p.kept.mean).map((a: { key: string }) => a.key);
+claim('round four', 'who meets the bar, best first', bar, ['frozen', 'frozen_v3', 'frozen_v1']);
+const v3gap = four('frozen_v3').vsFrozen;
+claim('round four', 'v4 leads v3, and the interval excludes zero', [whole(v3gap.kept.mean), v3gap.kept.lo > 0], ['$443', true], 'keeps $443 a day more than v3');
+claim('round four', 'v3 stops more than v4', whole(v3gap.stolen.mean), '$878', 'v3 stops $878 a day more');
+claim('round four', 'v4 holds less than v3', Math.round(100 * (1 - four('frozen').heldDollarHours.mean / four('frozen_v3').heldDollarHours.mean)), 84, 'holds 84% less honest money');
+const box = fourth.heldOut.find((h: { label: string }) => h.label === 'Empty box').arms;
+const boxOf = (name: string) => box.find((a: { name: string }) => a.name === name).stolen.mean;
+claim('round four', 'empty boxes', [whole(boxOf('Frozen v3')), whole(boxOf('Frozen v4'))], ['$48', '$2,953'], '$48 a day against $2,953 under v4');
+claim('round four', 'only v3 stops empty boxes', box.filter((a: { name: string; stolen: Ci }) => a.stolen.mean < 500 && a.name !== 'Fortress').map((a: { name: string }) => a.name), ['Frozen v3']);
+const priced = (k: string): DefenseArm => { const a = four(k); return { key: k, name: a.name, fulfilled: a.fulfilled.mean, stolen: a.stolen.mean, access: a.exact.access, heldDollarHours: a.heldDollarHours.mean, stepUps: (a.challengedPer100 / 100) * a.ordersPerDay }; };
+claim('round four', 'where v3 passes v4', `$${breakEven(priced('frozen'), priced('frozen_v3'), 'stolenDollar', DEFAULT_PRICES)!.toFixed(2)}`, '$1.50', 'more than $1.50');
+const steps = fourth.arms.filter((a: { key: string }) => a.key !== 'fortress').map((a: { challengedPer100: number }) => a.challengedPer100);
+claim('round four', 'step-ups barely differ with the same safeguards', [Math.min(...steps), Math.max(...steps)], [17.2, 18.1], 'between 17.2 and 18.1');
+claim('round four', 'who led under changed assumptions', ['frozen', 'frozen_v3'].map((k) => fourth.sensitivity.rows.filter((r: { ranking: string[] }) => r.ranking[0] === k).length), [11, 1], 'v4 came first under 11');
+
 const defender = json('../packages/web/src/data/defender.json');
 const side = (k: string) => defender.rows.filter((r: { kind: string }) => r.kind === k);
 const sum = (rs: { accepted: number }[], f: (r: never) => number) => rs.reduce((n, r) => n + f(r as never), 0);
@@ -156,7 +186,7 @@ const regDir = new URL('../regressions/', import.meta.url);
 const regs = readdirSync(regDir).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(readFileSync(new URL(f, regDir), 'utf8')) as Regression);
 for (const c of regs.filter((r): r is GateRegression => r.kind === 'gate')) claim('regressions', `${c.id} decides as recorded`, checkGateCase(c).violations, []);
 for (const c of regs.filter((r): r is DayRegression => r.kind === 'day')) claim('regressions', `${c.id} replays to the cent`, (await checkDayCase(c)).violations, []);
-claim('regressions', 'cases in the repository', regs.length, 13, '13 cases');
+claim('regressions', 'cases in the repository', regs.length, 16, '16 cases');
 const recovery = json('../packages/web/src/data/recovery-proof.json'), checkout = json('../packages/web/src/data/checkout-proof.json');
 claim('receipts', 'a real SIGKILL, one charge with the journal, two without', [recovery.crash.signal, recovery.crash.lastOnDisk, recovery.charges.afterRecovery, recovery.charges.afterControl], ['SIGKILL', 'capturing', 1, 2]);
 claim('receipts', 'receipts say what they ran against', [recovery.mode, checkout.mode], ['paypal-sandbox', 'paypal-sandbox'], 'paypal-sandbox');

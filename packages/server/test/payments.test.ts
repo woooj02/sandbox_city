@@ -146,7 +146,7 @@ describe('webhooks', () => {
   it('moves a payment forward only: repeats and old news change nothing', async () => {
     const w = new PaymentWorker(rails, journalAt());
     const r = await w.pay('o1', input('o1'));
-    const refunded = event('E2', 'PAYMENT.CAPTURE.REFUNDED', { id: 'RF1', links: [{ rel: 'up', href: `/v2/payments/captures/${r.captureId}` }] });
+    const refunded = event('E2', 'PAYMENT.CAPTURE.REFUNDED', { id: 'RF1', amount: { value: "42.50" }, links: [{ rel: 'up', href: `/v2/payments/captures/${r.captureId}` }] });
     expect(w.applyEvent(refunded)).toBe('applied');
     expect(w.journal.get('o1')?.state).toBe('refunded');
     expect(w.applyEvent(refunded)).toBe('duplicate');
@@ -159,7 +159,7 @@ describe('webhooks', () => {
     const j = journalAt();
     const w = new PaymentWorker(rails, j);
     const r = await w.pay('o1', input('o1'));
-    const e = event('E1', 'PAYMENT.CAPTURE.REFUNDED', { id: 'RF1', links: [{ rel: 'up', href: `/x/${r.captureId}` }] });
+    const e = event('E1', 'PAYMENT.CAPTURE.REFUNDED', { id: 'RF1', amount: { value: "42.50" }, links: [{ rel: 'up', href: `/x/${r.captureId}` }] });
     w.applyEvent(e);
     expect(new PaymentWorker(rails, new PaymentJournal(j.path)).applyEvent(e)).toBe('duplicate');
   });

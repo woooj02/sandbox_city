@@ -11,8 +11,8 @@ ModuleRegistry.registerModules([AllCommunityModule]);
 
 export const gridTheme = themeQuartz.withPart(colorSchemeDark).withParams({
   backgroundColor: 'rgba(6,8,22,0.0)', foregroundColor: '#cfd8ff', headerBackgroundColor: 'rgba(20,24,60,0.85)', headerTextColor: '#8fa2ff',
-  borderColor: 'rgba(110,130,255,0.14)', rowHoverColor: 'rgba(76,242,255,0.08)', fontFamily: 'JetBrains Mono, monospace', fontSize: 11.5,
-  headerFontFamily: 'Chakra Petch, sans-serif', headerFontSize: 11, headerFontWeight: 700, rowHeight: 26, headerHeight: 30, spacing: 5,
+  borderColor: 'rgba(110,130,255,0.14)', rowHoverColor: 'rgba(76,242,255,0.08)', fontFamily: 'JetBrains Mono, monospace', fontSize: 13,
+  headerFontFamily: 'Chakra Petch, sans-serif', headerFontSize: 12.5, headerFontWeight: 700, rowHeight: 30, headerHeight: 34, spacing: 5,
   oddRowBackgroundColor: 'rgba(255,255,255,0.015)', accentColor: '#4cf2ff', wrapperBorder: false,
 });
 
@@ -20,6 +20,20 @@ interface Row {
   key: string; lane: string; t: number; kind: 'ORDER' | 'REFUND'; id: string; paypal: string; rail: string; buyer: string; store: string;
   amount: number; gate: string; outcome: string; rules: string; truth: string; harm: number; tone: string;
 }
+
+/** How many rows the grid keeps on screen. The full run is kept separately, for the export. */
+const CAP = 2500;
+
+const COLUMNS: [string, (r: Row) => string | number][] = [
+  ['lane', (r) => r.lane], ['time', (r) => clock(r.t)], ['type', (r) => r.kind], ['order', (r) => r.id], ['paypal_id', (r) => r.paypal], ['rail', (r) => r.rail || 'twin'],
+  ['agent', (r) => r.buyer], ['store', (r) => r.store], ['amount', (r) => r.amount.toFixed(2)], ['gate', (r) => r.gate], ['outcome', (r) => r.outcome],
+  ['ground_truth', (r) => r.truth], ['harm', (r) => r.harm], ['why', (r) => r.rules],
+];
+const cell = (v: string | number) => {
+  const s = String(v);
+  return /^[=+\-@]/.test(s) ? `"'${s.replace(/"/g, '""')}"` : /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+const toCsv = (rows: Row[]) => [COLUMNS.map(([h]) => h).join(','), ...rows.map((r) => COLUMNS.map(([, f]) => cell(f(r))).join(','))].join('\n') + '\n';
 
 const names = new Map<string, string>();
 /** Rows arrive by transaction; a stable empty array keeps re-renders from wiping the grid. */
@@ -37,7 +51,7 @@ function toRow(lane: number, e: SimEvent): Row | null {
     return {
       key: `${lane}-${e.id}`, lane: LANE_NAMES[lane], t: e.t, kind: 'ORDER', id: e.id, paypal: e.paypal?.captureId ?? e.paypal?.authId ?? e.paypal?.orderId ?? '—',
       rail: e.rail === 'sandbox' ? 'PayPal sandbox' : 'twin', buyer: names.get(e.buyer) ?? e.buyer, store: names.get(e.merchant) ?? e.merchant,
-      amount: e.amount, gate: e.escrow && e.decision === 'allow' ? 'escrow' : e.decision, outcome: e.duplicateCharge ? 'charged ×2' : e.outcome,
+      amount: e.amount, gate: e.escrow && e.decision === 'allow' ? 'hold' : e.decision, outcome: e.duplicateCharge ? 'charged ×2' : e.outcome === 'escrowed' ? 'held' : e.outcome,
       rules: e.hits.map((h) => h.reason).join(' · '), truth: tr.malicious ? (tr.attack ? ATTACK_SHORT[tr.attack] : 'attacker') : 'honest', harm: tr.harm, tone,
     };
   }
@@ -69,6 +83,8 @@ const Truth = (p: ICellRendererParams<Row>) => p.node.rowPinned ? <span classNam
 export function Ledger() {
   const api = useRef<GridApi<Row> | null>(null);
   const rows = useRef<Row[]>([]);
+  const everyRow = useRef<Row[]>([]);
+  const [counted, setCounted] = useState(0);
   const multi = useStore((s) => s.lanes.length > 1);
   const [view, setView] = useState<View>('all');
   const [q, setQ] = useState('');
@@ -97,10 +113,13 @@ export function Ledger() {
       truth: `stolen ${usd(stolen)}`, harm: 0, tone: 'total',
     }] : []);
   }, []);
-  const exportCsv = () => api.current?.exportDataAsCsv({
-    fileName: `sandbox-city-ledger-${view}.csv`, skipPinnedBottom: true,
-    processCellCallback: (p) => p.column.getColId() === 't' ? clock(p.value) : p.value,
-  });
+  const exportRun = () => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([toCsv(everyRow.current)], { type: 'text/csv' }));
+    a.download = `sandbox-city-full-run-${everyRow.current.length}-rows.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
   const viewRef = useRef<View>('all');
   const pick = (v: View) => { viewRef.current = v; setView(v); api.current?.onFilterChanged(); };
   const isExternalFilterPresent = useCallback(() => viewRef.current !== 'all', []);
@@ -110,6 +129,7 @@ export function Ledger() {
     { field: 't', headerName: 'TIME', width: 70, valueFormatter: (p) => (p.node?.rowPinned ? 'Σ' : clock(p.value)) },
     { field: 'kind', headerName: 'TYPE', width: 78 },
     { field: 'paypal', headerName: 'PAYPAL ID', width: 170, cellClass: 'mono-dim' },
+    { field: 'rail', headerName: 'RAIL', width: 120, cellClass: 'mono-dim', valueFormatter: (p) => (p.node?.rowPinned ? '' : p.value || 'twin') },
     { field: 'buyer', headerName: 'AGENT', width: 110 },
     { field: 'store', headerName: 'STORE', flex: 1, minWidth: 150 },
     { field: 'amount', headerName: 'AMOUNT', width: 96, type: 'rightAligned', valueFormatter: (p) => `$${p.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
@@ -120,15 +140,14 @@ export function Ledger() {
   ], [multi]);
 
   useEffect(() => {
-    const CAP = 2500;
     let pending: Row[] = [];
     const seen = new Set<string>();
     const offW = bus.on('world', (w) => { for (const m of w.merchants) names.set(m.id, m.name); for (const s of w.shoppers) names.set(s.id, s.name); });
     // a new run reuses order ids (same seed), so drop anything still queued from the old one
-    const offR = bus.on('reset', () => { pending = []; seen.clear(); rows.current = []; api.current?.flushAsyncTransactions(); api.current?.setGridOption('rowData', []); });
+    const offR = bus.on('reset', () => { pending = []; seen.clear(); rows.current = []; everyRow.current = []; setCounted(0); api.current?.flushAsyncTransactions(); api.current?.setGridOption('rowData', []); });
     const offT = bus.on('tick', (m) => {
       for (const s of m.spawn) names.set(s.id, s.name);
-      for (const e of m.events) { const r = toRow(m.lane, e); if (r && !seen.has(r.key)) { seen.add(r.key); pending.push(r); } }
+      for (const e of m.events) { const r = toRow(m.lane, e); if (r && !seen.has(r.key)) { seen.add(r.key); pending.push(r); everyRow.current.push(r); } }
     });
     const iv = setInterval(() => {
       if (!api.current || !pending.length) return;
@@ -140,6 +159,7 @@ export function Ledger() {
       rows.current = [...add, ...rows.current];
       for (const r of remove) seen.delete(r.key);
       api.current.applyTransactionAsync({ add, addIndex: 0, remove });
+      setCounted(everyRow.current.length);
     }, 250);
     return () => { offW(); offR(); offT(); clearInterval(iv); };
   }, []);
@@ -147,10 +167,10 @@ export function Ledger() {
   return (
     <section className="ledger panel">
       <div className="panel-title">
-        <span>LIVE LEDGER</span><em>/ledger/tx</em><small>every order and refund on the PayPal rails · what the gate decided · what was really going on</small>
+        <span>LIVE LEDGER</span><em>/ledger/tx</em><small>{counted > CAP ? `showing the latest ${CAP.toLocaleString('en-US')} of ${counted.toLocaleString('en-US')} rows` : `all ${counted.toLocaleString('en-US')} rows of this run`} · the total below covers what is shown</small>
         <div className="ledger-tools">
           {(Object.keys(VIEWS) as View[]).map((v) => <button key={v} className={`lv lv-${v} ${view === v ? 'on' : ''}`} onClick={() => pick(v)}>{VIEWS[v].label}</button>)}
-          <button className="lv lv-csv" title="Download the rows in this view as CSV" onClick={exportCsv}>⇣ CSV</button>
+          <button className="lv lv-csv" title="Download every row of this run as CSV, including rows the grid no longer shows" onClick={exportRun}>⇣ FULL RUN CSV</button>
           <label className="lq"><span>grep</span><input value={q} spellCheck={false} placeholder="agent, store, id…" onChange={(e) => setQ(e.target.value)} /></label>
         </div>
       </div>

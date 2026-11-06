@@ -8,7 +8,7 @@ The flagship failure, stated so that someone else can check it. All figures are 
 
 **What can the attacker do?** Open a store, run it honestly, buy paid reach, discount and bundle, stop shipping. In the held-out versions, also buy from itself and ship empty parcels. It cannot touch the gate, PayPal or another store.
 
-**What permission does reputation unlock?** Instant capture. A new store's orders are held in escrow, while a store with a record gets the money when the buyer pays, and that record also earns it reach with agents choosing a store.
+**What permission does reputation unlock?** Instant capture. A new store's orders are held by a PayPal authorization, while a store with a record gets the money when the buyer pays, and that record also earns it reach with agents choosing a store.
 
 **What action causes the loss?** After warm-up the store stops shipping and keeps taking orders. Each order is normal. Nothing at the gate is wrong with any single one.
 

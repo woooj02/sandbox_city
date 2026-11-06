@@ -1,6 +1,6 @@
 # The checkout
 
-`POST /api/checkout` is where a rulebook leaves the lab. An outside review found the first version shared the evaluator and little else: it discarded hold decisions, and judged every order against a fixed, established store. Those seven findings are now tests in `packages/server/test/audit-regressions.test.ts`. Each one failed before its fix.
+`POST /api/checkout` is where a rulebook leaves the lab. An outside review found the first version shared the evaluator and little else: it discarded hold decisions, and judged every order against a fixed, established store. Those seven findings are now tests in `packages/server/test/audit-regressions.test.ts`. A second review found the paths around it were less careful: `reaudit-regressions.test.ts`. Each case failed before its fix.
 
 ## What transfers
 
@@ -24,6 +24,8 @@ The settlement rules are written twice, once in the world's tasks and once in `s
 ```
 
 The answer has the decision, the rulebook id, whether it was held, the facts the evaluator saw and the payment. A retry returns the original decision. A retry under another rulebook, owner or session gets a 409 that names the original.
+
+`rulebook` can be `frozen-v4`, `frozen-v3`, `frozen-v2`, `frozen-v1`, or `frozen-v1-safeguards`, the version round four measured. **Is it worth it?** in the app names the one to ask for.
 
 **Unknowns are not trusted.** A store nobody has seen is new, with no credit, so its orders are held. An agent nobody has seen is new, so the new-agent cap applies.
 
