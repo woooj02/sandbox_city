@@ -164,7 +164,11 @@ export type Outcome =
   | 'blocked'        // gate said no
   | 'abandoned'      // challenge failed / owner declined
   | 'declined'       // PayPal declined (risk / instrument)
+  | 'pending'        // PayPal has not confirmed payment; no success or saving counted
+  | 'unresolved'     // response missing or inconsistent; needs read-back or a person
   | 'failed';        // rails error after retries
+
+export type MoneyState = 'authorized' | 'pending' | 'captured' | 'refunded' | 'voided' | 'declined' | 'unresolved';
 
 export type SimEvent =
   | { type: 'order'; t: number; id: string; buyer: string; merchant: string; amount: number; qty: number;
@@ -174,8 +178,9 @@ export type SimEvent =
       /** Rails the payment was attempted on (set even when every attempt failed). */
       rail: 'twin' | 'sandbox' }
   | { type: 'refund'; t: number; id: string; order: string; buyer: string; merchant: string; amount: number;
-      approved: boolean; reason: string; hits: RuleHit[]; rail: 'twin' | 'sandbox'; truth: { malicious: boolean; attack?: AttackKind; harm: number } }
-  | { type: 'capture'; t: number; order: string; amount: number; rail: 'twin' | 'sandbox' }
+      approved: boolean; pending?: boolean; unresolved?: boolean; reason: string; hits: RuleHit[]; rail: 'twin' | 'sandbox'; truth: { malicious: boolean; attack?: AttackKind; harm: number } }
+  | { type: 'capture'; t: number; order: string; amount: number; rail: 'twin' | 'sandbox'; captureId?: string; initial?: boolean }
+  | { type: 'payment'; t: number; order: string; state: MoneyState; status: string; rail: 'twin' | 'sandbox' }
   | { type: 'ship'; t: number; order: string; merchant: string; buyer: string; tracking: string }
   | { type: 'store_open'; t: number; merchant: string; name: string; honest: boolean; attacker?: string }
   | { type: 'store_close'; t: number; merchant: string; reason: string }
@@ -199,6 +204,8 @@ export interface AttackerBook { take: number; cost: number }
 
 export interface Metrics {
   t: number;
+  /** Current payment states; delivery is separate from payment. Holds include unresolved authorizations. */
+  money: Record<MoneyState, number> & { delivered: number; heldNow: number; honestHeldNow: number };
   honest: { attempts: number; completed: number; blocked: number; abandoned: number; challenged: number; declined: number; gmv: number; blockedValue: number;
     /** Honest orders challenged to the owner and never approved. */
     abandonedValue: number;

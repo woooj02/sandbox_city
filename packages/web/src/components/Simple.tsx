@@ -1,8 +1,9 @@
-import { PRESETS, type Policy } from '@sandbox-city/core';
+import { policyId, PRESETS, type Policy } from '@sandbox-city/core';
 import { useStore } from '../store';
 import { client } from '../sim/client';
 import { money } from './meta';
 import raw from '../data/evidence.json';
+import { MoneyStates } from './MoneyStates';
 
 /** The rulebooks the evidence is about. The presets on their own would leave them out of the first screen. */
 const ev = raw as unknown as { third: { frozen: { rules: Policy } } | null; fourth: { frozen: { rules: Policy } } | null };
@@ -21,17 +22,19 @@ const replay = (p: Policy) => { client.start([p]); setTimeout(() => client.send(
 
 /** The first screen's left panel: one decision, in words. Every rule and slider is one click away in the full lab. */
 export function SimpleRules() {
-  const current = useStore((s) => s.policies[0]?.name.replace('*', ''));
+  const current = useStore((s) => s.policies[0]);
+  const hash = current && policyId(current);
   return (
     <aside className="rulebook panel simple-rules">
       <h2 className="simple-h"><i>1</i>Pick a rulebook</h2>
       <div className="choices" role="radiogroup" aria-label="Rulebook">
         {CHOICES.map(({ policy, plain }) => (
-          <button key={policy.name} role="radio" aria-checked={current === policy.name} className={`choice ${current === policy.name ? 'on' : ''}`} onClick={() => replay(policy)}>
-            <b>{policy.name}</b><span>{plain}</span>
+          <button key={policy.name} role="radio" aria-checked={hash === policyId(policy)} className={`choice ${hash === policyId(policy) ? 'on' : ''}`} onClick={() => replay(policy)}>
+            <b>{policy.name}</b><span>{plain}</span><code className="policy-hash">{policyId(policy)}</code>
           </button>
         ))}
       </div>
+      {current && <p className="simple-note">City: {current.name} · policy <code>{hash}</code>. The comparison labels safeguards added to its benchmark arms.</p>}
       <p className="simple-note">Same shoppers, same attackers, every time. Only the rules change.</p>
       <button className="simple-link" onClick={() => useStore.setState({ fullLab: true })}>Change individual rules →</button>
     </aside>
@@ -43,13 +46,17 @@ export function SimpleHud() {
   const m = useStore((s) => s.lanes[0]?.metrics);
   if (!m) return <aside className="hud panel simple-hud"><h2 className="simple-h"><i>2</i>Read the result</h2><p className="simple-note">The city is starting…</p></aside>;
   const held = m.honest.heldDollarMinutes / Math.max(m.t, 60);
+  const waiting = m.money.pending + m.money.unresolved > 0;
+  const resolvedFraud = m.fraud.prevented + m.fraud.leaked;
+  const safety = waiting && !resolvedFraud ? 'Awaiting confirmed payment results' : `${(m.safety * 100).toFixed(0)}% of ${waiting ? 'resolved fraud stopped; pending excluded' : 'attempted fraud stopped'}`;
   return (
     <aside className="hud panel simple-hud">
       <h2 className="simple-h"><i>2</i>Read the result</h2>
-      <div className="stat bad"><label>Money stolen</label><b>{money(m.fraud.leaked)}</b><span>{(m.safety * 100).toFixed(0)}% of attempted fraud stopped</span></div>
+      <div className="stat bad"><label>Money stolen</label><b>{money(m.fraud.leaked)}</b><span>{safety}</span></div>
       <div className="stat good"><label>Value delivered</label><b>{money(m.honest.fulfilledValue)}</b><span>honest orders that arrived and stayed paid</span></div>
       <div className="stat"><label>Honest purchases accepted</label><b>{(m.access * 100).toFixed(1)}%</b><span>{m.honest.completed.toLocaleString('en-US')} of {m.honest.attempts.toLocaleString('en-US')}. Accepted is not yet delivered</span></div>
-      <div className="stat warnc"><label>Honest money on hold</label><b>{money(held)}</b><span>average tied up, counting holds that have ended</span></div>
+      <div className="stat warnc"><label>Honest money held now</label><b>{money(m.money.honestHeldNow)}</b><span>Average over this run: {money(held)}, counting holds that have ended</span></div>
+      <MoneyStates m={m} />
       <button className="simple-cta" onClick={() => useStore.setState({ showWorth: true })}>Is it worth it? →</button>
       <button className="simple-link" onClick={() => useStore.setState({ showEvidence: true })}>See the evidence →</button>
     </aside>

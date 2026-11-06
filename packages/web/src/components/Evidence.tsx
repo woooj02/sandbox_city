@@ -11,7 +11,7 @@ import raw from '../data/evidence.json';
 interface Ci { mean: number; lo: number; hi: number }
 interface Cohort { attempts: number; refused: number }
 interface ArmRow {
-  key: string; name: string; stolen: Ci; fulfilled: Ci; kept: Ci; access: Ci; heldDollarHours: Ci; challengedPer100: number; overBound: number;
+  key: string; name: string; label?: string; policyId?: string; stolen: Ci; fulfilled: Ci; kept: Ci; access: Ci; heldDollarHours: Ci; challengedPer100: number; overBound: number;
   sleeper: { stolen: Ci; profit: Ci }; cohorts: { new_store: Cohort };
 }
 interface HeldArm { name: string; stolen: Ci; profit: Ci; kept: Ci; access: Ci }
@@ -76,7 +76,7 @@ function Frontier({ b }: { b: Bench }) {
         <text x={(L + W - R) / 2} y={H - 6} textAnchor="middle" className="ev-axis">stolen per day (less is better)</text>
         <text transform={`translate(13 ${(T + H - B) / 2}) rotate(-90)`} textAnchor="middle" className="ev-axis">value kept per day</text>
         {b.arms.map((a) => {
-          const mine = a.key === 'frozen', px = x(a.stolen.mean), py = y(a.kept.mean), left = px > W - 150;
+          const mine = a.key === 'frozen', px = x(a.stolen.mean), py = y(a.kept.mean), left = px > W - 210;
           return (
             <g key={a.key} onMouseEnter={() => setHover(a)} onMouseLeave={() => setHover(null)}>
               <line x1={x(a.stolen.lo)} x2={x(a.stolen.hi)} y1={py} y2={py} className="ev-whisker" />
@@ -84,13 +84,13 @@ function Frontier({ b }: { b: Bench }) {
               <circle cx={px} cy={py} r={mine ? 7 : 5} className={mine ? 'ev-dot mine' : 'ev-dot'} />
               <circle cx={px} cy={py} r={16} fill="transparent" />
               {slot.has(a.key)
-                ? <><line x1={px} y1={py} x2={columnX - 4} y2={slot.get(a.key)! - 4} className="ev-leader" /><text x={columnX} y={slot.get(a.key)} className={mine ? 'ev-label mine' : 'ev-label'}>{a.name}</text></>
-                : <text x={px + (left ? -11 : 11)} y={left ? py + 20 : py - 8} textAnchor={left ? 'end' : 'start'} className={mine ? 'ev-label mine' : 'ev-label'}>{a.name}</text>}
+                ? <><line x1={px} y1={py} x2={columnX - 4} y2={slot.get(a.key)! - 4} className="ev-leader" /><text x={columnX} y={slot.get(a.key)} className={mine ? 'ev-label mine' : 'ev-label'}>{a.label ?? a.name}</text></>
+                : <text x={px + (left ? -11 : 11)} y={left ? py + 20 : py - 8} textAnchor={left ? 'end' : 'start'} className={mine ? 'ev-label mine' : 'ev-label'}>{a.label ?? a.name}</text>}
             </g>
           );
         })}
       </svg>
-      {hover && <div className="ev-tip"><b>{hover.name}</b> kept {ci(hover.kept)} · stolen {ci(hover.stolen)} · honest access {(hover.access.mean * 100).toFixed(1)}%</div>}
+      {hover && <div className="ev-tip"><b>{hover.label ?? hover.name}</b> kept {ci(hover.kept)} · stolen {ci(hover.stolen)} · honest access {(hover.access.mean * 100).toFixed(1)}%{hover.policyId && <> · policy <code>{hover.policyId}</code></>}</div>}
     </div>
   );
 }
@@ -111,7 +111,8 @@ function FairPick({ b }: { b: Bench }) {
 
 function CostTable({ b }: { b: Bench }) {
   const cols = useMemo<ColDef<ArmRow>[]>(() => [
-    { field: 'name', headerName: 'RULEBOOK', width: 130, pinned: 'left' },
+    { headerName: 'RULEBOOK', width: 220, pinned: 'left', valueGetter: (p) => p.data?.label ?? p.data?.name },
+    { field: 'policyId', headerName: 'POLICY HASH', width: 170 },
     { headerName: 'VALUE KEPT', flex: 1, minWidth: 170, valueGetter: (p) => p.data?.kept.mean, valueFormatter: (p) => (p.data ? ci(p.data.kept) : '') },
     { headerName: 'STOLEN', flex: 1, minWidth: 160, valueGetter: (p) => p.data?.stolen.mean, valueFormatter: (p) => (p.data ? ci(p.data.stolen) : '') },
     { headerName: 'HONEST ACCESS', width: 118, valueGetter: (p) => p.data?.access.mean, valueFormatter: (p) => `${((p.value ?? 0) * 100).toFixed(1)}%` },

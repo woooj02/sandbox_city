@@ -8,15 +8,32 @@
 import { spawn } from 'node:child_process';
 import { appendFileSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { parseArgs } from 'node:util';
 import { agentVerdict, checkAgentAnswer, checkDayCase, checkGateCase, REGRESSION_SCHEMA, type AgentRegression, type AgentRow, type CaseResult, type Regression } from '@sandbox-city/core';
 
 const args = process.argv.slice(2);
-const valueOf = (name: string) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : args.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3); };
-const agent = valueOf('agent'), agentUrl = valueOf('agent-url'), kind = valueOf('kind'), report = valueOf('report');
-const timeoutMs = Number(valueOf('timeout') ?? 60) * 1000;
 const asJson = args.includes('--json');
-const taken = new Set([agent, agentUrl, report]);
-const target = args.find((a) => !a.startsWith('--') && !taken.has(a)) ?? 'regressions';
+function configurationError(message: string): never {
+  if (asJson) console.log(JSON.stringify({ verdict: null, results: [], blocked: true, problems: [message] }, null, 2));
+  else console.error(`BLOCK THIS RELEASE: ${message}`);
+  process.exit(1);
+}
+const { values, positionals } = (() => {
+  try {
+    return parseArgs({ args, allowPositionals: true, options: {
+      agent: { type: 'string' }, 'agent-url': { type: 'string' }, kind: { type: 'string' },
+      timeout: { type: 'string' }, report: { type: 'string' }, json: { type: 'boolean' },
+    } });
+  } catch (e) { return configurationError(e instanceof Error ? e.message : String(e)); }
+})();
+const { agent, 'agent-url': agentUrl, kind, report } = values;
+if (kind !== undefined && !['agent', 'gate', 'day'].includes(kind)) configurationError(`Unknown kind "${kind}". Use agent, gate or day.`);
+if (positionals.length > 1) configurationError('Give one case file or folder.');
+if (agent !== undefined && !agent.trim() || agentUrl !== undefined && !agentUrl.trim()) configurationError('The agent command or URL must not be blank.');
+if (agent && agentUrl) configurationError('Choose either --agent or --agent-url.');
+const timeoutMs = Number(values.timeout ?? 60) * 1000;
+if (!Number.isFinite(timeoutMs) || timeoutMs < 1 || timeoutMs > 2147483647) configurationError('--timeout must be a positive number of seconds, at most 2147483.647.');
+const target = positionals[0] ?? 'regressions';
 const files = statSync(target).isDirectory() ? readdirSync(target).filter((f) => f.endsWith('.json')).sort().map((f) => join(target, f)) : [target];
 
 const parseAnswer = (out: string): unknown => {
@@ -79,33 +96,40 @@ for (const f of files) {
 }
 
 const ranAgent = results.filter((r) => r.kind === 'agent' && !r.skipped);
-const verdict = ranAgent.length ? agentVerdict(ranAgent as AgentRow[]) : null;
+const agentRun = kind === 'agent' || !!agent || !!agentUrl || ranAgent.length > 0;
+const verdict = agentRun ? agentVerdict(ranAgent as AgentRow[]) : null;
 const otherFailed = results.filter((r) => r.kind !== 'agent' && !r.pass).length;
 const failed = results.filter((r) => !r.pass).length, ran = results.filter((r) => !r.skipped).length;
-const blocked = verdict?.verdict === 'block' || otherFailed > 0;
+const problems: string[] = [];
+if (!ran) problems.push('No cases were executed. Check the folder, --kind and agent command.');
+if (kind === 'agent' && !agent && !agentUrl) problems.push('Agent cases need --agent "<command>" or --agent-url <url>.');
+const blocked = verdict?.verdict === 'block' || otherFailed > 0 || problems.length > 0;
 const LABEL = { block: 'BLOCK THIS RELEASE', review: 'REVIEW BEFORE RELEASE', pass: 'NO FAILURE FOUND' };
 
 function markdown() {
-  const v = verdict!;
+  const v = verdict;
   const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\n/g, ' ');
   const rows = ranAgent.map((r) => {
     const what = r.declined ? (r.control ? 'Declined an honest listing' : 'Declined') : r.pass ? (r.control ? 'Bought it' : 'Kept to the mandate') : r.violations.join('; ');
     return `| ${mark(r, r.control)} | ${cell(r.title)} | ${cell(what)} | ${cell([...new Set(r.fixes)].join(' '))} |`;
   });
   return [
-    `## Agent regressions: ${LABEL[v.verdict]}`, '', v.why, '',
-    `- Attack listings: ${v.attacks}, breaches: ${v.breaches}, unjudged answers: ${v.invalid}`,
-    `- Honest listings bought: ${v.cleanBought} of ${v.cleanTotal}`, '',
+    `## Regressions: ${blocked ? LABEL.block : v ? LABEL[v.verdict] : LABEL.pass}`, '',
+    ...problems.map((p) => `- ${p}`), ...(v ? [v.why, '',
+      `- Attack listings: ${v.attacks}, breaches: ${v.breaches}, unjudged answers: ${v.invalid}`,
+      `- Honest listings bought: ${v.cleanBought} of ${v.cleanTotal}`] : []),
+    `- Cases executed: ${ran}; failed: ${failed}`, '',
     '| | Case | What the agent did | Fix |', '| --- | --- | --- | --- |', ...rows, '',
     'Checked by plain code against the owner\'s mandate, no model. A clean run covers these cases only.', '',
   ].join('\n');
 }
 
-if (asJson) console.log(JSON.stringify({ verdict, results }, null, 2));
+if (asJson) console.log(JSON.stringify({ verdict, results, blocked, problems }, null, 2));
 else {
   console.log(`\n${ran - failed} of ${ran} passed${results.length > ran ? `, ${results.length - ran} need an agent` : ''}.`);
   if (verdict) console.log(`${LABEL[verdict.verdict]}: ${verdict.why}\nHonest listings bought: ${verdict.cleanBought} of ${verdict.cleanTotal}.`);
+  for (const problem of problems) console.log(`${LABEL.block}: ${problem}`);
 }
-if (verdict && report) writeFileSync(report, markdown());
-if (verdict && process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, markdown());
+if (report) writeFileSync(report, markdown());
+if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, markdown());
 process.exit(blocked ? 1 : 0);

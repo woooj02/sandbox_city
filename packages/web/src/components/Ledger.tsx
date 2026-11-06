@@ -44,24 +44,24 @@ function toRow(lane: number, e: SimEvent): Row | null {
     const tr = e.truth;
     const mal = tr.malicious && tr.harm > 0;
     let tone = 'ok';
-    if (mal) tone = e.outcome === 'completed' ? 'breach' : e.outcome === 'escrowed' ? 'held' : 'stopped';
+    if (mal) tone = e.outcome === 'completed' ? 'breach' : e.outcome === 'escrowed' ? 'held' : e.outcome === 'pending' || e.outcome === 'unresolved' ? 'unresolved' : 'stopped';
     else if (e.outcome === 'blocked') tone = 'falsepos';
     else if (e.outcome === 'abandoned') tone = 'friction';
     if (e.duplicateCharge) tone = 'double';
     return {
       key: `${lane}-${e.id}`, lane: LANE_NAMES[lane], t: e.t, kind: 'ORDER', id: e.id, paypal: e.paypal?.captureId ?? e.paypal?.authId ?? e.paypal?.orderId ?? '—',
       rail: e.rail === 'sandbox' ? 'PayPal sandbox' : 'twin', buyer: names.get(e.buyer) ?? e.buyer, store: names.get(e.merchant) ?? e.merchant,
-      amount: e.amount, gate: e.escrow && e.decision === 'allow' ? 'hold' : e.decision, outcome: e.duplicateCharge ? 'charged ×2' : e.outcome === 'escrowed' ? 'held' : e.outcome,
+      amount: e.amount, gate: e.escrow && e.decision === 'allow' ? 'hold' : e.decision, outcome: e.duplicateCharge ? 'charged ×2' : e.outcome === 'escrowed' ? 'authorized' : e.outcome === 'completed' ? 'captured' : e.outcome,
       rules: e.hits.map((h) => h.reason).join(' · '), truth: tr.malicious ? (tr.attack ? ATTACK_SHORT[tr.attack] : 'attacker') : 'honest', harm: tr.harm, tone,
     };
   }
   if (e.type === 'refund') {
     const mal = e.truth.malicious;
     return {
-      key: `${lane}-${e.id}-${e.t}`, lane: LANE_NAMES[lane], t: e.t, kind: 'REFUND', id: e.id, paypal: '—', rail: '', buyer: names.get(e.buyer) ?? e.buyer,
-      store: names.get(e.merchant) ?? e.merchant, amount: e.amount, gate: e.approved ? 'approve' : 'deny', outcome: e.approved ? 'refunded' : 'denied',
+      key: `${lane}-${e.id}`, lane: LANE_NAMES[lane], t: e.t, kind: 'REFUND', id: e.id, paypal: '—', rail: e.rail === 'sandbox' ? 'PayPal sandbox' : 'twin', buyer: names.get(e.buyer) ?? e.buyer,
+      store: names.get(e.merchant) ?? e.merchant, amount: e.amount, gate: e.pending || e.unresolved ? 'wait' : e.approved ? 'approve' : 'deny', outcome: e.pending ? 'pending' : e.unresolved ? 'unresolved' : e.approved ? 'refunded' : 'denied',
       rules: [e.reason, ...e.hits.map((h) => h.reason)].join(' · '), truth: mal ? 'Refund abuse' : 'honest', harm: e.truth.harm,
-      tone: mal ? (e.approved ? 'breach' : 'stopped') : e.approved ? 'ok' : 'falsepos',
+      tone: e.pending || e.unresolved ? 'unresolved' : mal ? (e.approved ? 'breach' : 'stopped') : e.approved ? 'ok' : 'falsepos',
     };
   }
   return null;
@@ -142,12 +142,32 @@ export function Ledger() {
   useEffect(() => {
     let pending: Row[] = [];
     const seen = new Set<string>();
+    const byKey = new Map<string, Row>();
     const offW = bus.on('world', (w) => { for (const m of w.merchants) names.set(m.id, m.name); for (const s of w.shoppers) names.set(s.id, s.name); });
     // a new run reuses order ids (same seed), so drop anything still queued from the old one
-    const offR = bus.on('reset', () => { pending = []; seen.clear(); rows.current = []; everyRow.current = []; setCounted(0); api.current?.flushAsyncTransactions(); api.current?.setGridOption('rowData', []); });
+    const offR = bus.on('reset', () => { pending = []; seen.clear(); byKey.clear(); rows.current = []; everyRow.current = []; setCounted(0); api.current?.flushAsyncTransactions(); api.current?.setGridOption('rowData', []); });
     const offT = bus.on('tick', (m) => {
       for (const s of m.spawn) names.set(s.id, s.name);
-      for (const e of m.events) { const r = toRow(m.lane, e); if (r && !seen.has(r.key)) { seen.add(r.key); pending.push(r); everyRow.current.push(r); } }
+      for (const e of m.events) {
+        if (e.type === 'payment') {
+          const r = byKey.get(`${m.lane}-${e.order}`);
+          if (r) {
+            r.outcome = e.state;
+            r.tone = e.state === 'pending' || e.state === 'unresolved' ? 'unresolved' : e.state === 'authorized' ? 'held' : r.truth === 'honest' ? 'ok' : e.state === 'captured' ? 'breach' : 'stopped';
+            if (seen.has(r.key) && !pending.includes(r)) api.current?.applyTransactionAsync({ update: [r] });
+          }
+          continue;
+        }
+        const r = toRow(m.lane, e);
+        if (!r) continue;
+        const old = byKey.get(r.key);
+        if (old) {
+          Object.assign(old, r);
+          if (seen.has(old.key) && !pending.includes(old)) api.current?.applyTransactionAsync({ update: [old] });
+        } else {
+          byKey.set(r.key, r); seen.add(r.key); pending.push(r); everyRow.current.push(r);
+        }
+      }
     });
     const iv = setInterval(() => {
       if (!api.current || !pending.length) return;

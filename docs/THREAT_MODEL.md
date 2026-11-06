@@ -65,3 +65,16 @@ The first repair for empty parcels failed. It delayed the store's credit, but he
 - **Faking delivery.** Delivery events can release money, so they need `LAB_TOKEN`, and imported records must state a source.
 - **Retrying under a softer rulebook.** A key stays bound to its first decision. Anything else gets a 409.
 - **Breaking the demo.** Every socket command passes one check in `runner.ts`, and a rulebook from outside is rebuilt from known rules. A bad command gets an error. No search can switch off an invariant, whoever calls it.
+
+## Dependency reachability (Nov 5, 2026)
+
+`npm audit` reports 12 affected packages: 11 high and one moderate, down from 15. The static-file branch is fixed by `@fastify/static` 10.1.10, with `glob` 14.0.3 and `minimatch` 11.0.5 in the lockfile. See the [plugin release](https://github.com/fastify/fastify-static/releases/tag/v10.1.10) and [glob fix](https://github.com/isaacs/node-glob/releases/tag/v14.0.2).
+
+All remaining entries come through `@paypal/agent-toolkit` 1.11.0, which the entry uses. This is a review of the calls in this repo, not a claim that installed code is safe:
+
+- The public HTTP server uses `SandboxRails` and the durable checkout. It does not import the toolkit. The toolkit runs through `scripts/toolkit-shop.ts`, with sandbox credentials, and the code selects its `/openai` adapter.
+- **Zod is reached:** the toolkit parses a model's `create_order` arguments with it. Oversized collections are a [memory-exhaustion risk](https://github.com/colinhacks/zod/pull/6652). These calls are in the local recording script, not a public toolkit endpoint. The toolkit's Zod 3 dependency cannot take the Zod 4 fix as a compatible update.
+- **Mathjs is loaded**, but the selected adapter calls only `round` on order totals. This code does not pass model text to its [vulnerable expression parser](https://github.com/josdejong/mathjs/security/advisories/GHSA-29qv-4j9f-fjw5). Its fix needs mathjs 15; the toolkit asks for 14.
+- The LangChain, LangSmith and AI SDK adapters, HTML diff formatter and UUID buffer APIs are not called by this entry. Their packages remain installed and reported. Adding one of those paths needs another review.
+
+No forced upgrades, toolkit downgrade or major dependency overrides were applied. The remaining alerts need compatible upstream releases or a separately tested toolkit migration.

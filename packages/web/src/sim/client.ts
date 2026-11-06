@@ -117,8 +117,15 @@ function narrate(lane: number, events: SimEvent[], focusLane: number) {
         break;
       }
       case 'refund':
+        if (e.pending || e.unresolved) {
+          feed.push({ t: e.t, lane, tone: 'warn', text: `Refund for ${e.order} is ${e.pending ? 'pending' : 'unresolved'}; no refund counted.` });
+          break;
+        }
         if (e.truth.malicious) trace.push({ t: e.t, lane, verdict: e.approved ? 'GRANT' : 'DENY', text: `${cash(e.amount)}  refund claim`, note: e.approved ? 'RFND paid out' : 'carrier says delivered' });
         if (e.truth.malicious) feed.push({ t: e.t, lane, tone: e.approved ? 'bad' : 'good', text: `${e.approved ? 'Paid out' : 'Denied'} a false refund claim of ${money(e.amount)} (${e.reason})` });
+        break;
+      case 'payment':
+        feed.push({ t: e.t, lane, tone: e.state === 'pending' || e.state === 'unresolved' ? 'warn' : 'info', text: `${e.order}: ${e.state}${e.state === 'pending' || e.state === 'unresolved' ? ', no unconfirmed result counted' : ', confirmed by PayPal'}.` });
         break;
     }
   }

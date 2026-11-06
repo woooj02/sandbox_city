@@ -4,7 +4,7 @@
  */
 import type { BrainConfig } from './brain';
 import { World, DEFAULT_CONFIG, WorldConfig } from './world';
-import type { Merchant, Shopper } from './types';
+import { ATTACK_KINDS, type AttackKind, type Merchant, type Shopper } from './types';
 import type { FromSim, MerchantLite, ShopperLite, ToSim } from './protocol';
 import type { Rails } from './rails';
 import { whatIf } from './whatif';
@@ -12,6 +12,8 @@ import { searchRulebook } from './search';
 import { forgeAttacks } from './forge';
 import { PRESETS, type Policy } from './policy';
 import { INVARIANT_FLOOR } from './policy-patch';
+import { defaultGenome, GENOME_SPACE } from './genome';
+import type { Genomes } from './forge';
 
 export const mLite = (m: Merchant): MerchantLite => ({
   id: m.id, name: m.name, x: m.x, y: m.y, district: m.district, honest: m.honest, verified: m.verified, owner: m.owner, category: m.catalog[0]?.category ?? 'home',
@@ -38,6 +40,39 @@ function clampBrain(b: BrainConfig | undefined): BrainConfig | undefined {
 }
 
 const clampN = (v: number | undefined, lo: number, hi: number) => (v === undefined || !Number.isFinite(v) ? undefined : Math.max(lo, Math.min(hi, Math.round(v))));
+
+/** Rebuild every nested gene: a small outer object can otherwise create an unbounded number of agents. */
+function cleanGenomes(raw: unknown): { genomes?: Genomes } | { problem: string } {
+  if (raw === undefined) return {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { problem: 'genomes must be an object' };
+  const genomes: Genomes = {};
+  for (const [kind, genes] of Object.entries(raw)) {
+    if (!Object.hasOwn(GENOME_SPACE, kind)) return { problem: `unknown attack family ${kind}` };
+    if (!genes || typeof genes !== 'object' || Array.isArray(genes)) return { problem: `${kind} genes must be an object` };
+    const space = GENOME_SPACE[kind as AttackKind], clean: Record<string, number> = {};
+    for (const [gene, value] of Object.entries(genes)) {
+      if (!Object.hasOwn(space, gene)) return { problem: `unknown gene ${kind}.${gene}` };
+      const [lo, hi] = space[gene];
+      if (typeof value !== 'number' || !Number.isFinite(value) || value < lo || value > hi) return { problem: `${kind}.${gene} must be a number from ${lo} to ${hi}` };
+      // The forge uses whole numbers for counts and durations in these same ranges.
+      if (Number.isInteger(lo) && Number.isInteger(hi) && hi > 1 && !Number.isInteger(value)) return { problem: `${kind}.${gene} must be a whole number` };
+      clean[gene] = value;
+    }
+    genomes[kind as AttackKind] = clean;
+  }
+  return { genomes };
+}
+
+const MAX_SHOPPERS_PER_LANE = 1200;
+
+/** The budget includes identities created by the attacks, not only the honest shoppers in init. */
+function controlledShoppers(genomes?: Genomes): number {
+  return ATTACK_KINDS.reduce((total, kind) => {
+    const genes = { ...defaultGenome(kind), ...genomes?.[kind] };
+    const perAttacker = kind === 'refund_abuse' || kind === 'card_testing' ? genes.agents : kind === 'fraud_ring' ? genes.size : kind === 'sleeper_store' ? 4 : 0;
+    return total + (DEFAULT_CONFIG.attackers[kind] ?? 0) * perAttacker;
+  }, 0);
+}
 
 /** A rulebook from outside: only known rules, of the right type, in a sane range. Anything else is not a rulebook. */
 function cleanPolicy(p: unknown): Policy | null {
@@ -68,8 +103,10 @@ function checkMsg(raw: unknown): { msg: ToSim } | { problem: string } {
     if (!Array.isArray(m.lanes) || m.lanes.length < 1) return { problem: 'init needs at least one lane' };
     const lanes = m.lanes.slice(0, 2).map((l: { policy?: unknown } | null) => cleanPolicy(l?.policy));
     if (lanes.some((p) => !p)) return { problem: 'a lane needs a valid rulebook' };
-    if (m.genomes !== undefined && (!m.genomes || typeof m.genomes !== 'object' || Array.isArray(m.genomes))) return { problem: 'genomes must be an object' };
-    return { msg: { ...m, lanes: lanes.map((policy) => ({ policy: policy! })) } as unknown as ToSim };
+    const checked = cleanGenomes(m.genomes);
+    if ('problem' in checked) return checked;
+    if (controlledShoppers(checked.genomes) > MAX_SHOPPERS_PER_LANE - 50) return { problem: 'expanded attacker workload exceeds the shopper budget' };
+    return { msg: { ...m, genomes: checked.genomes, lanes: lanes.map((policy) => ({ policy: policy! })) } as unknown as ToSim };
   }
   if (m.cmd === 'forge') {
     const policy = cleanPolicy(m.policy);
@@ -82,7 +119,7 @@ function checkMsg(raw: unknown): { msg: ToSim } | { problem: string } {
 /** Requests can come from anyone on a public lab server: keep every size inside what the lab itself ever asks for. */
 function clampMsg(msg: ToSim): ToSim {
   switch (msg.cmd) {
-    case 'init': return { ...msg, lanes: msg.lanes.slice(0, 2), shoppers: clampN(msg.shoppers, 50, 1200), chaos: Math.max(0, Math.min(1, Number(msg.chaos) || 0)), brain: clampBrain(msg.brain) };
+    case 'init': return { ...msg, lanes: msg.lanes.slice(0, 2), shoppers: clampN(msg.shoppers ?? DEFAULT_CONFIG.shoppers, 50, MAX_SHOPPERS_PER_LANE - controlledShoppers(msg.genomes)), chaos: Math.max(0, Math.min(1, Number(msg.chaos) || 0)), brain: clampBrain(msg.brain) };
     case 'speed': return { ...msg, tps: clampN(msg.tps, 1, 2400) ?? 8 };
     case 'tune': return { ...msg, generations: clampN(msg.generations, 1, 8), children: clampN(msg.children, 1, 12), trainDays: clampN(msg.trainDays, 1, 5) };
     case 'forge': return { ...msg, generations: clampN(msg.generations, 1, 8), children: clampN(msg.children, 1, 10) };
@@ -95,6 +132,10 @@ export class SimRunner {
   running = false;
   tps = 8;
   private timer: ReturnType<typeof setTimeout> | null = null;
+  private paymentTimer: ReturnType<typeof setTimeout> | null = null;
+  private paymentPolling: number | null = null;
+  private worldWork: Promise<void> = Promise.resolve();
+  private playback = 0;
   private gen = 0;
   private tuneGen = 0;
   private forgeGen = 0;
@@ -104,6 +145,38 @@ export class SimRunner {
 
   private status() {
     this.post({ type: 'status', running: this.running, tps: this.tps, mode: this.opts.mode, paypal: this.worlds.some((w) => w.cfg.liveRails) ? 'sandbox' : 'twin' });
+  }
+
+  /** A pause or resume can arrive while PayPal is answering: never poll and step the same world at once. */
+  private serialize<T>(work: () => Promise<T>): Promise<T> {
+    const next = this.worldWork.then(work);
+    this.worldWork = next.then(() => undefined, () => undefined);
+    return next;
+  }
+
+  private schedulePayments(g: number) {
+    if (g !== this.gen || this.paymentTimer || this.paymentPolling === g || !this.worlds.some((w) => w.hasPendingPayments)) return;
+    this.paymentTimer = setTimeout(() => void this.pollPayments(g), 5000);
+  }
+
+  /** Paused cities and finished days still fold a later PayPal confirmation into their original run. */
+  private async pollPayments(g: number) {
+    this.paymentTimer = null;
+    if (g !== this.gen) return;
+    this.paymentPolling = g;
+    try {
+      for (let lane = 0; lane < this.worlds.length; lane++) {
+        const w = this.worlds[lane];
+        const events = await this.serialize(() => g === this.gen && !this.running && w.hasPendingPayments ? w.pollPayments() : Promise.resolve(null));
+        if (g !== this.gen) return;
+        if (events?.length) this.post({ type: 'tick', lane, t: w.t, events, spawn: [], sale: w.sale, attackerPhase: {} });
+      }
+    } catch (e) {
+      if (g === this.gen) this.post({ type: 'error', message: `payment read-back: ${(e as Error).message}` });
+    } finally {
+      if (this.paymentPolling === g) this.paymentPolling = null;
+      this.schedulePayments(g);
+    }
   }
 
   /** Never throws: one bad command gets one error back, and the process and every other client carry on. */
@@ -117,8 +190,11 @@ export class SimRunner {
     if (msg.cmd === 'init') {
       this.lastInit = msg;
       this.gen++;
+      this.playback++;
       this.running = false;
       if (this.timer) clearTimeout(this.timer);
+      if (this.paymentTimer) clearTimeout(this.paymentTimer);
+      this.paymentTimer = null;
       this.worlds = msg.lanes.map((l, lane) => new World({
         ...DEFAULT_CONFIG, seed: msg.seed, chaos: msg.chaos, shoppers: msg.shoppers ?? DEFAULT_CONFIG.shoppers, crypto: this.opts.crypto ?? 'ed25519', policy: l.policy,
         liveRails: lane === 0 ? this.opts.liveRails?.() : undefined,
@@ -134,14 +210,17 @@ export class SimRunner {
         },
       }));
       this.status();
+      this.schedulePayments(this.gen);
     } else if (msg.cmd === 'play') {
       if (this.running) return;
       this.running = true;
       this.status();
-      void this.loop(this.gen);
+      void this.loop(this.gen, ++this.playback);
     } else if (msg.cmd === 'pause') {
+      this.playback++;
       this.running = false;
       this.status();
+      this.schedulePayments(this.gen);
     } else if (msg.cmd === 'speed') {
       this.tps = msg.tps;
       this.status();
@@ -200,10 +279,10 @@ export class SimRunner {
   }
 
   /** Ends everything this runner started, searches included, so a closed socket leaves no work behind. */
-  stop() { this.running = false; this.gen++; this.tuneGen++; this.forgeGen++; if (this.timer) clearTimeout(this.timer); }
+  stop() { this.running = false; this.gen++; this.playback++; this.tuneGen++; this.forgeGen++; if (this.timer) clearTimeout(this.timer); if (this.paymentTimer) clearTimeout(this.paymentTimer); this.paymentTimer = null; }
 
-  private async loop(g: number) {
-    if (!this.running || g !== this.gen) return;
+  private async loop(g: number, playback: number) {
+    if (!this.running || g !== this.gen || playback !== this.playback) return;
     const t0 = Date.now();
     const batch = this.tps > 60 ? Math.ceil(this.tps / 30) : 1;
     try {
@@ -212,22 +291,26 @@ export class SimRunner {
         for (let lane = 0; lane < this.worlds.length; lane++) {
           const w = this.worlds[lane];
           if (w.done) continue;
-          const events = await w.step();
+          const events = await this.serialize(() => g === this.gen && playback === this.playback && this.running ? w.step() : Promise.resolve(null));
           if (g !== this.gen) return;
+          if (!events) { this.schedulePayments(g); return; }
           const spawn: MerchantLite[] = [];
           for (const e of events) if (e.type === 'store_open') { const m = w.merchants.get(e.merchant); if (m) spawn.push(mLite(m)); }
           const attackerPhase: Record<string, string> = {};
           for (const a of w.attackers.values()) attackerPhase[a.id] = a.phase;
           this.post({ type: 'tick', lane, t: w.t, events, spawn, sale: w.sale, attackerPhase });
           if (w.done) this.post({ type: 'done', lane });
+          this.schedulePayments(g);
+          if (playback !== this.playback) return;
         }
       }
     } catch (e) {
-      this.post({ type: 'error', message: (e as Error).message });
-      this.running = false; this.status(); return;
+      if (g === this.gen) { this.post({ type: 'error', message: (e as Error).message }); this.running = false; this.status(); this.schedulePayments(g); }
+      return;
     }
-    if (this.worlds.every((w) => w.done)) { this.running = false; this.status(); return; }
+    if (this.worlds.every((w) => w.done)) { this.running = false; this.status(); this.schedulePayments(g); return; }
+    if (!this.running || playback !== this.playback) return;
     const interval = batch > 1 ? 1000 / 30 : 1000 / this.tps;
-    this.timer = setTimeout(() => void this.loop(g), Math.max(0, interval - (Date.now() - t0)));
+    this.timer = setTimeout(() => void this.loop(g, playback), Math.max(0, interval - (Date.now() - t0)));
   }
 }

@@ -17,7 +17,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { canonicalAddress, CheckoutSession, policyId, PRESETS, settlement, type CheckoutArgs, type CreateOrderInput, type Policy, type PostalAddress, type Verdict, INVARIANT_FLOOR } from '@sandbox-city/core';
+import { BASELINES, canonicalAddress, CheckoutSession, policyId, PRESETS, settlement, type CheckoutArgs, type CreateOrderInput, type Policy, type PostalAddress, type Verdict, INVARIANT_FLOOR } from '@sandbox-city/core';
 import { JournalHistory, type HistorySource } from './history';
 import { PaymentJournal, PaymentWorker, type DecisionContext, type PayRecord } from './payments';
 import type { SandboxRails } from './paypal';
@@ -53,6 +53,8 @@ export function frozenRulebooks(): Record<string, Policy> {
     if (policyId(f.policy) !== f.policyId) throw new Error(`${file} does not match its hash`);
     out[name] = f.policy;
   }
+  // Round four's baseline arms use these same mandatory safeguards. Keep the raw presets available too.
+  for (const [key, policy] of Object.entries(BASELINES)) out[`${key}-safeguards`] = { ...policy, ...INVARIANT_FLOOR };
   // v1 as benchmarked in round four: the same rulebook with the mandatory safeguards on
   if (out['frozen-v1']) out['frozen-v1-safeguards'] = { ...out['frozen-v1'], ...INVARIANT_FLOOR };
   return out;

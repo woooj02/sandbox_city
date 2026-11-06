@@ -5,7 +5,7 @@
 import { agentRep, closedLoop, holdsToRelease, isIndependentBuyer, merchantRep } from './history';
 import { Rng, round2, clamp } from './rng';
 import type {
-  Attacker, AttackerBook, AttackKind, Cohort, CohortTally, GateResult, KindTally, Merchant, Metrics, OrderIntent, Outcome, Passport, Product, RuleHit, Shopper, SignedRequest, SimEvent,
+  Attacker, AttackerBook, AttackKind, Cohort, CohortTally, GateResult, KindTally, Merchant, Metrics, MoneyState, OrderIntent, Outcome, Passport, Product, RuleHit, Shopper, SignedRequest, SimEvent,
 } from './types';
 import { ATTACK_KINDS, COHORTS } from './types';
 import { CryptoMode, deriveKey, KeyPair, signRequest, SignatureVerifier } from './kya';
@@ -86,6 +86,12 @@ interface OrderRec {
   voided?: boolean;
   /** This order is in the honest value delivered right now. */
   valued?: boolean;
+  state: MoneyState;
+  captureBooked?: boolean;
+  credited?: boolean;
+  pending?: { kind: 'initial'; id: string; identity: string; cohort?: CohortTally }
+    | { kind: 'capture'; id: string }
+    | { kind: 'refund'; id: string; reason: string; abuse: boolean; hits: RuleHit[] };
 }
 type Task =
   | { k: 'ship'; order: string }
@@ -137,6 +143,8 @@ export class World {
   private reach = new Map<string, { share: number; paid: boolean }>();
   /** Orders scheduled work wants placed this tick. */
   private queued: OrderIntent[] = [];
+  private lastPaymentRead = 0;
+  private declinedPayments = 0;
 
   constructor(cfg: WorldConfig) {
     this.cfg = cfg;
@@ -163,6 +171,7 @@ export class World {
     for (const c of COHORTS) cohorts[c] = emptyCohort();
     return {
       t: 0, orders: 0,
+      money: { authorized: 0, pending: 0, captured: 0, refunded: 0, voided: 0, declined: 0, unresolved: 0, delivered: 0, heldNow: 0, honestHeldNow: 0 },
       honest: { attempts: 0, completed: 0, blocked: 0, abandoned: 0, challenged: 0, declined: 0, gmv: 0, blockedValue: 0, abandonedValue: 0, fulfilledValue: 0, heldDollarMinutes: 0 },
       fraud: { attempts: 0, attempted: 0, prevented: 0, leaked: 0, byKind },
       refunds: { legitApproved: 0, legitDenied: 0, abuseApproved: 0, abuseDenied: 0 },
@@ -339,6 +348,11 @@ export class World {
     this.sale = hour >= 19 && hour < 20.5;
     const diurnal = 0.35 + 0.65 * Math.max(0, Math.sin(((hour - 7) / 16) * Math.PI));
     const intents: OrderIntent[] = [];
+    // Read-backs never move money. Keep them infrequent even when the simulation runs quickly.
+    if (this.live && t % 60 === 0 && Date.now() - this.lastPaymentRead >= 5000) {
+      this.lastPaymentRead = Date.now();
+      await this.reconcilePending();
+    }
 
     // scheduled lifecycle work
     const due = this.tasks.get(t);
@@ -388,7 +402,7 @@ export class World {
     }
     const end = this.cfg.ticks + horizon;
     while (this.t < end) await this.step();
-    this.m.settled = true;
+    this.m.settled = ![...this.orders.values()].some((r) => r.state === 'pending' || r.state === 'unresolved' || r.amountHeld > 0);
     return this.snapshot();
   }
 
@@ -407,6 +421,16 @@ export class World {
     m.safety = harmTotal ? m.fraud.prevented / harmTotal : 1;
     m.access = m.honest.attempts ? m.honest.completed / m.honest.attempts : 1;
     m.netValue = round2(m.honest.gmv - m.fraud.leaked - m.chaos.duplicateValue);
+    m.money = { authorized: 0, pending: 0, captured: 0, refunded: 0, voided: 0, declined: 0, unresolved: 0, delivered: 0, heldNow: 0, honestHeldNow: 0 };
+    for (const rec of this.orders.values()) {
+      m.money[rec.state]++;
+      if (rec.delivered && !rec.empty) m.money.delivered++;
+      m.money.heldNow += rec.amountHeld;
+      if (rec.legit) m.money.honestHeldNow += rec.amountHeld;
+    }
+    m.money.declined += this.declinedPayments;
+    m.money.heldNow = round2(m.money.heldNow);
+    m.money.honestHeldNow = round2(m.money.honestHeldNow);
     return JSON.parse(JSON.stringify(m));
   }
 
@@ -763,15 +787,24 @@ export class World {
         this.m.chaos.duplicateCharges += res.duplicates;
         this.m.chaos.duplicateValue = round2(this.m.chaos.duplicateValue + o.amount * res.duplicates);
       }
-      if (!res.result) outcome = 'failed';
+      if (!res.result) {
+        outcome = lane.name === 'sandbox' ? 'unresolved' : 'failed';
+        if (outcome === 'unresolved') this.orders.set(o.id, { r, lane, intent: o, card, payer: o.buyer, amountHeld: 0, carrierScan: false, delivered: false, refunded: false, leaked: 0, legit, paidAt: this.t, inExposure: reserved, state: 'unresolved' });
+      }
       else {
         const pr = res.result;
         paypal = { orderId: pr.id, captureId: pr.captureId, authId: pr.authorizationId, status: pr.status, rail: pr.rail, debugId: pr.debugId };
-        if (pr.status === 'DECLINED') outcome = 'declined';
-        else if (pr.status === 'PENDING') outcome = 'failed'; // not paid yet: the lab books nothing until PayPal says so
+        if (pr.status === 'DECLINED') { outcome = 'declined'; this.declinedPayments++; }
+        else if (pr.status === 'PENDING' || (gate.escrow ? !pr.authorizationId : !pr.captureId || pr.captureStatus !== 'COMPLETED')) {
+          outcome = pr.status === 'PENDING' ? 'pending' : 'unresolved';
+          charges = 0;
+          const rec: OrderRec = { r, lane, intent: o, card, payer: o.buyer, captureId: pr.captureId, authId: pr.authorizationId, amountHeld: 0, carrierScan: false, delivered: false, refunded: false, leaked: 0, legit, paidAt: this.t, inExposure: reserved, state: outcome };
+          if (pr.captureId) rec.pending = { kind: 'initial', id: pr.captureId, identity, cohort };
+          this.orders.set(o.id, rec);
+        }
         else {
           outcome = gate.escrow ? 'escrowed' : 'completed';
-          const rec: OrderRec = { r, lane, intent: o, card, payer: o.buyer, captureId: pr.captureId, authId: pr.authorizationId, amountHeld: gate.escrow ? o.amount : 0, carrierScan: false, delivered: false, refunded: false, leaked: 0, legit, paidAt: this.t, inExposure: false };
+          const rec: OrderRec = { r, lane, intent: o, card, payer: o.buyer, captureId: pr.captureId, authId: pr.authorizationId, amountHeld: gate.escrow ? o.amount : 0, carrierScan: false, delivered: false, refunded: false, leaked: 0, legit, paidAt: this.t, inExposure: false, state: gate.escrow ? 'authorized' : 'captured' };
           this.orders.set(o.id, rec);
           if (!gate.escrow) this.captured(rec, m);
           this.recordStats(identity, m.id);
@@ -779,7 +812,7 @@ export class World {
         }
       }
     }
-    if (reserved && outcome !== 'completed') ms.exposure = round2(ms.exposure - o.amount);
+    if (reserved && outcome !== 'completed' && outcome !== 'pending' && outcome !== 'unresolved') ms.exposure = round2(ms.exposure - o.amount);
     if (outcome === 'failed' && charges > 0 && this.policy.idempotencyKeys) {
       // money moved but the agent never learned it: a ghost charge
       this.m.chaos.duplicateCharges++;
@@ -791,7 +824,7 @@ export class World {
       if (outcome === 'completed' || outcome === 'escrowed') { this.m.honest.completed++; cohort!.completed++; this.m.honest.gmv = round2(this.m.honest.gmv + o.amount); }
       else if (outcome === 'blocked') { this.m.honest.blocked++; this.m.honest.blockedValue = round2(this.m.honest.blockedValue + o.amount); }
       else if (outcome === 'abandoned') { this.m.honest.abandoned++; this.m.honest.abandonedValue = round2(this.m.honest.abandonedValue + o.amount); }
-      else this.m.honest.declined++;
+      else if (outcome !== 'pending' && outcome !== 'unresolved') this.m.honest.declined++;
       if (outcome === 'blocked' || outcome === 'abandoned') { cohort!.refused++; cohort!.refusedValue = round2(cohort!.refusedValue + o.amount); }
     } else if (honest) {
       // honest money headed into a fake / ring store is the attack, whatever the rules did
@@ -800,10 +833,10 @@ export class World {
       o.truth = { malicious: true, attack: kind, attacker: m.owner, victim: o.buyer, harm: o.amount };
       this.tallyAttempt(kind, o.amount);
       if (outcome === 'completed') this.leak(o.id, kind, o.amount);
-      else if (outcome !== 'escrowed') this.prevent(kind, o.amount);
+      else if (outcome !== 'escrowed' && outcome !== 'pending' && outcome !== 'unresolved') this.prevent(kind, o.amount);
     } else if (truth.harm > 0) {
       if (outcome === 'completed') this.leak(o.id, truth.attack!, truth.harm);
-      else if (outcome !== 'escrowed') this.prevent(truth.attack!, truth.harm);
+      else if (outcome !== 'escrowed' && outcome !== 'pending' && outcome !== 'unresolved') this.prevent(truth.attack!, truth.harm);
     } else if (truth.attack === 'refund_abuse' && outcome === 'blocked') {
       // blocking a known abuser's purchase pre-empts the refund scam
       this.tallyAttempt('refund_abuse', o.amount);
@@ -889,6 +922,8 @@ export class World {
 
   /** Money reached the store. Until a carrier scans the parcel it is exposure: paid for, not delivered. */
   private captured(rec: OrderRec, m: Merchant) {
+    if (rec.captureBooked) return;
+    rec.captureBooked = true;
     const o = rec.intent, kind = this.scamKind(m), ms = this.mStats.get(m.id)!;
     const a = this.assume, own = m.owner ? this.attackers.get(m.owner)?.agents.includes(o.buyer) : false;
     // a store paying itself keeps the money either way; only the fee is a real cost
@@ -913,7 +948,7 @@ export class World {
   /** The goods reached an honest buyer. Value counts here, not at the scan, and leaves again if the money does. */
   private arrived(rec: OrderRec) {
     rec.delivered = true;
-    if (!rec.legit || rec.empty || rec.refunded || rec.voided) return;
+    if (rec.valued || rec.state !== 'captured' || !rec.legit || rec.empty || rec.refunded || rec.voided) return;
     rec.valued = true;
     this.m.honest.fulfilledValue = round2(this.m.honest.fulfilledValue + rec.intent.amount);
   }
@@ -927,30 +962,103 @@ export class World {
   /** Held money waits for the complaint window, not just the scan: an empty parcel scans like a full one. */
   private get holdsToRelease() { return holdsToRelease(this.policy); }
 
+  private paymentState(rec: OrderRec, state: MoneyState, status: string) {
+    rec.state = state;
+    this.emit({ type: 'payment', t: this.t, order: rec.intent.id, state, status, rail: rec.lane.name });
+  }
+
+  get hasPendingPayments() { return [...this.orders.values()].some((rec) => !!rec.pending); }
+
+  /** Delivers read-back changes through the same event stream as normal city ticks. */
+  async pollPayments(): Promise<SimEvent[]> {
+    await this.reconcilePending();
+    this.emit({ type: 'metrics', t: this.t, m: this.snapshot() });
+    return this.flush();
+  }
+
+  /** A known pending payment is read, never charged again. A completed id is folded in once. */
+  async reconcilePending() {
+    for (const rec of this.orders.values()) {
+      const pending = rec.pending;
+      if (!pending || !rec.lane.getPayment) continue;
+      let got: Awaited<ReturnType<NonNullable<Rails['getPayment']>>>;
+      try { got = await rec.lane.getPayment(pending.kind === 'refund' ? 'refund' : 'capture', pending.id); }
+      catch { continue; } // a failed read proves nothing, so the pending state stays
+      if (!got || got.status === 'PENDING') continue;
+      // Another read may have finished this payment while this call was waiting.
+      if (rec.pending !== pending) continue;
+      if (got.id !== pending.id || !Number.isFinite(got.amount) || got.amount !== rec.intent.amount || got.status !== 'COMPLETED') {
+        rec.pending = undefined;
+        this.paymentState(rec, 'unresolved', got.status);
+        continue;
+      }
+      rec.pending = undefined;
+      const m = this.merchants.get(rec.intent.merchant)!;
+      if (pending.kind === 'refund') {
+        this.finishRefund(rec, pending.reason, pending.abuse, pending.hits, true);
+      } else {
+        if (pending.kind === 'initial') {
+          if (rec.legit) {
+            this.m.honest.completed++;
+            if (pending.cohort) pending.cohort.completed++;
+            this.m.honest.gmv = round2(this.m.honest.gmv + rec.intent.amount);
+          }
+          if (!rec.inExposure) this.mStats.get(m.id)!.exposure = round2(this.mStats.get(m.id)!.exposure + rec.intent.amount);
+          this.recordStats(pending.identity, m.id);
+          this.afterPayment(rec, m);
+        }
+        this.finishCapture(rec, m, got.id, pending.kind === 'initial');
+      }
+    }
+  }
+
   private async captureHeld(rec: OrderRec, m: Merchant) {
+    if (rec.state !== 'authorized') return;
     const o = rec.intent;
     const c = await this.lifecycle(() => rec.lane.captureAuthorization(rec.authId!, `cap-${o.id}`));
-    if (!c) return;
-    if (c.status === 'PENDING') { rec.amountHeld = 0; return; } // PayPal has not finished: the lab books nothing yet
-    rec.captureId = c.captureId; rec.amountHeld = 0;
+    if (!c || c.status !== 'COMPLETED' || !c.captureId) {
+      if (c?.captureId && c.status === 'PENDING') rec.pending = { kind: 'capture', id: c.captureId };
+      this.paymentState(rec, c?.status === 'PENDING' ? 'pending' : 'unresolved', c?.status ?? 'NO_RESPONSE');
+      return;
+    }
+    this.finishCapture(rec, m, c.captureId);
+  }
+
+  private endHold(rec: OrderRec) {
+    if (rec.amountHeld <= 0) return;
+    if (rec.legit) this.m.honest.heldDollarMinutes = round2(this.m.honest.heldDollarMinutes + rec.amountHeld * (this.t - rec.paidAt));
+    rec.amountHeld = 0;
+  }
+
+  private finishCapture(rec: OrderRec, m: Merchant, captureId: string, initial = false) {
+    if (rec.captureBooked) return;
+    const o = rec.intent;
+    rec.captureId = captureId;
+    this.endHold(rec);
+    this.paymentState(rec, 'captured', 'COMPLETED');
     this.captured(rec, m);
-    if (rec.legit) this.m.honest.heldDollarMinutes = round2(this.m.honest.heldDollarMinutes + o.amount * (this.t - rec.paidAt));
-    this.emit({ type: 'capture', t: this.t, order: o.id, amount: o.amount, rail: rec.lane.name });
+    if (rec.delivered) this.arrived(rec);
+    if (rec.carrierScan && this.t >= rec.shipped! + (this.policy.releaseLag ?? 0)) this.credit(rec, m);
+    this.emit({ type: 'capture', t: this.t, order: o.id, amount: o.amount, rail: rec.lane.name, captureId, initial });
     if (o.truth.malicious && o.truth.harm > 0) this.leak(o.id, o.truth.attack!, o.truth.harm);
   }
 
   private async voidHeld(rec: OrderRec) {
+    if (rec.state !== 'authorized') return;
     const o = rec.intent;
-    await this.lifecycle(() => rec.lane.voidAuthorization(rec.authId!, `void-${o.id}`));
-    if (rec.legit) this.m.honest.heldDollarMinutes = round2(this.m.honest.heldDollarMinutes + o.amount * (this.t - rec.paidAt));
-    rec.amountHeld = 0;
+    const result = await this.lifecycle(() => rec.lane.voidAuthorization(rec.authId!, `void-${o.id}`));
+    if (result?.status !== 'VOIDED') { this.paymentState(rec, 'unresolved', result?.status ?? 'NO_RESPONSE'); return; }
+    this.endHold(rec);
     rec.voided = true;
+    this.paymentState(rec, 'voided', 'VOIDED');
     this.unvalue(rec);
     if (o.truth.malicious && o.truth.harm > 0) this.prevent(o.truth.attack!, o.truth.harm);
   }
 
   /** The delivery counts now: the store earns the record and the order stops being exposure. */
   private credit(rec: OrderRec, m: Merchant) {
+    if (rec.credited || rec.state !== 'captured') return;
+    rec.credited = true;
     const o = rec.intent, ms = this.mStats.get(m.id)!;
     ms.scannedValue = round2(ms.scannedValue + o.amount);
     if (this.independentBuyer(o.buyer, m)) ms.independentValue = round2(ms.independentValue + o.amount);
@@ -1022,7 +1130,7 @@ export class World {
       }
       case 'deliver': this.arrived(rec); break;
       case 'escrowExpire': {
-        if (!rec.authId || rec.amountHeld <= 0) break;
+        if (!rec.authId || rec.amountHeld <= 0 || rec.state !== 'authorized') break;
         await this.voidHeld(rec);
         break;
       }
@@ -1047,6 +1155,7 @@ export class World {
   }
 
   private async refund(rec: OrderRec, reason: string, abuse: boolean) {
+    if (rec.pending || rec.state === 'unresolved') return;
     const o = rec.intent, m = this.merchants.get(o.merchant)!;
     const agent = this.agentView(o.buyer);
     const remorse = reason === 'return';
@@ -1058,13 +1167,27 @@ export class World {
     if (!m.honest && m.closed) approved = false;
     if (approved) {
       const ok = await this.lifecycle(() => rec.lane.refundCapture(rec.captureId!, o.amount, `rf-${o.id}`));
-      if (ok) {
-        rec.refunded = true;
-        const ms = this.mStats.get(m.id)!;
-        if (rec.inExposure) { rec.inExposure = false; ms.exposure = round2(ms.exposure - o.amount); }
-        this.unvalue(rec);
-        this.book(this.scamKind(m), -o.amount, 0);
-      } else approved = false;
+      if (ok?.status !== 'COMPLETED' || !ok.refundId) {
+        const pending = ok?.status === 'PENDING';
+        if (pending && ok.refundId) rec.pending = { kind: 'refund', id: ok.refundId, reason, abuse, hits: decision.hits };
+        this.paymentState(rec, pending ? 'pending' : 'unresolved', ok?.status ?? 'NO_RESPONSE');
+        this.emit({ type: 'refund', t: this.t, id: `R${o.id}`, order: o.id, buyer: o.buyer, merchant: m.id, amount: o.amount, approved: false, pending, unresolved: !pending, reason, hits: decision.hits, rail: rec.lane.name, truth: { malicious: abuse, attack: abuse ? 'refund_abuse' : undefined, harm: abuse ? o.amount : 0 } });
+        return;
+      }
+    }
+    this.finishRefund(rec, reason, abuse, decision.hits, approved);
+  }
+
+  private finishRefund(rec: OrderRec, reason: string, abuse: boolean, hits: RuleHit[], approved: boolean) {
+    if (rec.refunded) return;
+    const o = rec.intent, m = this.merchants.get(o.merchant)!, remorse = reason === 'return';
+    if (approved) {
+      rec.refunded = true;
+      this.paymentState(rec, 'refunded', 'COMPLETED');
+      const ms = this.mStats.get(m.id)!;
+      if (rec.inExposure) { rec.inExposure = false; ms.exposure = round2(ms.exposure - o.amount); }
+      this.unvalue(rec);
+      this.book(this.scamKind(m), -o.amount, 0);
     }
     const st = this.aStats.get(o.buyer);
     if (approved && st) st.refunds++;
@@ -1080,7 +1203,7 @@ export class World {
       // a legit claim denied on an honest store = honest money lost to the rules
       if (!approved && !harmCase && !remorse && m.honest) this.m.honest.blockedValue = round2(this.m.honest.blockedValue + o.amount);
     }
-    this.emit({ type: 'refund', t: this.t, id: `R${o.id}`, order: o.id, buyer: o.buyer, merchant: m.id, amount: o.amount, approved, reason, hits: decision.hits, rail: rec.lane.name, truth: { malicious: abuse, attack: abuse ? 'refund_abuse' : undefined, harm: abuse ? o.amount : 0 } });
+    this.emit({ type: 'refund', t: this.t, id: `R${o.id}`, order: o.id, buyer: o.buyer, merchant: m.id, amount: o.amount, approved, reason, hits, rail: rec.lane.name, truth: { malicious: abuse, attack: abuse ? 'refund_abuse' : undefined, harm: abuse ? o.amount : 0 } });
   }
 
   /** Platform-side lifecycle calls always reuse their PayPal-Request-Id, so retries are safe. */

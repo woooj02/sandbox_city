@@ -4,6 +4,7 @@ import { DISTRICTS, SimEvent } from '@sandbox-city/core';
 import type { MerchantLite, TickMsg, WorldSnapshot } from '@sandbox-city/core';
 import { makeTextures, Textures } from './textures';
 import { C, CATEGORY_COLORS, DISTRICT_COLORS } from './palette';
+import { prefersReducedMotion } from '../sim/motion';
 
 const VH = 1000, PAD = 40;
 
@@ -107,7 +108,7 @@ export class CityRenderer {
    * otherwise there is a cooldown so the edit never feels frantic.
    */
   focus(x: number, y: number, z: number, hold: number, weight: number, kind?: Moment['kind']) {
-    if (!this.cinema) return false;
+    if (!this.cinema || prefersReducedMotion()) return false;
     const T = this.time;
     const busy = this.shot && T < this.shot.until;
     if (busy && weight <= this.shot!.weight) return false;
@@ -119,7 +120,7 @@ export class CityRenderer {
     return true;
   }
   /** Bullet time for the visuals only (comets, sparks, text): the sim keeps its own clock. */
-  slowmo(sec: number, k: number) { if (this.cinema) { this.slowUntil = this.time + sec; this.slowK = k; } }
+  slowmo(sec: number, k: number) { if (this.cinema && !prefersReducedMotion()) { this.slowUntil = this.time + sec; this.slowK = k; } }
 
   private resize() {
     const w = this.app.renderer.width / this.app.renderer.resolution, h = this.app.renderer.height / this.app.renderer.resolution;
@@ -221,6 +222,7 @@ export class CityRenderer {
   }
 
   private addBuilding(m: MerchantLite, spawn: boolean) {
+    if (prefersReducedMotion()) spawn = false;
     const c = new Container();
     const x = this.px(m.x), y = this.py(m.y);
     c.position.set(x, y);
@@ -262,6 +264,12 @@ export class CityRenderer {
 
   private handle(e: SimEvent, budget: number) {
     const xr = this.opts.xray();
+    if (prefersReducedMotion()) {
+      // Preserve the city's state and event feed while removing travel, flashes and camera effects.
+      if (e.type === 'store_close') { const b = this.buildings.get(e.merchant); if (b) b.c.visible = false; }
+      if (e.type === 'inject') { const b = this.buildings.get(e.merchant); if (b) b.infected = 1; }
+      return;
+    }
     switch (e.type) {
       case 'order': {
         const from = this.pos(e.buyer) ?? this.pos(e.truth.attacker ?? '');
@@ -536,12 +544,38 @@ export class CityRenderer {
     const slow = T < this.slowUntil ? this.slowK + (1 - this.slowK) * Math.max(0, 1 - (this.slowUntil - T) / 0.25) ** 3 : 1;
     const dt = real * slow;
 
-    this.camera(real);
+    if (!prefersReducedMotion()) this.camera(real);
 
     // night tint
     const h = this.hour;
     const dark = h < 6 || h > 20 ? 0.32 : h < 8 ? 0.32 * (1 - (h - 6) / 2) : h > 18 ? 0.32 * ((h - 18) / 2) : 0;
     this.night.clear().rect(-50, -50, this.VW + 100, VH + 100).fill({ color: 0x050018, alpha: dark });
+
+    if (prefersReducedMotion()) {
+      this.world.scale.set(1); this.world.position.set(0, 0);
+      this.lock.clear(); this.lockText.visible = false;
+      this.shot = null; this.idleShot = null; this.shake = 0; this.punch = 0;
+      this.cam = { x: this.VW / 2, y: VH / 2, z: 1 };
+      for (const c of this.comets) { c.head.destroy(); c.trail.forEach((s) => s.destroy()); }
+      this.comets = [];
+      for (const f of this.fx) f.s.destroy();
+      this.fx = []; this.textCount = 0;
+      if (this.shockT >= 0 || this.glitchT > 0) { this.shockT = -1; this.glitchT = -1; this.applyFilters(); }
+      for (const g of this.districtPlates) g.alpha = 1;
+      for (const tr of this.traffic) tr.s.position.set(...along(tr.path, tr.u));
+      for (const p of this.people.values()) {
+        p.s.position.set(p.hx, p.hy); p.s.scale.set(p.baseScale); p.s.tint = p.tint;
+        if (p.ring) { p.ring.position.copyFrom(p.s.position); p.ring.scale.set(0.11); p.ring.rotation = 0; }
+      }
+      for (const b of this.buildings.values()) {
+        if (b.dying !== undefined) b.c.visible = false;
+        b.c.alpha = 1; b.c.scale.set(1); b.c.x = b.x; b.born = -9999;
+        b.body.tint = 0xffffff; b.light.scale.set(0.42); b.light.alpha = 0.45;
+        b.light.tint = b.infected ? C.injection : this.opts.xray() && !b.m.honest ? C.attack : CATEGORY_COLORS[b.m.category];
+      }
+      for (const a of this.attackers.values()) { a.ring.rotation = 0; a.core.scale.set(0.42); a.core.alpha = 0.9; a.c.alpha = this.opts.xray() ? 1 : 0.25; }
+      return;
+    }
 
     // districts pulse on flash sale
     this.districtPlates.forEach((g, i) => { g.alpha = this.sale ? 0.7 + 0.6 * Math.abs(Math.sin(T * 4 + i)) : 1; });

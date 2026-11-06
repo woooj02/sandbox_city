@@ -36,6 +36,8 @@ export function sandboxMoves(ledger: LiveLedger, events: SimEvent[]) {
       if (e.paypal?.captureId) ledger.captureIds.add(e.paypal.captureId);
     } else if (e.type === 'capture' && e.rail === 'sandbox') {
       ledger.captured = round2(ledger.captured + e.amount);
+      if (e.captureId) ledger.captureIds.add(e.captureId);
+      if (e.initial) ledger.orders++;
     } else if (e.type === 'refund' && e.rail === 'sandbox' && e.approved) {
       ledger.refunded = round2(ledger.refunded + e.amount);
       ledger.refunds++;

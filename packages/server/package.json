@@ -8,7 +8,7 @@
     "mock-paypal": "tsx src/mock-paypal.ts"
   },
   "dependencies": {
-    "@fastify/static": "^10.1.8",
+    "@fastify/static": "^10.1.10",
     "@fastify/websocket": "^11.3.6",
     "@paypal/agent-toolkit": "^1.11.0",
     "@sandbox-city/core": "*",

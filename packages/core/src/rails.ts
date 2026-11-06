@@ -65,6 +65,8 @@ export interface Rails {
   captureAuthorization(authId: string, requestId: string): Promise<{ captureId: string; status: string }>;
   voidAuthorization(authId: string, requestId: string): Promise<{ status: string }>;
   refundCapture(captureId: string, amount: number, requestId: string): Promise<{ refundId: string; status: string }>;
+  /** Read a known payment without sending another money-moving call. */
+  getPayment?(kind: 'capture' | 'refund', id: string): Promise<{ id: string; status: string; amount: number } | null>;
 }
 
 interface Capture { id: string; amount: number; payee: string; payer: string; refunded: number; custom: string }
@@ -190,4 +192,5 @@ export class ChaosRails implements Rails {
   captureAuthorization(a: string, r: string) { return this.wrap(() => this.inner.captureAuthorization(a, r)); }
   voidAuthorization(a: string, r: string) { return this.wrap(() => this.inner.voidAuthorization(a, r)); }
   refundCapture(c: string, amt: number, r: string) { return this.wrap(() => this.inner.refundCapture(c, amt, r)); }
+  async getPayment(kind: 'capture' | 'refund', id: string) { return this.inner.getPayment?.(kind, id) ?? null; }
 }

@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { checkAgentAnswer, type AgentRegression, type CaseResult } from '@sandbox-city/core';
 import { useStore } from '../store';
+import { prefersReducedMotion } from '../sim/motion';
 import { useModal } from './useModal';
 import raw from '../data/evidence.json';
 
 const cases = (raw as unknown as { agentCases: AgentRegression[] }).agentCases;
+const ALL_CASES = 'npx tsx scripts/regress.ts regressions --agent "python3 my_agent.py" --report=agent-report.md';
 
 type Verdict = { kind: 'empty' } | { kind: 'invalid'; messages: string[] } | { kind: 'checked'; result: CaseResult; control: boolean };
 
@@ -57,14 +59,14 @@ export function AgentTest() {
   const panel = useModal<HTMLDivElement>(open, close);
   const [pick, setPick] = useState(0);
   const [text, setText] = useState('');
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'input' | 'command' | null>(null);
   const verdict = useRef<HTMLDivElement>(null);
   // the verdict is the point of the page, so it must not land below the fold
-  useEffect(() => { if (text) verdict.current?.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, [text]);
+  useEffect(() => { if (text) verdict.current?.scrollIntoView({ block: 'center', behavior: prefersReducedMotion() ? 'instant' : 'smooth' }); }, [text]);
   if (!open) return null;
   const c = cases[pick];
   const input = JSON.stringify(c.input, null, 2);
-  const copy = async () => { await navigator.clipboard.writeText(input); setCopied(true); setTimeout(() => setCopied(false), 1500); };
+  const copy = async (value: string, kind: 'input' | 'command') => { await navigator.clipboard.writeText(value); setCopied(kind); setTimeout(() => setCopied(null), 1500); };
   const download = () => {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(c, null, 2)], { type: 'application/json' }));
@@ -79,8 +81,9 @@ export function AgentTest() {
           <span className="glyph ev-glyph">RUN</span>
           <div>
             <h2>TEST MY AGENT</h2>
-            <p>Give your agent a listing built to fool it, then see whether it would break its owner's mandate. Plain code decides, no model grades it, and your answer never leaves this page.</p>
+            <p>This checks one pasted answer against one selected listing. Plain code checks the owner's mandate, and your answer stays in this page. Use the command below to run all cases against your agent.</p>
           </div>
+          <button className="btn dialog-close" aria-label="Close Test my agent" onClick={close}>CLOSE ×</button>
         </div>
 
         <h3 className="simple-h"><i>1</i>Send your agent this input</h3>
@@ -91,11 +94,11 @@ export function AgentTest() {
         </label>
         <pre className="at-json">{input}</pre>
         <div className="at-row">
-          <button className="btn" onClick={() => void copy()}>{copied ? 'COPIED' : 'COPY INPUT'}</button>
+          <button className="btn" onClick={() => void copy(input, 'input')}>{copied === 'input' ? 'COPIED' : 'COPY INPUT'}</button>
           <button className="btn" onClick={download}>DOWNLOAD THE CASE</button>
         </div>
 
-        <h3 className="simple-h"><i>2</i>Paste what it printed</h3>
+        <h3 className="simple-h"><i>2</i>Check one answer</h3>
         <textarea className="at-answer" aria-label="Your agent's answer" spellCheck={false} rows={6} value={text} placeholder={'{ "buy": true, "qty": 1, "ship_to": "...", "reason": "..." }'} onChange={(e) => setText(e.target.value)} />
         <div className="at-row">
           <span className="at-hint">No agent to hand? See both results:</span>
@@ -106,7 +109,8 @@ export function AgentTest() {
 
         <h3 className="simple-h"><i>3</i>Run every case in CI</h3>
         <p className="at-p">Your agent is any command that reads this JSON on stdin and prints its answer. You get a verdict, a fix for each failure and a report for your pull request. A failed run exits 1, so it can block a release.</p>
-        <pre className="at-json">npm run agent-test -- "python3 my_agent.py"</pre>
+        <pre className="at-json">{ALL_CASES}</pre>
+        <div className="at-row"><button className="btn" onClick={() => void copy(ALL_CASES, 'command')}>{copied === 'command' ? 'COPIED' : 'COPY ALL-CASE COMMAND'}</button></div>
         <p className="at-p">Working examples are in <code>examples/agents/</code>, and the contract is in <code>docs/REGRESSION.md</code>.</p>
       </div>
     </div>,

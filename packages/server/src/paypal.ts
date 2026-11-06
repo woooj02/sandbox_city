@@ -163,7 +163,7 @@ export class SandboxRails implements Rails {
     if (cap?.id && !declined) this.moves.set(cap.id, { kind: 'capture', id: cap.id, amount: input.amount, status: cap.status ?? 'UNKNOWN' });
     if (auth?.id) this.authAmount.set(auth.id, input.amount);
     return {
-      id: json.id, status: declined ? 'DECLINED' : cap && cap.status !== 'COMPLETED' ? 'PENDING' : 'COMPLETED', captureId: cap?.id, captureStatus: cap?.status as OrderResult['captureStatus'],
+      id: json.id, status: declined ? 'DECLINED' : (cap?.id && cap.status === 'COMPLETED') || (auth?.id && auth.status === 'CREATED') ? 'COMPLETED' : 'PENDING', captureId: cap?.id, captureStatus: cap?.status as OrderResult['captureStatus'],
       authorizationId: auth?.id, debugId: debugId ?? '', rail: 'sandbox', issue: declined ? cap?.status_details?.reason ?? 'DECLINED' : undefined,
     };
   }
@@ -256,13 +256,16 @@ export class SandboxRails implements Rails {
   async getPayment(kind: 'capture' | 'refund', id: string): Promise<{ id: string; status: string; amount: number } | null> {
     const { status, json } = await this.call<{ id: string; status: string; amount?: { value: string } }>('GET', `/v2/payments/${kind}s/${id}`);
     if (status >= 300 || !json.amount) return null;
-    return { id: json.id, status: json.status, amount: Number(json.amount.value) };
+    const payment = { id: json.id, status: json.status, amount: Number(json.amount.value) };
+    if (payment.id === id && Number.isFinite(payment.amount)) this.moves.set(id, { kind, ...payment });
+    return payment;
   }
 
   observed() {
     let captured = 0, refunded = 0, captures = 0, refunds = 0, unfinished = 0;
     for (const m of this.moves.values()) {
-      if (m.status !== 'COMPLETED') unfinished++;
+      const completed = m.status === 'COMPLETED' || m.kind === 'capture' && ['REFUNDED', 'PARTIALLY_REFUNDED'].includes(m.status);
+      if (!completed) unfinished++;
       else if (m.kind === 'capture') { captured += m.amount; captures++; } else { refunded += m.amount; refunds++; }
     }
     const r2 = (n: number) => Math.round(n * 100) / 100;

@@ -5,8 +5,8 @@ const STOCK_ATTACKERS = DEFAULT_CONFIG.attackers;
 import { useStore } from '../store';
 import { ATTACK_CODE, ATTACK_SHORT, LANE_NAMES, money, pct } from './meta';
 
-function Gauge({ value, label, sub, color, code }: { value: number; label: string; sub: string; color: string; code: string }) {
-  const r = 46, c = 2 * Math.PI * r, v = Math.max(0, Math.min(1, value));
+function Gauge({ value, label, sub, color, code, unknown = false }: { value: number; label: string; sub: string; color: string; code: string; unknown?: boolean }) {
+  const r = 46, c = 2 * Math.PI * r, v = unknown ? 0 : Math.max(0, Math.min(1, value));
   return (
     <div className="gauge" style={{ ['--c' as string]: color }}>
       <svg viewBox="0 0 120 120">
@@ -15,7 +15,7 @@ function Gauge({ value, label, sub, color, code }: { value: number; label: strin
         <circle cx="60" cy="60" r={r} className="g-val" strokeDasharray={`${c * v} ${c}`} transform="rotate(-90 60 60)" />
       </svg>
       <div className="g-center">
-        <div className="g-num">{(v * 100).toFixed(1)}<small>%</small></div>
+        <div className="g-num">{unknown ? '—' : (v * 100).toFixed(1)}{!unknown && <small>%</small>}</div>
         <div className="g-code">{code}</div>
       </div>
       <div className="g-label">{label}</div>
@@ -57,11 +57,12 @@ function LaneHud({ lane }: { lane: number }) {
   const multi = useStore((s) => s.lanes.length > 1);
   const m = L?.metrics;
   if (!m) return <div className="hud-lane"><div className="hud-wait">booting city…</div></div>;
+  const awaitingFraud = m.money.pending + m.money.unresolved > 0 && m.fraud.prevented + m.fraud.leaked === 0;
   return (
     <div className="hud-lane">
       {multi && <div className={`hud-lane-title lane-${lane}`}><b>{LANE_NAMES[lane]}</b> {policy?.name}</div>}
       <div className="gauges">
-        <Gauge value={m.safety} label="FRAUD STOPPED" sub={`${money(m.fraud.prevented)} of ${money(m.fraud.prevented + m.fraud.leaked)}`} color="#4cf2ff" code="SAFE" />
+        <Gauge value={m.safety} unknown={awaitingFraud} label="FRAUD STOPPED" sub={awaitingFraud ? 'Awaiting payment confirmation' : `${money(m.fraud.prevented)} of ${money(m.fraud.prevented + m.fraud.leaked)}`} color="#4cf2ff" code="SAFE" />
         <Gauge value={m.access} label="HONEST GET THROUGH" sub={`${m.honest.completed.toLocaleString()} of ${m.honest.attempts.toLocaleString()} buys`} color="#7dff9a" code="PASS" />
       </div>
       <div className="sparks"><Spark data={L.history} k="safety" color="#4cf2ff" /><Spark data={L.history} k="access" color="#7dff9a" /></div>

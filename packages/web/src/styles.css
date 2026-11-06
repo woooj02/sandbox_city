@@ -814,3 +814,27 @@ button.rail-badge { background: transparent; cursor: pointer; }
 .worth-check b { display: block; font-size: 15px; color: #fff; }
 .worth-check small { display: block; font-size: 14px; line-height: 1.35; color: #aab4dc; }
 
+.worth .report-head > div, .agent-test .report-head > div { flex: 1; min-width: 0; }
+.dialog-close { margin-left: auto; align-self: flex-start; flex: none; white-space: nowrap; }
+.worth-inputs { display: grid; grid-template-columns: minmax(0, 1fr) 100px; align-items: center; gap: 10px; }
+.worth-knob input[type="number"] { min-width: 0; padding: 6px 8px; color: #fff; background: #0c0f2a; border: 1px solid var(--line); font: 14px var(--mono); }
+.worth-knob input[type="number"]:focus-visible { outline: 2px solid var(--cy); outline-offset: 2px; }
+.policy-hash { display: block; margin-top: 3px; color: #aab4dc; font: 12px var(--mono); }
+.worth-answer code { margin: 4px 0; color: #aab4dc; font: 12px var(--mono); }
+.worth-assumption { margin: 0 0 12px; padding: 10px 12px; color: #dfe6ff; border: 1px solid var(--gold); font-size: 14px; line-height: 1.45; }
+.worth-assumption b { display: block; margin-bottom: 4px; color: var(--gold); }
+
+.money-states { margin: 10px 0; font-size: 12px; line-height: 1.45; }
+.money-states summary { cursor: pointer; color: var(--cy); }
+.money-states dl { margin: 8px 0; }
+.money-states dt { font-weight: 700; color: #cfd8ff; margin-top: 7px; }
+.money-states dd { margin: 0; }
+.tone-unresolved, .b-pending, .b-unresolved, .b-authorized { color: var(--gold); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .impact, .speedlines, .scanbars, .cine-grain, .cc-sweep,
+  .glitch::before, .glitch::after, .cc-title::before, .cc-title::after { display: none !important; }
+  .cutin .band { transform: none; left: 0; right: 0; opacity: 1; }
+  .cutin .content, .cutin .stamp, .cutin .tag-bg { transform: translateY(-50%); }
+}
