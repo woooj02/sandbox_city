@@ -18,3 +18,4 @@ export * from './regression';
 export * from './policy-patch';
 export * from './worth';
 export * from './history';
+export * from './authority-checkout';

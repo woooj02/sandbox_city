@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { BrainPrompt, Metrics, Policy } from '@sandbox-city/core';
-import { PRESETS } from '@sandbox-city/core';
+import { DEFAULT_PRICES, PRESETS, type Prices } from '@sandbox-city/core';
+import { experimentFor, type Experiment, type Task, type AgentResult, type SavedDecision, type SavedGate } from './workflow';
 import type { DaySummary, ForgeScore, Genomes, Policy as PolicyT, TunePoint, WorldSnapshot } from '@sandbox-city/core';
 
 export type CutInKind = 'attack' | 'blocked' | 'breach' | 'double' | 'sale' | 'falsepos' | 'replay' | 'escrow';
@@ -36,6 +37,18 @@ export const emptyBrain = (): BrainTally => ({ read: 0, poisoned: 0, obeyed: 0, 
 interface LaneState { brain: BrainTally; world: WorldSnapshot | null; metrics: Metrics | null; t: number; done: boolean; sale: boolean; phases: Record<string, string>; history: { t: number; safety: number; access: number; net: number }[] }
 
 interface State {
+  task: Task | 'home' | 'city';
+  experiment: Experiment | null;
+  selectTask: (task: Task | 'home' | 'city') => void;
+  experiments: Partial<Record<Task, Experiment>>;
+  agentDraft: { pick: number; text: string; method: 'sample' | 'pasted-answer' | 'local-command' };
+  agentResults: AgentResult[];
+  agentGate: SavedGate | null;
+  agentGatePolicy: Policy | null;
+  costDraft: { prices: Prices; boxes: boolean };
+  savedDecision: SavedDecision | null;
+  decisionHistory: SavedDecision[];
+  runComplete: boolean;
   seed: string;
   chaos: number;
   policies: Policy[];
@@ -85,6 +98,15 @@ let nid = 1;
 const emptyLane = (): LaneState => ({ brain: emptyBrain(), world: null, metrics: null, t: 0, done: false, sale: false, phases: {}, history: [] });
 
 export const useStore = create<State>((set, get) => ({
+  task: new URLSearchParams(location.search).has('agent') ? 'agent-authority' : new URLSearchParams(location.search).has('worth') ? 'policy-cost' : new URLSearchParams(location.search).has('lab') || location.hash ? 'city' : 'home',
+  experiment: null, experiments: {},
+  selectTask: (task) => {
+    const current = get();
+    const experiment = task === 'home' || task === 'city' ? current.experiment : current.experiments[task] ?? experimentFor(task, `${task}-${Date.now()}`);
+    set({ task, experiment, ...(experiment ? { experiments: { ...current.experiments, [experiment.task]: experiment } } : {}), showAgent: false, showWorth: false, showReport: false, showEvidence: false, showHijack: false, tune: { ...current.tune, open: false }, forge: { ...current.forge, open: false } });
+  },
+  agentDraft: { pick: 0, text: '', method: 'sample' }, agentResults: [], agentGate: null, agentGatePolicy: null,
+  costDraft: { prices: DEFAULT_PRICES, boxes: false }, savedDecision: null, decisionHistory: [], runComplete: false,
   seed: 'neo-osaka-7',
   chaos: 0.04,
   policies: [PRESETS.open],

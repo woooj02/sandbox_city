@@ -1,3 +1,5 @@
+import { Scope } from './Scope';
+import { prefersReducedMotion } from '../sim/motion';
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AgGridReact } from 'ag-grid-react';
@@ -251,6 +253,8 @@ function Regressions() {
 /** The case for the project in the order an auditor asks: the failure, its cost, what it misses, and whether the money is safe. */
 export function Evidence() {
   const open = useStore((s) => s.showEvidence);
+  const experiment = useStore((s) => s.experiment);
+  const decision = useStore((s) => s.savedDecision);
   const close = () => useStore.setState({ showEvidence: false });
   const panel = useModal<HTMLDivElement>(open, close);
   if (!open) return null;
@@ -267,10 +271,13 @@ export function Evidence() {
             <p>One failure, what stopping it costs, what still gets through, and what happens to the money when a process dies. Simulated days are simulation; each proof says what it ran against.</p>
           </div>
         </div>
+        <Scope experiment={experiment} title="Evidence library · recorded runs with separate populations, policies and dates" />
+        {decision && <p className="worth-assumption">Kept decision: {decision.selected.label} · policy {decision.selected.policyHash} · experiment {decision.experiment?.id}. Receipts below retain their recorded policies; they are not executions of this decision unless their hashes match. Owner/order context must match too.</p>}
+        <button className="btn" onClick={close}>Return to the same task and result</button>
         {!b ? <Missing what="the benchmark" /> : <>
           <nav className="ev-path" aria-label="The path through the evidence">
             {[['ev-cost', 'Compare what stopping it costs'], ['ev-missed', 'See what still gets through'], ['ev-checkout', 'Watch it at the checkout'], ['ev-regressions', 'Take it into CI']].map(([id, label], i) => (
-              <button key={id} onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })}><i>{i + 2}</i>{label}</button>
+              <button key={id} onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: prefersReducedMotion() ? 'instant' : 'smooth' })}><i>{i + 2}</i>{label}</button>
             ))}
           </nav>
           <Incident b={b} />

@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { breakEven, DEFAULT_PRICES, policyId, priceDefense, rankDefenses, type DefenseArm, type Policy, type PriceKnob, type Prices } from '@sandbox-city/core';
 import { useStore } from '../store';
 import { client } from '../sim/client';
 import { prefersReducedMotion } from '../sim/motion';
-import { useModal } from './useModal';
+import { Scope } from './Scope';
 import { money } from './meta';
 import raw from '../data/evidence.json';
 
@@ -52,15 +51,14 @@ function download(name: string, value: unknown) {
 
 /** The decision the lab exists for. The measurements are ours and simulated; the prices are the developer's. */
 export function Worth() {
-  const open = useStore((s) => s.showWorth);
-  const close = () => useStore.setState({ showWorth: false });
-  const panel = useModal<HTMLDivElement>(open, close);
-  const [p, setP] = useState<Prices>(DEFAULT_PRICES);
-  const [boxes, setBoxes] = useState(false);
+  const state = useStore();
+  const p = state.costDraft.prices, boxes = state.costDraft.boxes;
+  const setP = (prices: Prices) => useStore.setState({ costDraft: { prices, boxes } });
+  const setBoxes = (boxes: boolean) => useStore.setState({ costDraft: { prices: p, boxes } });
   const [copied, setCopied] = useState<'checkout' | 'ci' | null>(null);
   const set = boxes ? withEmptyBoxes : arms;
   const ranked = useMemo(() => rankDefenses(set, p), [set, p]);
-  if (!open || !round) return null;
+  if (!round) return null;
   const top = ranked[0], next = ranked[1];
   const qualified = ranked.filter((r) => !r.out);
   const flips = next && !next.out ? KNOBS.flatMap((k) => {
@@ -73,6 +71,7 @@ export function Worth() {
   const reason = chosen ? `${chosen.label} meets your ${(p.minAccess * 100).toFixed(2)}% honest-access floor and has the highest value after your priced costs among ${qualified.length} qualifying rulebooks: ${money(top.net)} per simulated day.` : '';
   const decision = chosen ? {
     schema: 'sandbox-city/decision@1',
+    experiment: { ...state.experiment!, task: 'policy-cost' as const, phase: 'complete' as const, source: 'recorded-benchmark' as const, paymentMode: 'simulated' as const, scenario: { id: boxes ? 'empty-box-estimate' : 'standard', version: 'benchmark-v4', approximation: boxes }, candidatePolicyHash: chosen.policyId, prices: { ...p } },
     selected: { key: chosen.key, name: chosen.name, label: chosen.label, policyHash: chosen.policyId },
     prices: p, accessFloor: p.minAccess,
     scenario: { key: boxes ? 'empty-box-approximation' : 'standard', approximation: boxes, assumption: boxes ? EMPTY_BOX_LIMIT : 'All columns come from the same standard simulated days.' },
@@ -80,22 +79,24 @@ export function Worth() {
     result: { perDay: { delivered: top.delivered, theftCost: top.theft, stepUpCost: top.friction, holdingCost: top.holding, net: top.net }, honestAccess: top.arm.access },
     reason, costsLeftOut: LEFT_OUT, rules: chosen.rules,
   } : null;
-  const evidence = () => { close(); useStore.setState({ showEvidence: true }); setTimeout(() => document.getElementById('ev-checkout')?.scrollIntoView({ behavior: prefersReducedMotion() ? 'instant' : 'smooth' }), 500); };
-  const apply = () => { if (!chosen) return; client.start([chosen.rules]); close(); setTimeout(() => client.send({ cmd: 'play' }), 300); };
+  const evidence = () => { if (decision) useStore.setState({ savedDecision: decision, decisionHistory: [...state.decisionHistory, decision], experiment: decision.experiment, experiments: { ...state.experiments, 'policy-cost': decision.experiment } }); useStore.setState({ showEvidence: true }); setTimeout(() => document.getElementById('ev-checkout')?.scrollIntoView({ behavior: prefersReducedMotion() ? 'instant' : 'smooth' }), 500); };
+  const keep = () => { if (decision) useStore.setState({ savedDecision: decision, decisionHistory: [...state.decisionHistory, decision], experiment: decision.experiment, experiments: { ...state.experiments, 'policy-cost': decision.experiment } }); };
+  const apply = () => { if (!chosen) return; keep(); client.send({ cmd: 'pause' }); client.start([chosen.rules]); state.selectTask('city'); };
   const checkout = chosen ? `curl -sS http://localhost:8787/api/checkout \\\n  -H 'content-type: application/json' \\\n  --data '${JSON.stringify({ key: `worth-${chosen.key}-example`, rulebook: AT_CHECKOUT[chosen.key], owner: { category: 'home', qty: 1, address: '12 Neon St, Silk Row', budget: 100 }, listedUnit: 80, args: { items: [{ name: 'Lamp', quantity: 1, itemCost: 80, itemTotal: 80 }], shippingAddress: { address_line_1: '12 Neon St', admin_area_2: 'Silk Row' } } })}'` : '';
   const copy = async (value: string, kind: 'checkout' | 'ci') => { await navigator.clipboard.writeText(value); setCopied(kind); setTimeout(() => setCopied(null), 1500); };
 
-  return createPortal(
-    <div className="report-wrap" onClick={close}>
-      <div className="report panel hijack worth" ref={panel} tabIndex={-1} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Is it worth it?">
+  return (
+      <section className="task-panel worth" aria-label="Defense cost workspace">
         <div className="report-head">
           <span className="glyph ev-glyph">$</span>
           <div>
-            <h2>IS IT WORTH IT?</h2>
+            <h1>Which payment defense is worth using?</h1>
             <p>Every defense costs something. These are {round.protocol.testDays} simulated days, the same for every rulebook, and all of them carry the same four safeguards. The results are measured here. The prices are yours, and they decide the answer.</p>
           </div>
-          <button className="btn dialog-close" aria-label="Close Is it worth it?" onClick={close}>CLOSE ×</button>
+
         </div>
+        <Scope experiment={decision?.experiment ?? state.experiment} title="Recorded standard world · 30 simulated days · identical safeguards · terminal outcomes" />
+        <p><b>Reprice recorded results.</b> Prices change the arithmetic instantly; they do not rerun agents or the benchmark.</p>
         <div className="worth-grid">
           <section className="worth-prices" aria-label="Your prices">
             <h3 className="simple-h"><i>1</i>Your prices</h3>
@@ -117,11 +118,11 @@ export function Worth() {
               </div>
               <small>A defense below this is out, whatever it saves.</small>
             </div>
-            <label className="worth-check">
+            <details className="risk-estimator"><summary>Estimate an additional risk</summary><p>This is a separate approximation, not a measured city scenario.</p><label className="worth-check">
               <input type="checkbox" checked={boxes} onChange={(e) => setBoxes(e.target.checked)} />
               <span><b>Stores on my platform could ship empty boxes</b><small>Estimate this risk using held-out theft. Other measurements stay from standard days.</small></span>
-            </label>
-            <button className="simple-link" onClick={() => { setP(DEFAULT_PRICES); setBoxes(false); }}>Reset my prices</button>
+            </label></details>
+            <button className="simple-link" onClick={() => { useStore.setState({ costDraft: { prices: DEFAULT_PRICES, boxes: false } }); }}>Reset my prices</button>
           </section>
           <section aria-label="Your answer">
             <h3 className="simple-h"><i>2</i>Your answer</h3>
@@ -129,11 +130,15 @@ export function Worth() {
             {chosen ? (
               <div className="worth-answer">
                 <label>At your prices, use</label>
-                <b>{chosen.label}</b>
+                <b>{chosen.key === 'frozen_v3' ? 'Wait through the complaint window' : chosen.key === 'frozen' ? 'Release earlier with an exposure limit' : chosen.label}</b><span>{chosen.label}</span>
                 <code>Policy {chosen.policyId}</code>
                 <span>{money(top.net)} a day after the costs you priced</span>
               </div>
             ) : <div className="worth-answer"><label>No rulebook here accepts that many honest purchases.</label><span>Lower the floor to compare them.</span></div>}
+            {chosen && <p>Honest purchases accepted: {(top.arm.access * 100).toFixed(2)}% · held capital: {top.arm.heldDollarHours.toLocaleString('en-US')} dollar-hours/day.</p>}
+            {!boxes && <p>v4 leads v3 by about $443/day at principal-only theft cost (paired 95% interval $233–$647). v3 stops about $878/day more theft. These intervals describe the recorded default comparison, not arbitrary repriced objectives.</p>}
+            <p className="worth-assumption">Held-out failure: empty-box sellers took $2,953/day under v4 and $48 under v3. Standard days omit this mechanism. The optional estimator keeps that risk visible without claiming a complete measured scenario.</p>
+            {chosen && <p className="cost-equation">{money(top.delivered)} delivered and paid − {money(top.theft)} theft − {money(top.friction)} step-ups − {money(top.holding)} holding = {money(top.net)} / day</p>}
             {flips.length > 0 && <ul className="worth-flips">{flips.map((f) => <li key={f}>{f}</li>)}</ul>}
             {chosen && <p className="at-p">{reason}</p>}
             <p className="at-p">Delivered value less theft, step-up and holding costs at your prices. Left out: {LEFT_OUT}</p>
@@ -154,11 +159,14 @@ export function Worth() {
         </div>
         <h3 className="simple-h"><i>3</i>Take it with you</h3>
         <div className="at-row">
-          <button className="btn" disabled={!chosen} onClick={apply}>APPLY TO CITY</button>
+          <button className="btn" disabled={!chosen} onClick={apply}>Explore these rules in a new city</button>
+          <button className="btn" disabled={!decision} onClick={keep}>Keep this decision</button>
           <button className="btn" disabled={!chosen} onClick={() => chosen && download(`rulebook-${chosen.key}.json`, chosen.rules)}>DOWNLOAD THIS RULEBOOK</button>
-          <button className="btn" disabled={!decision} onClick={() => decision && download(`decision-${decision.selected.key}.json`, decision)}>EXPORT THE WHOLE DECISION</button>
+          <button className="btn" disabled={!decision} onClick={() => { keep(); if (decision) download(`decision-${decision.selected.key}.json`, decision); }}>EXPORT THE WHOLE DECISION</button>
           <button className="btn" onClick={evidence}>SEE A RULEBOOK AT THE CHECKOUT</button>
         </div>
+        <p className="scope-banner">Exploring carries over the policy only. The new default city has a different population and seed; it does not replay these benchmark days or create empty-box sellers. Your decision stays pinned beside it. The new city starts paused.</p>
+        {state.savedDecision && <p>Kept decision: {state.savedDecision.selected.label} · {state.savedDecision.experiment?.id} · {state.savedDecision.scenario.key}. Export or keep again to replace this saved snapshot.</p>}
         <p className="at-p">Simulated days, and prices you chose: this ranks these rulebooks in this world. It does not predict your fraud rate. The rulebook is the JSON the gate reads. {chosen && AT_CHECKOUT[chosen.key] ? <>At the checkout, ask for <code>"rulebook": "{AT_CHECKOUT[chosen.key]}"</code>. </> : null}<code>docs/CHECKOUT.md</code> shows the call.</p>
         {chosen && <>
           <h4>Use these rules at your local checkout</h4>
@@ -166,12 +174,11 @@ export function Worth() {
           <pre className="at-json">{checkout}</pre>
           <div className="at-row"><button className="btn" onClick={() => void copy(checkout, 'checkout')}>{copied === 'checkout' ? 'COPIED' : 'COPY CHECKOUT COMMAND'}</button></div>
         </>}
+        {state.decisionHistory.length > 0 && <details><summary>Kept decision history ({state.decisionHistory.length})</summary><ul>{state.decisionHistory.map((d, i) => <li key={i}><b>{d.selected.label}</b> · {d.scenario.key} · theft price ${d.prices.stolenDollar.toFixed(2)} · {d.reason}<button className="simple-link" onClick={() => useStore.setState({ costDraft: { prices: { ...d.prices }, boxes: d.scenario.approximation } })}>Reprice with these saved inputs</button></li>)}</ul><p>Saved snapshots stay unchanged when you edit the current prices.</p></details>}
         <h4>Check your agent before release</h4>
         <p className="at-p">Replace the example command with your agent. This runs every portable case, including honest controls, and writes the release verdict.</p>
         <pre className="at-json">{CI_COMMAND}</pre>
         <div className="at-row"><button className="btn" onClick={() => void copy(CI_COMMAND, 'ci')}>{copied === 'ci' ? 'COPIED' : 'COPY CI COMMAND'}</button></div>
-      </div>
-    </div>,
-    document.body,
+      </section>
   );
 }

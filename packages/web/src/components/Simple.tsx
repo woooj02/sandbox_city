@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { policyId, PRESETS, type Policy } from '@sandbox-city/core';
 import { useStore } from '../store';
 import { client } from '../sim/client';
@@ -24,16 +25,19 @@ const replay = (p: Policy) => { client.start([p]); setTimeout(() => client.send(
 export function SimpleRules() {
   const current = useStore((s) => s.policies[0]);
   const hash = current && policyId(current);
+  const [advanced, setAdvanced] = useState(false);
+  const choices = advanced ? CHOICES : CHOICES.filter(({ policy }) => policy.name === 'Frozen v3' || policy.name === 'Frozen v4');
   return (
     <aside className="rulebook panel simple-rules">
       <h2 className="simple-h"><i>1</i>Pick a rulebook</h2>
       <div className="choices" role="radiogroup" aria-label="Rulebook">
-        {CHOICES.map(({ policy, plain }) => (
+        {choices.map(({ policy, plain }) => (
           <button key={policy.name} role="radio" aria-checked={hash === policyId(policy)} className={`choice ${hash === policyId(policy) ? 'on' : ''}`} onClick={() => replay(policy)}>
-            <b>{policy.name}</b><span>{plain}</span><code className="policy-hash">{policyId(policy)}</code>
+            <b>{policy.name === 'Frozen v3' ? 'Wait through the complaint window' : policy.name === 'Frozen v4' ? 'Release earlier with an exposure limit' : policy.name}</b><span>{policy.name} · {plain}</span>
           </button>
         ))}
       </div>
+      <button className="simple-link" onClick={() => setAdvanced(!advanced)}>{advanced ? 'Show the main tradeoff' : 'All historical rulebooks'}</button>
       {current && <p className="simple-note">City: {current.name} · policy <code>{hash}</code>. The comparison labels safeguards added to its benchmark arms.</p>}
       <p className="simple-note">Same shoppers, same attackers, every time. Only the rules change.</p>
       <button className="simple-link" onClick={() => useStore.setState({ fullLab: true })}>Change individual rules →</button>

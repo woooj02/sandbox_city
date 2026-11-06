@@ -70,7 +70,7 @@ function LaneHud({ lane }: { lane: number }) {
         <div><label>STOLEN</label><b className="bad">{money(m.fraud.leaked)}</b></div>
         <div><label>WRONGLY BLOCKED</label><b className="warn">{m.honest.blocked + m.honest.abandoned}</b></div>
         <div><label>DOUBLE CHARGES</label><b className={m.chaos.duplicateCharges ? 'warn' : ''}>{m.chaos.duplicateCharges}</b></div>
-        <div><label>NET VALUE</label><b>{money(m.netValue)}</b></div>
+        <div><label>DELIVERED LESS LOSSES · PROVISIONAL</label><b>{money(m.honest.fulfilledValue - m.fraud.leaked - m.chaos.duplicateValue)}</b></div>
       </div>
       {!multi && <AttackBoard m={m} />}
     </div>

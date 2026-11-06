@@ -1,3 +1,4 @@
+import { CityScope } from './Scope';
 import { ATTACK_KINDS, Metrics, PRESETS, type Policy } from '@sandbox-city/core';
 import { client } from '../sim/client';
 import { startTune } from './AutoTune';
@@ -128,29 +129,32 @@ export function Report() {
   const brainPrompt = useStore((s) => s.brainPrompt);
   const close = () => useStore.setState({ showReport: false });
   const panel = useModal<HTMLDivElement>(show, close);
+  useEffect(() => { if (show && w === null) { useStore.setState({ whatif: 'pending' }); client.send({ cmd: 'whatif' }); } }, [show]);
   if (!show) return null;
   // the best preset this day, if it beats the first lane: one click races it on the same seed
   const mine = w && w !== 'pending' ? w.mine[0] : null;
   const top = w && w !== 'pending' ? [...w.alternatives].sort((a, b) => b.net - a.net)[0] : null;
-  const better: Policy | null = mine && top && top.net > mine.net ? PRESETS[top.key] ?? null : null;
+  const better: Policy | null = null;
   const race = (p: Policy) => { close(); client.start([policies[0], p]); setTimeout(() => client.send({ cmd: 'play' }), 300); };
   return (
     <div className="report-wrap" onClick={close}>
       <div className="report panel" ref={panel} tabIndex={-1} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="End of day report">
         <div className="report-head"><span className="glyph">EOD</span><div><h2>END OF DAY REPORT</h2><p>{live ? '24 simulated hours · lane A paid on the PayPal sandbox, reconciled below' : '24 simulated hours · every payment on the PayPal twin, a contract-tested model of the Orders v2 API'}</p></div></div>
+        <CityScope />
+        <p>Trading has ended; deliveries, holds and refunds may still change these provisional city values. This is a different population and objective from the recorded 30-day benchmark.</p>
         <div className={`report-cols n${lanes.length}`}>
           {lanes.map((l, i) => l.metrics && (
             <div className="report-col" key={i}>
               <h3>{lanes.length > 1 ? `${LANE_NAMES[i]} · ` : ''}{policies[i]?.name}</h3>
               <div className="report-big">
                 <div><b className="cy">{pct(l.metrics.safety)}</b><span>fraud $ stopped</span></div>
-                <div><b className="gr">{pct(l.metrics.access)}</b><span>honest buys completed</span></div>
+                <div><b className="gr">{pct(l.metrics.access)}</b><span>honest purchases accepted</span></div>
               </div>
               <div className="report-row"><span>Stolen</span><b className="bad">{money(l.metrics.fraud.leaked)}</b></div>
               <div className="report-row"><span>Double charges</span><b className={l.metrics.chaos.duplicateValue > 0.5 ? 'warn' : ''}>{money(l.metrics.chaos.duplicateValue)}</b></div>
               <div className="report-row"><span>Lost (stolen + double charges)</span><b className="bad">{money(l.metrics.fraud.leaked + l.metrics.chaos.duplicateValue)}</b></div>
               <div className="report-row"><span>Honest GMV</span><b>{money(l.metrics.honest.gmv)}</b></div>
-              <div className="report-row"><span>Net value</span><b>{money(l.metrics.netValue)}</b></div>
+              <div className="report-row"><span>Value delivered and paid, less theft and duplicates (provisional)</span><b>{money(l.metrics.honest.fulfilledValue - l.metrics.fraud.leaked - l.metrics.chaos.duplicateValue)}</b></div><details><summary>Legacy accepted-GMV measure</summary><p>{money(l.metrics.netValue)} = accepted honest GMV less theft and duplicates. Includes authorized orders; not delivered value or profit.</p></details>
               {brain && l.brain.poisoned > 0 && (
                 <div className="report-row"><span>Model shoppers · {PROMPT_LABEL[brainPrompt].toLowerCase()}</span><b className={l.brain.obeyed ? 'bad' : 'gr'}>{l.brain.obeyed} of {l.brain.poisoned} poisoned listings obeyed</b></div>
               )}
@@ -158,12 +162,11 @@ export function Report() {
             </div>
           ))}
         </div>
-        <WhatIf />
+        <details><summary>Advanced: provisional accepted-GMV counterfactuals</summary><p>These replays stop when trading ends; they are not the terminal delivered-value benchmark.</p><WhatIf /></details>
         {live ? <LiveReconcile /> : <SandboxProof />}
         <ToolkitProof />
         <button className="hj-open" onClick={() => useStore.setState({ showHijack: true })}>◆ OPEN THE HIJACK EXHIBIT <span>the hijacked order step by step, every plan in the hijack-rate test, and every paid toolkit call</span></button>
         <div className="report-foot">
-          {!rolling && better && <button className="btn hot" onClick={() => race(better)}>⑂ RACE {better.name.toUpperCase()} AGAINST {policies[0]?.name.toUpperCase()}</button>}
           {!rolling && <button className="btn tune-btn" onClick={() => { close(); startTune('safe'); }}>✦ AUTO-TUNE A RULEBOOK</button>}
           <button className="btn" onClick={close}>CLOSE</button>
         </div>

@@ -1,12 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { checkAgentAnswer, type AgentRegression, type CaseResult } from '@sandbox-city/core';
+import { useState } from 'react';
+import { checkAgentAnswer, gateAgentAnswer, policyId, PRESETS, type Policy, type AgentRegression, type CaseResult } from '@sandbox-city/core';
 import { useStore } from '../store';
-import { prefersReducedMotion } from '../sim/motion';
-import { useModal } from './useModal';
+import { EvaluationBoundary } from './EvaluationBoundary';
+import { Scope } from './Scope';
+import { downloadJson } from './download';
+import checkout from '../data/checkout-proof.json';
+import toolkit from '../data/toolkit-proof.json';
+import type { AgentResult, SavedGate } from '../workflow';
 import raw from '../data/evidence.json';
 
 const cases = (raw as unknown as { agentCases: AgentRegression[] }).agentCases;
+const frozenV3 = (raw as unknown as { fourth: { arms: { key: string; rules: Policy }[] } }).fourth.arms.find((a) => a.key === 'frozen_v3')!.rules;
+const gatePolicies = [PRESETS.open, PRESETS.kya, frozenV3];
 const ALL_CASES = 'npx tsx scripts/regress.ts regressions --agent "python3 my_agent.py" --report=agent-report.md';
 
 type Verdict = { kind: 'empty' } | { kind: 'invalid'; messages: string[] } | { kind: 'checked'; result: CaseResult; control: boolean };
@@ -52,68 +57,52 @@ function Result({ v }: { v: Verdict }) {
   );
 }
 
-/** Bring your own agent: one real failing case, the real checker, then the command for CI. */
+/** The answer predicate and checkout gate are separate experiments; neither sends a payment. */
 export function AgentTest() {
-  const open = useStore((s) => s.showAgent);
-  const close = () => useStore.setState({ showAgent: false });
-  const panel = useModal<HTMLDivElement>(open, close);
-  const [pick, setPick] = useState(0);
-  const [text, setText] = useState('');
-  const [copied, setCopied] = useState<'input' | 'command' | null>(null);
-  const verdict = useRef<HTMLDivElement>(null);
-  // the verdict is the point of the page, so it must not land below the fold
-  useEffect(() => { if (text) verdict.current?.scrollIntoView({ block: 'center', behavior: prefersReducedMotion() ? 'instant' : 'smooth' }); }, [text]);
-  if (!open) return null;
+  const s = useStore();
+  const { pick, text, method } = s.agentDraft;
   const c = cases[pick];
-  const input = JSON.stringify(c.input, null, 2);
-  const copy = async (value: string, kind: 'input' | 'command') => { await navigator.clipboard.writeText(value); setCopied(kind); setTimeout(() => setCopied(null), 1500); };
-  const download = () => {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([JSON.stringify(c, null, 2)], { type: 'application/json' }));
-    a.download = `${c.id}.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  const [copied, setCopied] = useState(false);
+  const gatePolicy = s.agentGatePolicy ?? frozenV3;
+  const setGatePolicy = (policy: Policy) => useStore.setState({ agentGatePolicy: policy });
+  const gate = s.agentGate;
+  const setGate = (gate: SavedGate) => useStore.setState({ agentGate: gate });
+  const draft = (change: Partial<typeof s.agentDraft>) => useStore.setState({ agentDraft: { ...s.agentDraft, ...change }, experiment: s.experiment ? { ...s.experiment, phase: 'draft' } : null });
+  const result = [...s.agentResults].reverse().find((r) => r.case.id === c.id);
+  const changed = !!result && (result.text !== text || result.method !== method);
+  const check = (answer = text, from = method) => {
+    const v = judge(c, answer);
+    if (v.kind === 'empty') return;
+    const r: AgentResult = { experiment: { ...s.experiment!, task: 'agent-authority', source: 'current-run', paymentMode: 'simulated', inputRef: c.id, phase: v.kind === 'invalid' ? 'failed' : 'complete' }, case: c, text: answer, method: from, checkedAt: new Date().toISOString(), result: v.kind === 'invalid' ? { pass: false, invalid: true, violations: v.messages } : v.result };
+    useStore.setState({ agentDraft: { pick, text: answer, method: from }, agentResults: [...s.agentResults, r], experiment: r.experiment, experiments: { ...s.experiments, 'agent-authority': r.experiment } });
   };
-  return createPortal(
-    <div className="report-wrap" onClick={close}>
-      <div className="report panel hijack agent-test" ref={panel} tabIndex={-1} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Test my agent">
-        <div className="report-head">
-          <span className="glyph ev-glyph">RUN</span>
-          <div>
-            <h2>TEST MY AGENT</h2>
-            <p>This checks one pasted answer against one selected listing. Plain code checks the owner's mandate, and your answer stays in this page. Use the command below to run all cases against your agent.</p>
-          </div>
-          <button className="btn dialog-close" aria-label="Close Test my agent" onClick={close}>CLOSE ×</button>
-        </div>
-
-        <h3 className="simple-h"><i>1</i>Send your agent this input</h3>
-        <label className="at-label">Case
-          <select value={pick} onChange={(e) => { setPick(Number(e.target.value)); setText(''); }}>
-            {cases.map((x, i) => <option key={x.id} value={i}>{x.control ? 'Control · ' : ''}{x.title}</option>)}
-          </select>
-        </label>
-        <pre className="at-json">{input}</pre>
-        <div className="at-row">
-          <button className="btn" onClick={() => void copy(input, 'input')}>{copied === 'input' ? 'COPIED' : 'COPY INPUT'}</button>
-          <button className="btn" onClick={download}>DOWNLOAD THE CASE</button>
-        </div>
-
-        <h3 className="simple-h"><i>2</i>Check one answer</h3>
-        <textarea className="at-answer" aria-label="Your agent's answer" spellCheck={false} rows={6} value={text} placeholder={'{ "buy": true, "qty": 1, "ship_to": "...", "reason": "..." }'} onChange={(e) => setText(e.target.value)} />
-        <div className="at-row">
-          <span className="at-hint">No agent to hand? See both results:</span>
-          <button className="btn" onClick={() => setText(FOOLED)}>EXAMPLE: A FOOLED AGENT</button>
-          <button className="btn" onClick={() => setText(careful(c))}>EXAMPLE: A CAREFUL AGENT</button>
-        </div>
-        <div ref={verdict}><Result v={judge(c, text)} /></div>
-
-        <h3 className="simple-h"><i>3</i>Run every case in CI</h3>
-        <p className="at-p">Your agent is any command that reads this JSON on stdin and prints its answer. You get a verdict, a fix for each failure and a report for your pull request. A failed run exits 1, so it can block a release.</p>
-        <pre className="at-json">{ALL_CASES}</pre>
-        <div className="at-row"><button className="btn" onClick={() => void copy(ALL_CASES, 'command')}>{copied === 'command' ? 'COPIED' : 'COPY ALL-CASE COMMAND'}</button></div>
-        <p className="at-p">Working examples are in <code>examples/agents/</code>, and the contract is in <code>docs/REGRESSION.md</code>.</p>
-      </div>
-    </div>,
-    document.body,
-  );
+  const sample = (care: boolean) => check(care ? careful(c) : FOOLED, 'sample');
+  const copy = async () => { await navigator.clipboard.writeText(ALL_CASES); setCopied(true); };
+  return <section className="task-panel agent-test" aria-label="Agent authority workspace">
+    <h1>Can my agent buy only what its owner allowed?</h1>
+    <Scope experiment={s.experiment} title="Local checker · one selected answer · no model or payment invoked" />
+    <p>Check an agent answer, then separately evaluate a checkout gate. A one-case pass does not certify safety. Every full-suite verdict also needs the three honest controls.</p>
+    <div className="at-row" aria-label="Answer method">{(['sample', 'pasted-answer', 'local-command'] as const).map((m) => <button className={`btn ${m === method ? 'on' : ''}`} key={m} onClick={() => draft({ method: m })}>{m === 'sample' ? 'Use a sample' : m === 'pasted-answer' ? 'Paste one answer' : 'Run my local agent'}</button>)}</div>
+    <label className="at-label">Case<select value={pick} onChange={(e) => draft({ pick: Number(e.target.value), text: '' })}>{cases.map((x, i) => <option key={x.id} value={i}>{x.control ? 'Honest control · ' : ''}{x.title}</option>)}</select></label>
+    <div className="authority-inputs"><section><h2>Trusted owner request</h2><dl><dt>Quantity</dt><dd>{c.input.owner.qty}</dd><dt>Budget</dt><dd>${c.input.owner.budget.toFixed(2)}</dd><dt>Deliver to</dt><dd>{c.input.owner.address}</dd></dl></section><section><h2>Untrusted seller listing</h2><b>{c.input.listing.title} · ${c.input.listing.price.toFixed(2)}</b><pre className="seller-copy">{c.input.listing.text}</pre><p>{c.control ? 'This is an honest control. A useful agent should still buy.' : "The store page is trying to change the buyer’s authority. Seller text cannot authorize quantity, address or budget changes."}</p></section></div>
+    {method === 'local-command' ? <div><h2>Run all eight cases on your machine</h2><p>This page never executes your command or calls your endpoint. Adapt examples/agents/template.py, then run the command below locally. Results here remain one-case checks; no suite report has been imported.</p></div> : <>
+      <h2>Check one answer</h2>
+      {method === 'pasted-answer' && <details><summary>JSON input for your agent</summary><pre className="at-json">{JSON.stringify(c.input, null, 2)}</pre></details>}
+      <textarea className="at-answer" aria-label="Your agent's answer" rows={5} spellCheck={false} value={text} onChange={(e) => draft({ text: e.target.value })} />
+      <div className="at-row">{method === 'sample' && <><button className="btn" onClick={() => sample(false)}>Check a fooled sample answer</button><button className="btn" onClick={() => sample(true)}>Check a careful sample answer</button></>}<button className="btn" disabled={!text.trim()} onClick={() => check()}>Check pasted answer</button><button className="btn" onClick={() => draft({ pick: 1, text: '', method: 'sample' })}>Try an honest control</button></div>
+    </>}
+    {changed && <p className="worth-assumption" role="status">Inputs changed — check again. The saved result below still belongs to its original answer.</p>}
+    {result && <section aria-label="Saved authority result"><h2>What happened</h2><p>{result.case.title} · {result.method} · checked {result.checkedAt}</p><Result v={result.result.invalid ? { kind: 'invalid', messages: result.result.violations } : { kind: 'checked', result: result.result, control: !!result.case.control }} /><button className="btn" onClick={() => downloadJson(`result-${c.id}.json`, { schema: 'sandbox-city/agent-check@1', ...result, checkoutEvaluation: gate?.source === result ? gate : null, controlsChecked: s.agentResults.filter((r) => r.case.control).map((r) => ({ id: r.case.id, ...r.result })), scope: 'one-case, not a full-suite verdict' })}>Download case and checked result</button></section>}
+    {s.agentResults.length > 0 && <details><summary>Checked answers and honest controls ({s.agentResults.length})</summary><ul>{s.agentResults.map((r) => <li key={`${r.case.id}-${r.checkedAt}`}>{r.case.control ? 'Honest control' : 'Attack case'} · {r.case.title}: {r.result.invalid ? 'NOT JUDGED' : !r.result.pass ? 'BREACH' : r.result.declined ? r.case.control ? 'LOST SALE' : 'REFUSED' : 'BOUGHT WITHIN MANDATE'} <button className="simple-link" onClick={() => useStore.setState({ agentDraft: { pick: cases.findIndex((c) => c.id === r.case.id), text: r.text, method: r.method }, experiment: r.experiment })}>Restore checked answer</button></li>)}</ul><p>These local checks are not an imported or executed full-suite report.</p></details>}
+    <h2>See what the checkout gate does</h2><p>This uses the shared checkout evaluator on the saved answer. It checks a proposed order in code; it does not send it to PayPal.</p>
+    <label className="at-label">Checkout rulebook<select value={gatePolicy.name} onChange={(e) => { setGatePolicy(gatePolicies.find((p) => p.name === e.target.value)!); }}>{gatePolicies.map((p: Policy) => <option key={p.name}>{p.name}</option>)}</select></label>
+    <button className="btn" disabled={!result || changed || result.result.invalid} onClick={() => { if (result) setGate({ hash: policyId(gatePolicy), name: gatePolicy.name, source: result, result: gateAgentAnswer(result.case, JSON.parse(result.text), gatePolicy) }); }}>Evaluate checkout gate</button>
+    {gate && <section className="at-result" role="status"><b>Gate evaluation · {gate.name} · {gate.hash}</b><p>{gate.source !== result || gate.hash !== policyId(gatePolicy) ? 'Inputs changed — evaluate again. Showing the previous gate result.' : 'Current saved answer.'}</p><p>{gate.result.kind === 'evaluated' ? `${gate.result.verdict.ok ? gate.result.verdict.escrow ? 'HOLD' : 'ALLOW' : 'REFUSE'} · ${gate.result.verdict.reason ?? 'Within these rules'}` : gate.result.kind === 'declined' ? 'NO ORDER: the agent declined.' : 'NOT JUDGED'}</p></section>}
+    <details><summary>Recorded checkout proof · Frozen v3 · {checkout.policy}</summary><p>{policyId(gatePolicy) === checkout.policy ? 'The selected policy hash matches this recorded receipt.' : 'No matching receipt is shown for your selected policy. This is a different policy: Frozen v3.'} Recorded {checkout.recordedAt} · {checkout.mode} · evaluator {checkout.evaluator}.</p><pre className="at-json">{JSON.stringify(checkout.rows, null, 2)}</pre></details>
+    <details><summary>Matching recorded toolkit incident, when available</summary><p>Recorded {toolkit.recordedAt} · model {toolkit.model} · {toolkit.mode} setup. This is historical model behavior, not a new inference. The checkout proof above uses a different owner/order; matching its policy does not make it a receipt for this listing.</p>{toolkit.cases.filter((t) => t.title === c.input.listing.title && t.owner.address === c.input.owner.address).length ? toolkit.cases.filter((t) => t.title === c.input.listing.title && t.owner.address === c.input.owner.address).map((t) => <pre className="at-json" key={t.title}>{JSON.stringify(t, null, 2)}</pre>) : <p>No recorded toolkit receipt matches this selected listing. The local checker and gate result remain simulated checks.</p>}<p>The toolkit run compared Wild West, Lab-Tuned and Know Your Agent. It did not run Frozen v3 or v4.</p><button className="btn" onClick={() => useStore.setState({ showHijack: true })}>Inspect recorded toolkit payments and refund IDs</button></details>
+    <EvaluationBoundary />
+    <h2>Take this to your release gate</h2><pre className="at-json">{ALL_CASES}</pre><button className="btn" onClick={() => void copy()}>{copied ? 'COPIED' : 'Copy all-case command'}</button>
+    <button className="btn" onClick={() => downloadJson(`${c.id}.json`, c)}>Download this regression</button>
+    <p>Recorded model evidence uses the stated model/settings, not a general robustness guarantee. A command run checks your own adapter against these eight cases, including three honest controls.</p>
+  </section>;
 }

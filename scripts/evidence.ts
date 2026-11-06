@@ -33,7 +33,7 @@ writeFileSync(data('evidence.json'), JSON.stringify({
   // round four keeps each arm's rulebook, so a developer can take the one they choose
   fourth: ((b) => b && { ...b, version: 'benchmark-v4', arms: b.arms?.map(fourthArm) })(load('benchmark-v4.json')),
   recovery: load('recovery-proof.json'), checkout: load('checkout-proof.json'), sleeperCheckout: load('sleeper-checkout.json'), agents: load('agent-rate.json'), defender: load('defender.json'),
-  agentCases: cases.filter((c) => c.kind === 'agent').map(({ id, kind, title, input, control }) => ({ id, kind, title, input, control })),
+  agentCases: cases.filter((c) => c.kind === 'agent'),
   regressions: cases.map((c) => ({ id: c.id, kind: c.kind, title: c.title, minimized: c.minimized ?? null, threat: c.threat })),
   sleeperCase: cases.find((c) => c.id === 'day-sleeper-store') ?? null,
 }) + '\n');

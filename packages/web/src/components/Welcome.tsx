@@ -1,51 +1,17 @@
-import { useState } from 'react';
 import { useStore } from '../store';
-import { director } from '../sim/director';
-import { useModal } from './useModal';
-
-const KEY = 'sandbox-city:welcomed';
-const seen = () => { try { return localStorage.getItem(KEY) === '1'; } catch { return false; } };
-const remember = () => { try { localStorage.setItem(KEY, '1'); } catch { /* storage blocked: show again next time */ } };
-
-/** First visit only, and never over a deep link: what this is, and the two ways in. */
 export function Welcome() {
-  const cinema = useStore((s) => s.cinema.on);
-  const [open, setOpen] = useState(() => !seen() && !location.search && !location.hash);
-  const explore = () => { remember(); setOpen(false); };
-  const panel = useModal<HTMLDivElement>(open && !cinema, explore);
-  if (!open || cinema) return null;
-  const film = () => {
-    remember(); setOpen(false);
-    useStore.setState((s) => ({ cinema: { ...s.cinema, on: true } }));
-    setTimeout(() => director.roll(1), 200);
-  };
-  const hijack = () => { explore(); useStore.setState({ showHijack: true }); };
-  const evidence = () => { explore(); useStore.setState({ showEvidence: true }); };
-  return (
-    <div className="report-wrap welcome-wrap" onClick={explore}>
-      <div className="welcome panel" ref={panel} tabIndex={-1} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Welcome to Sandbox City">
-        <div className="wl-prompt"><span>root@sandbox-city:~$</span> ./intro</div>
-        <h2>SANDBOX CITY</h2>
-        <p className="wl-lede">Test an agent that can spend money before you ship it. Reproduce a financial failure, compare defenses and what they cost honest buyers, then carry the result into checkout and CI.</p>
-        <ol className="wl-steps">
-          <li><b>A simulated city trades for one day.</b> Scripted shoppers, stores and six crews of attackers, on a twin of PayPal's API.</li>
-          <li><b>You set the rules at the gate.</b> Passports, signatures, spend caps, payment holds, idempotency keys.</li>
-          <li><b>The lab keeps score.</b> Fraud stopped, honest buyers let through, and net value, on the same day every time.</li>
-        </ol>
-        <button className="wl-hijack" onClick={hijack}>
-          <span className="wl-tag">RECORDED ON THE PAYPAL SANDBOX</span>
-          <b>A real model was talked into shipping 8 units to an attacker's PO Box.</b>
-          <span>Wild West paid it. Lab-Tuned and Know Your Agent refused the call before PayPal saw it. The audit refunded it through PayPal's Agent Toolkit. See the hijack →</span>
-        </button>
-        <div className="wl-actions">
-          <button className="btn hot" onClick={evidence}>SEE THE EVIDENCE <small>start here · two minutes</small></button>
-          <button className="btn" onClick={() => { explore(); useStore.setState({ showAgent: true }); }}>TEST MY AGENT</button>
-          <button className="btn" onClick={() => { explore(); useStore.setState({ showWorth: true }); }}>IS IT WORTH IT?</button>
-          <button className="btn" onClick={explore}>EXPLORE THE LAB</button>
-        </div>
-        <button className="simple-link" onClick={film}>Or watch the long film, about 9 minutes →</button>
-        <p className="wl-keys">Keys: <kbd>C</kbd> cinema · <kbd>R</kbd> roll the film · <kbd>1</kbd>–<kbd>5</kbd> jump to an act · <kbd>H</kbd> the hijack · <kbd>L</kbd> the full lab</p>
-      </div>
+  const select = useStore((s) => s.selectTask);
+  return <main className="task-home">
+    <p className="eyebrow">SANDBOX CITY · A LAB FOR DEVELOPERS OF SPENDING AGENTS</p>
+    <h1>What do you want to test?</h1>
+    <p className="task-lede">Find a financial failure, compare a defense with honest trade, and export the result.</p>
+    <div className="at-row"><button className="btn hot" onClick={() => select('agent-authority')}>Run a guided example</button><button className="btn" onClick={() => { useStore.setState((s) => ({ agentDraft: { ...s.agentDraft, method: 'pasted-answer' } })); select('agent-authority'); }}>Use my own agent</button></div>
+    <div className="task-cards">
+      <button onClick={() => select('agent-authority')}><span>01 · OWNER AUTHORITY</span><h2>Can my agent buy only what its owner allowed?</h2><p>Check a sample or pasted answer, compare a checkout gate, and download the case and verdict.</p></button>
+      <button onClick={() => select('policy-cost')}><span>02 · DEFENSE COST</span><h2>Which payment defense is worth using?</h2><p>Reprice 30 recorded simulated days using your costs. Keep honest trade and held capital in view.</p></button>
+      <button onClick={() => select('payment-recovery')}><span>03 · PAYMENT RECOVERY</span><h2>Will a payment recover safely?</h2><p>Inspect a recorded sandbox recovery and its control, with IDs and local reproduction commands.</p></button>
     </div>
-  );
+    <p>Sample answers and simulated dollars are bounded evidence, not a certification of safety or a merchant forecast. Recorded model behavior covers the stated model and prompts only.</p>
+    <div className="at-row"><button className="simple-link" onClick={() => useStore.setState({ showEvidence: true })}>Read the evidence</button><button className="simple-link" onClick={() => { select('city'); useStore.setState({ fullLab: true }); }}>Advanced lab</button></div>
+  </main>;
 }

@@ -838,3 +838,59 @@ button.rail-badge { background: transparent; cursor: pointer; }
   .cutin .band { transform: none; left: 0; right: 0; opacity: 1; }
   .cutin .content, .cutin .stamp, .cutin .tag-bg { transform: translateY(-50%); }
 }
+
+/* A question, its inputs and its result stay in one scrollable workspace. */
+.task-app { height: 100dvh; overflow-y: auto; overflow-x: hidden; background: radial-gradient(ellipse at top left, #102938 0, #070b1c 40%, #03030a 80%); color: #e2e9ff; }
+.task-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 22px max(20px, calc((100% - 1240px) / 2)); border-bottom: 1px solid var(--line); }
+.task-header span { color: #aabbd5; font-size: 14px; }
+.brand-link { border: 0; background: none; color: var(--cy); font: 700 20px var(--ui); cursor: pointer; white-space: nowrap; }
+.task-home, .task-workspace { width: min(1240px, 100%); margin: auto; padding: 32px 24px 64px; }
+.task-home h1 { font-size: clamp(32px, 4vw, 54px); margin: 18px 0; max-width: 850px; }
+.task-lede { font-size: 21px; max-width: 760px; line-height: 1.5; }
+.eyebrow { color: var(--cy); font: 12px var(--mono); letter-spacing: 1.5px; }
+.task-cards { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 20px; margin: 36px 0; }
+.task-cards button { padding: 26px; text-align: left; color: var(--text); border: 1px solid var(--line); border-top: 3px solid var(--cy); background: #0c1326; cursor: pointer; }
+.task-cards button:nth-child(2) { border-top-color: var(--gold); }
+.task-cards button:nth-child(3) { border-top-color: var(--mg); }
+.task-cards span { color: var(--cy); font: 12px var(--mono); }
+.task-cards h2 { font-size: 25px; line-height: 1.3; }
+.task-cards p, .task-panel p { line-height: 1.6; color: #b9c7df; }
+.task-nav { display: flex; flex-wrap: wrap; gap: 12px; width: min(1240px,100%); margin: 20px auto 0; padding: 0 24px; }
+.task-panel, .task-panel.agent-test { width: 100%; min-width: 0; }
+.task-panel h1 { font-size: clamp(28px,3vw,40px); line-height: 1.2; margin: 0 0 22px; }
+.task-panel h2 { margin: 26px 0 12px; }
+.task-panel > .btn { margin: 8px 10px 8px 0; }
+.task-panel details { margin: 16px 0; }
+.task-panel summary { cursor: pointer; color: var(--cy); padding: 8px 0; }
+.scope-banner { display: flex; flex-direction: column; gap: 7px; border-left: 3px solid var(--cy); background: #10192e; padding: 16px 20px; margin: 16px 0; font-size: 15px; overflow-wrap: anywhere; }
+.scope-banner details { margin: 0; } .scope-banner p { margin: 4px 0; } .scope-banner small { color: #97aec8; }
+.authority-inputs { display: grid; grid-template-columns: 1fr 1.5fr; gap: 20px; margin: 20px 0; }
+.authority-inputs > section { padding: 20px; background: #0b1528; border: 1px solid var(--line); border-top: 3px solid var(--cy); min-width: 0; }
+.authority-inputs > section:nth-child(2) { border-top-color: var(--am); }
+.authority-inputs h2 { margin-top: 0; font-size: 21px; }
+.authority-inputs dt { color: #97aec8; } .authority-inputs dd { margin: 2px 0 12px; }
+.seller-copy { white-space: pre-wrap; overflow-wrap: anywhere; font: 15px/1.6 var(--mono); color: #ffd2ad; }
+.task-app .at-row { flex-wrap: wrap; } .task-app .at-answer { width: 100%; }
+.task-app .at-json { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; }
+.task-panel .report-head { align-items: start; } .task-panel .report-head p { font-size: 16px; color: #b9c7df; }
+.task-panel .worth-grid { grid-template-columns: minmax(260px, .65fr) minmax(0, 1.35fr); }
+.task-panel .worth-table tbody th { position: sticky; left: 0; background: #10162a; }
+.cost-equation { border: 1px solid var(--line); padding: 12px; font-family: var(--mono); }
+.incident-trace li { margin: 18px 0; padding: 8px 12px; border-left: 2px solid var(--cy); }
+.run-notice { background: #13203a; padding: 16px 24px; border-top: 1px solid var(--cy); }
+.city-context { grid-area: context; max-height: 220px; overflow: auto; }
+.city-context .scope-banner { margin: 4px 0; padding: 8px 14px; }
+.app:not(.cinema) { grid-template-rows: auto auto minmax(200px, 1fr) 250px; grid-template-areas: 'top top top' 'context context context' 'rules stage hud' 'rules ledger feed'; }
+.app.simple:not(.cinema) { grid-template-rows: auto auto minmax(0, 1fr); grid-template-areas: 'top top top' 'context context context' 'rules stage hud'; }
+.decision-reference { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding: 10px 14px; border: 1px solid var(--gold); }
+.decision-reference p { flex: 1 1 100%; margin: 0; font-size: 14px; }
+button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px solid var(--cy); outline-offset: 3px; }
+@media(max-width: 800px) {
+ .task-cards, .authority-inputs, .task-panel .worth-grid { grid-template-columns: minmax(0,1fr); }
+ .task-header { flex-wrap: wrap; padding: 16px; } .task-home, .task-workspace { padding: 24px 16px 48px; }
+ .task-header span { font-size: 12px; } .task-nav { padding: 0 16px; gap: 8px; }
+ .task-app .btn { letter-spacing: .7px; padding: 10px 12px; white-space: normal; }
+ .task-panel .worth-answer b { font-size: 24px; } .authority-inputs > section { padding: 16px; }
+ .app.simple:not(.cinema) { height: auto; min-height: 100dvh; overflow-y: auto; grid-template-columns: minmax(0,1fr); grid-template-rows: auto auto auto 45vh auto; grid-template-areas: 'top' 'context' 'rules' 'stage' 'hud'; }
+ .city-context { max-height: none; }
+}

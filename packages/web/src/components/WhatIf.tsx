@@ -27,12 +27,12 @@ function verdict(me: DaySummary, alts: DaySummary[]): string {
   const safest = [...alts].sort((a, b) => a.stolen - b.stolen)[0];
   const lost = (x: DaySummary) => x.stolen + x.duplicate;
   if (best.net > me.net) {
-    return `Switching to ${best.name} would have kept ${money(best.net - me.net)} more value: ${money(Math.max(0, lost(me) - lost(best)))} less lost to fraud and double charges, ${best.honestLost > me.honestLost ? `at the cost of ${money(best.honestLost - me.honestLost)} more honest sales turned away` : `and ${money(me.honestLost - best.honestLost)} fewer honest sales turned away`}.`;
+    return `Switching to ${best.name} would have kept ${money(best.net - me.net)} more accepted GMV less losses: ${money(Math.max(0, lost(me) - lost(best)))} less lost to fraud and double charges, ${best.honestLost > me.honestLost ? `at the cost of ${money(best.honestLost - me.honestLost)} more honest sales turned away` : `and ${money(me.honestLost - best.honestLost)} fewer honest sales turned away`}.`;
   }
   if (safest.stolen < me.stolen) {
-    return `No preset beats your rules on net value. ${safest.name} would have stopped ${money(me.stolen - safest.stolen)} more fraud, but turned away ${money(Math.max(0, safest.honestLost - me.honestLost))} more honest sales.`;
+    return `No preset beats your rules on accepted GMV less losses. ${safest.name} would have stopped ${money(me.stolen - safest.stolen)} more fraud, but turned away ${money(Math.max(0, safest.honestLost - me.honestLost))} more honest sales.`;
   }
-  return 'Your rules beat every preset on this day, on both fraud stopped and net value.';
+  return 'Your rules beat every preset on this day, on both fraud stopped and accepted GMV less losses.';
 }
 
 function WhatIfGrid({ rows, ctx, vs }: { rows: WRow[]; ctx: Record<string, number>; vs: string }) {
@@ -41,7 +41,7 @@ function WhatIfGrid({ rows, ctx, vs }: { rows: WRow[]; ctx: Record<string, numbe
     { field: 'stolen', headerName: 'STOLEN', flex: 1, cellRenderer: Bar, cellRendererParams: { tone: 'bad', max: ctx.stolen } },
     { field: 'duplicate', headerName: 'DOUBLE CHARGES', flex: 1, cellRenderer: Bar, cellRendererParams: { tone: 'warn', max: ctx.duplicate } },
     { field: 'honestLost', headerName: 'HONEST SALES LOST', flex: 1, cellRenderer: Bar, cellRendererParams: { tone: 'warn', max: ctx.honestLost } },
-    { field: 'net', headerName: 'NET VALUE', flex: 1.2, sort: 'desc', cellRenderer: Bar, cellRendererParams: { tone: 'gold', max: ctx.net } },
+    { field: 'net', headerName: 'GMV LESS LOSSES', flex: 1.2, sort: 'desc', cellRenderer: Bar, cellRendererParams: { tone: 'gold', max: ctx.net } },
     { field: 'delta', headerName: vs, width: 120, type: 'rightAligned', valueFormatter: (p) => (p.value == null ? '—' : signed(p.value)), cellClass: (p) => `ag-right-aligned-cell ${p.value == null ? 'dim' : p.value >= 0 ? 'good' : 'bad'}` },
   ], [vs, ctx]);
   return (

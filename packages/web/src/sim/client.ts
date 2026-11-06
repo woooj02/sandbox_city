@@ -1,3 +1,4 @@
+import { confirmationText } from '../workflow';
 import { ATTACK_LABEL, Policy, PRESETS, SimEvent } from '@sandbox-city/core';
 import { bus } from './bus';
 import type { FromSim, ToSim, WorldSnapshot } from '@sandbox-city/core';
@@ -125,7 +126,7 @@ function narrate(lane: number, events: SimEvent[], focusLane: number) {
         if (e.truth.malicious) feed.push({ t: e.t, lane, tone: e.approved ? 'bad' : 'good', text: `${e.approved ? 'Paid out' : 'Denied'} a false refund claim of ${money(e.amount)} (${e.reason})` });
         break;
       case 'payment':
-        feed.push({ t: e.t, lane, tone: e.state === 'pending' || e.state === 'unresolved' ? 'warn' : 'info', text: `${e.order}: ${e.state}${e.state === 'pending' || e.state === 'unresolved' ? ', no unconfirmed result counted' : ', confirmed by PayPal'}.` });
+        feed.push({ t: e.t, lane, tone: e.state === 'pending' || e.state === 'unresolved' ? 'warn' : 'info', text: `${e.order}: ${e.state}${e.state === 'pending' || e.state === 'unresolved' ? ', no unconfirmed result counted' : `, ${confirmationText(e.rail)}`}.` });
         break;
     }
   }
@@ -200,7 +201,7 @@ class Client {
     resetLanes(policies.length);
     seenAttackers.clear();
     worlds.length = 0;
-    useStore.setState({ policies, paypalCalls: [], inFlight: [], runId: null, whatif: null });
+    useStore.setState({ policies, paypalCalls: [], inFlight: [], runId: null, whatif: null, runComplete: false });
     bus.emit('reset');
     // while the film rolls only hero shoppers pay on the live sandbox, so real PayPal latency never stalls the shot
     this.send({ cmd: 'init', seed: st.seed, lanes: policies.map((policy) => ({ policy })), chaos: st.chaos, ...(st.cinema.rolling ? { liveSample: 0 } : {}), ...(st.genomes ? { genomes: st.genomes } : {}), ...(st.brain ? { brain: brainInit(st.brainPrompt) } : {}) });
@@ -233,8 +234,8 @@ class Client {
       if (now.lanes.every((l) => l.done)) {
         // while the film is rolling the director decides when the report appears
         const rolling = now.cinema.rolling;
-        if (!rolling || now.lanes.length > 1) { useStore.setState({ whatif: 'pending' }); this.send({ cmd: 'whatif' }); }
-        if (!rolling) useStore.setState({ showReport: true });
+
+        if (!rolling) useStore.setState({ runComplete: true });
       }
     } else if (m.type === 'status') {
       useStore.setState({ running: m.running, tps: m.tps, paypal: m.paypal ?? 'twin' });
