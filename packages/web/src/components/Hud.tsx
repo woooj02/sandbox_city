@@ -4,6 +4,7 @@ import { ATTACK_KINDS, DEFAULT_CONFIG, Metrics } from '@sandbox-city/core';
 const STOCK_ATTACKERS = DEFAULT_CONFIG.attackers;
 import { useStore } from '../store';
 import { ATTACK_CODE, ATTACK_SHORT, LANE_NAMES, money, pct } from './meta';
+import { waitingMetrics } from '../run-status';
 
 function Gauge({ value, label, sub, color, code, unknown = false }: { value: number; label: string; sub: string; color: string; code: string; unknown?: boolean }) {
   const r = 46, c = 2 * Math.PI * r, v = unknown ? 0 : Math.max(0, Math.min(1, value));
@@ -55,17 +56,18 @@ function LaneHud({ lane }: { lane: number }) {
   const L = useStore((s) => s.lanes[lane]);
   const policy = useStore((s) => s.policies[lane]);
   const multi = useStore((s) => s.lanes.length > 1);
+  const running = useStore((s) => s.running);
   const m = L?.metrics;
-  if (!m) return <div className="hud-lane"><div className="hud-wait">booting city…</div></div>;
+  if (!m) { const wait = waitingMetrics(!!L?.world, running); return <div className="hud-lane"><div className="hud-wait" role="status"><b>{wait.title}</b><p>{wait.detail}</p></div></div>; }
   const awaitingFraud = m.money.pending + m.money.unresolved > 0 && m.fraud.prevented + m.fraud.leaked === 0;
   return (
     <div className="hud-lane">
       {multi && <div className={`hud-lane-title lane-${lane}`}><b>{LANE_NAMES[lane]}</b> {policy?.name}</div>}
       <div className="gauges">
-        <Gauge value={m.safety} unknown={awaitingFraud} label="FRAUD STOPPED" sub={awaitingFraud ? 'Awaiting payment confirmation' : `${money(m.fraud.prevented)} of ${money(m.fraud.prevented + m.fraud.leaked)}`} color="#4cf2ff" code="SAFE" />
-        <Gauge value={m.access} label="HONEST GET THROUGH" sub={`${m.honest.completed.toLocaleString()} of ${m.honest.attempts.toLocaleString()} buys`} color="#7dff9a" code="PASS" />
+        <Gauge value={m.safety} unknown={awaitingFraud} label="FRAUD STOPPED" sub={awaitingFraud ? 'Awaiting payment confirmation' : `${money(m.fraud.prevented)} of ${money(m.fraud.prevented + m.fraud.leaked)}`} color="#7bb4f5" code="SAFE" />
+        <Gauge value={m.access} label="HONEST GET THROUGH" sub={`${m.honest.completed.toLocaleString()} of ${m.honest.attempts.toLocaleString()} buys`} color="#65c7ae" code="PASS" />
       </div>
-      <div className="sparks"><Spark data={L.history} k="safety" color="#4cf2ff" /><Spark data={L.history} k="access" color="#7dff9a" /></div>
+      <div className="sparks"><Spark data={L.history} k="safety" color="#7bb4f5" /><Spark data={L.history} k="access" color="#65c7ae" /></div>
       <div className="kpis">
         <div><label>STOLEN</label><b className="bad">{money(m.fraud.leaked)}</b></div>
         <div><label>WRONGLY BLOCKED</label><b className="warn">{m.honest.blocked + m.honest.abandoned}</b></div>

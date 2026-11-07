@@ -69,7 +69,7 @@ export class CityRenderer {
   private punch = 0;
   // target lock: corner brackets that snap onto whatever the camera pushed in on
   private lock = new Graphics();
-  private lockText = new Text({ text: '', style: new TextStyle({ fontFamily: 'JetBrains Mono', fontSize: 13, fontWeight: '700', fill: 0xffffff, letterSpacing: 2, stroke: { color: 0x05060f, width: 3 } }) });
+  private lockText = new Text({ text: '', style: new TextStyle({ fontFamily: 'monospace', fontSize: 13, fontWeight: '700', fill: 0xffffff, letterSpacing: 2, stroke: { color: 0x05060f, width: 3 } }) });
 
   constructor(private host: HTMLElement, private opts: RendererOptions) {}
 
@@ -88,7 +88,7 @@ export class CityRenderer {
     this.layers.fx.blendMode = 'add';
     this.layers.people.blendMode = 'add';
 
-    this.bloom = new AdvancedBloomFilter({ threshold: 0.24, bloomScale: 0.95, brightness: 1.0, blur: 6, quality: 6 });
+    this.bloom = new AdvancedBloomFilter({ threshold: 0.4, bloomScale: 0.35, brightness: 1.0, blur: 3, quality: 3 });
     this.shock = new ShockwaveFilter({ center: { x: 0, y: 0 }, amplitude: 26, wavelength: 140, speed: 900, brightness: 1.25, radius: 520 });
     this.glitch = new GlitchFilter({ slices: 14, offset: 22, red: { x: 4, y: 0 }, green: { x: -3, y: 2 }, blue: { x: 0, y: -2 }, fillMode: 2 });
     this.root.filters = [this.bloom];
@@ -188,10 +188,10 @@ export class CityRenderer {
       g.poly(inner).stroke({ width: 1, color: col, alpha: 0.18 });
       this.layers.districts.addChild(g);
       this.districtPlates.push(g);
-      const label = new Text({ text: d.name.toUpperCase(), style: new TextStyle({ fontFamily: 'Chakra Petch', fontSize: 15, fontWeight: '700', fill: col, letterSpacing: 4 }) });
+      const label = new Text({ text: d.name.toUpperCase(), style: new TextStyle({ fontFamily: 'sans-serif', fontSize: 15, fontWeight: '700', fill: col, letterSpacing: 2 }) });
       label.alpha = 0.85;
       label.position.set(cx - rw * 0.52, cy - rh * 0.98);
-      const code = new Text({ text: `// ${d.code}`, style: new TextStyle({ fontFamily: 'JetBrains Mono', fontSize: 11, fontWeight: '700', fill: col, letterSpacing: 3 }) });
+      const code = new Text({ text: `// ${d.code}`, style: new TextStyle({ fontFamily: 'monospace', fontSize: 11, fontWeight: '700', fill: col, letterSpacing: 2 }) });
       code.alpha = 0.4;
       code.position.set(cx - rw * 0.52, cy - rh * 0.98 + 20);
       this.layers.labels.addChild(label, code);
@@ -235,7 +235,7 @@ export class CityRenderer {
       const aura = new Sprite(this.tex.glow); aura.anchor.set(0.5); aura.tint = C.attack; aura.alpha = 0.35; aura.scale.set(1.3); aura.blendMode = 'add';
       const ring = new Sprite(this.tex.dashRing); ring.anchor.set(0.5); ring.scale.set(0.34); ring.tint = C.attack; ring.alpha = 0.8;
       const core = new Sprite(this.tex.diamond); core.anchor.set(0.5); core.scale.set(0.42); core.tint = 0xff3d6e;
-      const label = new Text({ text: a.name.toUpperCase(), style: new TextStyle({ fontFamily: 'Chakra Petch', fontSize: 11, fontWeight: '700', fill: 0xff7a9a, letterSpacing: 2 }) });
+      const label = new Text({ text: a.name.toUpperCase(), style: new TextStyle({ fontFamily: 'sans-serif', fontSize: 11, fontWeight: '700', fill: C.attack, letterSpacing: 1 }) });
       label.anchor.set(0.5, 0); label.position.set(0, 20); label.alpha = 0.9;
       c.addChild(aura, ring, core, label);
       this.layers.attackers.addChild(c);
@@ -326,7 +326,7 @@ export class CityRenderer {
         a.flash = 1; b.infected = 1;
         this.bolt(a.x, a.y, b.x, b.y, C.injection);
         this.focus((a.x + b.x) / 2, (a.y + b.y) / 2, 1.55, 2.6, 5, 'inject');
-        this.floatText(b.x, b.y - 22, 'INJECTED', C.injection, 14, 'JetBrains Mono');
+        this.floatText(b.x, b.y - 22, 'INJECTED', C.injection, 14, 'monospace');
         break;
       }
       case 'hijack': {
@@ -466,7 +466,7 @@ export class CityRenderer {
     this.fx.push({ s: g as unknown as Sprite, age: 0, dur: 0.5, kind: 'flash', s0: 1, s1: 1, a0: 1 });
   }
 
-  private floatText(x: number, y: number, text: string, color: number, size: number, font = 'Chakra Petch') {
+  private floatText(x: number, y: number, text: string, color: number, size: number, font = 'sans-serif') {
     if (this.textCount > 26) return;
     const t = new Text({ text, style: new TextStyle({ fontFamily: font, fontSize: size, fontWeight: '700', fill: color, letterSpacing: 1.5, stroke: { color: 0x05060f, width: 3 } }) });
     t.anchor.set(0.5); t.position.set(x, y);

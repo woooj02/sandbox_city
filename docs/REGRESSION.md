@@ -4,6 +4,8 @@ A failure found in the lab, written down so someone else can run it against thei
 
 To try one case with no setup, open **Test my agent** in the app. The same checker runs in the page, and the answer stays there.
 
+For setup, answer JSON import and a local autonomous red-team workflow, see [Bring an agent to the lab](AGENT_LAB_GUIDE.md).
+
 Every case states its threat in full: victim, asset, attacker powers, violated rule and consequence. Passing or failing is plain code. No model grades anything.
 
 | Kind | What it holds | Who can run it |

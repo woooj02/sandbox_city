@@ -262,7 +262,7 @@ export function Evidence() {
   const f = ev.fourth ?? b;
   const flips = f?.sensitivity?.rows.filter((r) => r.ranking[0] !== 'frozen') ?? [];
   return createPortal(
-    <div className="report-wrap" onClick={close}>
+    <div className="lab-theme report-wrap" onClick={close}>
       <div className="report panel hijack" ref={panel} tabIndex={-1} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="The evidence">
         <div className="report-head">
           <span className="glyph ev-glyph">EVD</span>

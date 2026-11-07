@@ -2,7 +2,7 @@ import { PRESETS } from '@sandbox-city/core';
 import { PROMPT_LABEL, TAPES, modelLabel } from '../sim/brain';
 import { useStore } from '../store';
 import { client } from '../sim/client';
-import { clock } from './meta';
+import { runClock } from '../run-status';
 
 const SPEEDS = [2, 8, 24, 80, 240];
 const SPEED_LABEL: Record<number, string> = { 2: '¼×', 8: '1×', 24: '3×', 80: '10×', 240: 'MAX' };
@@ -14,6 +14,7 @@ export function TopBar() {
   const forged = useStore((s) => s.genomes !== null);
   const lane0 = useStore((s) => s.lanes[0]);
   const t = lane0?.t ?? 0, total = lane0?.world?.ticks ?? 1440;
+  const done = useStore((s) => s.lanes.length > 0 && s.lanes.every((lane) => lane.done));
   const fork = () => {
     const p = useStore.getState().policies;
     client.start(p.length > 1 ? [p[0]] : [p[0], p[0].name === PRESETS.balanced.name ? PRESETS.kya : PRESETS.balanced]);
@@ -42,11 +43,11 @@ export function TopBar() {
       <button className="rail-badge agent" title="Run a case that fooled a real model against your own agent" onClick={() => useStore.setState({ showAgent: true })}>TEST MY AGENT</button>
       <button className="rail-badge worth-badge" title="Price every rulebook with your own costs" onClick={() => useStore.setState({ showWorth: true })}>IS IT WORTH IT?</button>
       <div className="clockbox">
-        <div className="clock-big">DAY 1 · {clock(t)}</div>
-        <div className="progress"><i style={{ width: `${(t / total) * 100}%` }} /></div>
+        <div className="clock-big" aria-label="Simulation clock">{runClock(t, done)}</div>
+        <div className="progress"><i style={{ width: `${Math.min(100, (t / total) * 100)}%` }} /></div>
       </div>
       <div className="controls">
-        <button className={`btn play ${running ? 'on' : ''}`} onClick={() => client.send({ cmd: running ? 'pause' : 'play' })}>{running ? '❚❚ PAUSE' : '▶ RUN'}</button>
+        <button className={`btn play ${running ? 'on' : ''}`} disabled={done} onClick={() => client.send({ cmd: running ? 'pause' : 'play' })}>{done ? 'COMPLETE' : running ? '❚❚ PAUSE' : '▶ RUN'}</button>
         <div className="seg">
           {(full ? SPEEDS : SIMPLE_SPEEDS).map((s) => <button key={s} className={tps === s ? 'on' : ''} onClick={() => client.send({ cmd: 'speed', tps: s })}>{SPEED_LABEL[s]}</button>)}
         </div>

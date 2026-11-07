@@ -3,7 +3,8 @@ import { CityRenderer } from '../city/CityRenderer';
 import { director } from '../sim/director';
 import { bus } from '../sim/bus';
 import { useStore } from '../store';
-import { LANE_NAMES, clock } from './meta';
+import { LANE_NAMES } from './meta';
+import { runClock } from '../run-status';
 
 function Lane({ lane }: { lane: number }) {
   const host = useRef<HTMLDivElement>(null);
@@ -45,10 +46,11 @@ function Lane({ lane }: { lane: number }) {
 export function CityView() {
   const n = useStore((s) => s.lanes.length);
   const t = useStore((s) => s.lanes[0]?.t ?? 0);
+  const done = useStore((s) => s.lanes.every((lane) => lane.done));
   return (
     <div className={`city n${n}`}>
       {Array.from({ length: n }, (_, i) => <Lane key={`${i}-${n}`} lane={i} />)}
-      <div className="city-clock"><span>{clock(t)}</span></div>
+      <div className="city-clock"><span>{runClock(t, done)}</span></div>
     </div>
   );
 }

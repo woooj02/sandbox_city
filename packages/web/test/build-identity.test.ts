@@ -43,6 +43,15 @@ describe('naming a build', () => {
     expect(buildIdentity(join(repo, 'packages/web')).revision).toBeNull();
   });
 
+  it('includes the guide bundled into the interface in the source identity', () => {
+    const dir = copy();
+    mkdirSync(join(dir, 'docs'));
+    writeFileSync(join(dir, 'docs/AGENT_LAB_GUIDE.md'), 'First guide');
+    const before = buildIdentity(dir).sourceHash;
+    writeFileSync(join(dir, 'docs/AGENT_LAB_GUIDE.md'), 'Updated guide');
+    expect(buildIdentity(dir).sourceHash).not.toBe(before);
+  });
+
   it('gives the same source hash with and without git', () => {
     expect(buildIdentity(repo, false).sourceHash).toBe(buildIdentity(repo).sourceHash);
   });

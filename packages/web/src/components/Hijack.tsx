@@ -282,7 +282,7 @@ export function Hijack() {
   const panel = useModal<HTMLDivElement>(open, close);
   if (!open) return null;
   return createPortal(
-    <div className="report-wrap" onClick={close}>
+    <div className="lab-theme report-wrap" onClick={close}>
       <div className="report panel hijack" ref={panel} tabIndex={-1} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="The hijack">
         <div className="report-head">
           <span className="glyph hj-glyph">HJK</span>

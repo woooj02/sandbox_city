@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-const SOURCES = ['packages', 'scripts', 'package.json', 'package-lock.json'];
+const SOURCES = ['packages', 'scripts', 'package.json', 'package-lock.json', 'docs/AGENT_LAB_GUIDE.md'];
 const IGNORED = new Set(['node_modules', 'dist', 'runs', '.data', '.env', '.DS_Store']);
 
 /** Null when there is no usable repo here: a ZIP download, a server copy, or a folder inside someone else's repo. */

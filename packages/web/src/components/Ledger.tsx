@@ -10,10 +10,10 @@ import { clock, LANE_NAMES } from './meta';
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 export const gridTheme = themeQuartz.withPart(colorSchemeDark).withParams({
-  backgroundColor: 'rgba(6,8,22,0.0)', foregroundColor: '#cfd8ff', headerBackgroundColor: 'rgba(20,24,60,0.85)', headerTextColor: '#8fa2ff',
-  borderColor: 'rgba(110,130,255,0.14)', rowHoverColor: 'rgba(76,242,255,0.08)', fontFamily: 'JetBrains Mono, monospace', fontSize: 13,
-  headerFontFamily: 'Chakra Petch, sans-serif', headerFontSize: 12.5, headerFontWeight: 700, rowHeight: 30, headerHeight: 34, spacing: 5,
-  oddRowBackgroundColor: 'rgba(255,255,255,0.015)', accentColor: '#4cf2ff', wrapperBorder: false,
+  backgroundColor: '#101823', foregroundColor: '#c1d0e3', headerBackgroundColor: '#152233', headerTextColor: '#9fb5d0',
+  borderColor: '#2a3b50', rowHoverColor: '#1d3045', fontFamily: 'JetBrains Mono, monospace', fontSize: 12,
+  headerFontFamily: 'system-ui, sans-serif', headerFontSize: 11, headerFontWeight: 600, rowHeight: 30, headerHeight: 34, spacing: 5,
+  oddRowBackgroundColor: '#121d2b', accentColor: '#86b7f4', wrapperBorder: false,
 });
 
 interface Row {

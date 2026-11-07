@@ -57,9 +57,9 @@ export function App() {
   }, [state.showAgent, state.showWorth]);
   useEffect(() => { if (!state.experiment && task !== 'home' && task !== 'city') state.selectTask(task); }, [task]);
   const overlays = <>{overlay === 'report' ? <Report /> : overlay === 'evidence' ? <Evidence /> : overlay === 'hijack' ? <Hijack /> : overlay === 'tune' ? <AutoTune /> : overlay === 'forge' ? <Forge /> : null}</>;
-  if (task !== 'city' && !cinema) return <div className="task-app"><Workspace home={task === 'home'} />{overlays}</div>;
+  if (task !== 'city' && !cinema) return <div className="lab-theme task-app"><Workspace home={task === 'home'} />{overlays}</div>;
   return (
-    <div className={`app lanes-${lanes} ${cinema ? 'cinema' : ''} ${full ? '' : 'simple'}`}>
+    <div className={`app lanes-${lanes} ${cinema ? 'cinema' : 'lab-theme'} ${full ? '' : 'simple'}`}>
       <div className="scanlines" />
       <TopBar />
       <div className="city-context"><button className="simple-link" onClick={() => { client.send({ cmd: 'pause' }); state.selectTask('home'); }}>Choose a question</button><CityScope />{state.savedDecision && <div className="decision-reference"><b>Pinned decision · {state.savedDecision.selected.label} · {state.savedDecision.experiment?.id}</b>{state.savedDecision.selected.policyHash !== policyId(state.policies[0]) && <strong>Current city policy differs from the kept decision.</strong>}<span>{state.savedDecision.reason}</span><p>Carries over: policy only. This default city has a different population and seed; it does not replay benchmark days or the empty-box days.</p><button className="btn" onClick={() => state.selectTask('policy-cost')}>Return to priced decision</button></div>}{state.runComplete && <button className="btn" onClick={() => useStore.setState({ showReport: true })}>Run complete — inspect result</button>}</div>
