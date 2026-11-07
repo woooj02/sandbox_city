@@ -3,12 +3,14 @@ import { Scope } from './Scope';
 import recovery from '../data/recovery-proof.json';
 import checkout from '../data/checkout-proof.json';
 import { downloadJson } from './download';
+import { experimentFor, recoveryExperiment } from '../workflow';
 
 export function RecoveryTask() {
-  const experiment = useStore((s) => s.experiment);
+  const current = useStore((s) => s.experiment);
+  const experiment = recoveryExperiment(current ?? experimentFor('payment-recovery', 'recovery-inspection'));
   return <section className="task-panel" aria-label="Payment recovery">
     <h2>Will a payment recover safely?</h2>
-    <Scope experiment={experiment ? { ...experiment, phase: 'complete' } : null} title="Recorded crash recovery · PayPal sandbox · not a new payment" />
+    <Scope experiment={experiment} title="Recorded crash recovery · PayPal sandbox · not a new payment" />
     <p>A response was lost after money moved. Restarting the worker read the known order back instead of charging again. You are inspecting a prior run; no account is connected by this page.</p>
     <p>Recorded {recovery.recordedAt} · run <code>{recovery.run}</code> · amount ${recovery.amount.toFixed(2)}.</p>
     <ol className="incident-trace">{recovery.steps.map((s) => <li key={s.step}><b>{s.step}</b><p>{s.detail}</p></li>)}</ol>

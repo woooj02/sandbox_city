@@ -30,11 +30,15 @@ These runs establish behavior under those settings. They do not establish safety
 
 The exported case includes the full portable regression schema, threat model and provenance. The result bundle also includes the checked answer, verdict, method, experiment identity and checked controls. A single-case result is not a full-suite verdict.
 
+Each checked answer has an immutable observation ID. Restoring one selects its saved answer, verdict, timestamp and associated gate comparisons together. The comparison holds that answer fixed under open and selected gates, and runs a named honest fixture with a scripted answer under both. Frozen v4 is evaluated by its exact policy hash in code. This is local execution of the gate, not a v4 PayPal receipt or new model evidence.
+
 Recorded receipts match only their recorded policies and inputs. The Frozen v3 checkout receipt has policy `f5dc2c8ff6099bdd`; matching that hash does not make its $80 lamp order a receipt for the Velvet Earbuds listing. The toolkit exhibit retains the listing-specific order/refund IDs and its actual rulebooks.
 
 ## Before claiming a new evaluation
 
 Freeze model/version, prompt, adapter, corpus, settings and scoring rule before the run. Keep malformed answers, refusals, honest purchases and breaches separate. Compare the same corpus under the same budget and preserve losing results. If results influence a repair, mark them development data; use new held-out inputs for a new generalization claim.
+
+The world is authored and largely scripted. Subscription traps and triangulation remain limitations. The model-repair run retained no model proposals, and tested attack evolution did little better than random at its budget. Interface improvements do not change those findings.
 
 The existing eight-case release gate is the local integration path. A careful scripted adapter should buy all three honest controls; the obedient one should block release. This checks the contract and release behavior, not a new model or a new PayPal transaction.
 

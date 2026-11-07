@@ -840,6 +840,22 @@ button.rail-badge { background: transparent; cursor: pointer; }
 }
 
 /* A question, its inputs and its result stay in one scrollable workspace. */
+.guided-next { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; border: 1px solid var(--cy); padding: 16px 20px; background: #0c1c2d; margin: 20px 0; }
+.guided-next > b { color: var(--cy); }
+.guided-next > p { flex-basis: 100%; margin: 0; }
+.guided-next .at-label { max-width: 440px; margin: 0; }
+.observation-id { font: 12px/1.6 var(--mono); overflow-wrap: anywhere; }
+.comparison-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.comparison-cards article { background: #0c1629; border: 1px solid var(--line); padding: 16px; min-width: 0; }
+.comparison-cards .bad { border-top: 3px solid var(--rd); }
+.comparison-cards .good { border-top: 3px solid var(--cy); }
+.comparison-cards h3 { margin: 0 0 14px; font-size: 17px; }
+.comparison-cards strong { display: block; font-size: 20px; }
+.comparison-cards code { font-size: 11px; overflow-wrap: anywhere; }
+.observation-history { padding-left: 20px; }
+.observation-history li { margin: 12px 0; overflow-wrap: anywhere; }
+.observation-history li[aria-current] { border-left: 2px solid var(--cy); padding-left: 12px; }
+.observation-history code, .observation-history span { display: block; }
 .task-app { height: 100dvh; overflow-y: auto; overflow-x: hidden; background: radial-gradient(ellipse at top left, #102938 0, #070b1c 40%, #03030a 80%); color: #e2e9ff; }
 .task-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 22px max(20px, calc((100% - 1240px) / 2)); border-bottom: 1px solid var(--line); }
 .task-header span { color: #aabbd5; font-size: 14px; }
@@ -881,11 +897,13 @@ button.rail-badge { background: transparent; cursor: pointer; }
 .city-context { grid-area: context; max-height: 220px; overflow: auto; }
 .city-context .scope-banner { margin: 4px 0; padding: 8px 14px; }
 .app:not(.cinema) { grid-template-rows: auto auto minmax(200px, 1fr) 250px; grid-template-areas: 'top top top' 'context context context' 'rules stage hud' 'rules ledger feed'; }
+.app:not(.cinema):not(.simple) { grid-template-rows: auto auto minmax(120px, 1fr) minmax(140px, 250px); }
 .app.simple:not(.cinema) { grid-template-rows: auto auto minmax(0, 1fr); grid-template-areas: 'top top top' 'context context context' 'rules stage hud'; }
 .decision-reference { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding: 10px 14px; border: 1px solid var(--gold); }
 .decision-reference p { flex: 1 1 100%; margin: 0; font-size: 14px; }
 button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px solid var(--cy); outline-offset: 3px; }
 @media(max-width: 800px) {
+ .comparison-cards { grid-template-columns: minmax(0, 1fr); }
  .task-cards, .authority-inputs, .task-panel .worth-grid { grid-template-columns: minmax(0,1fr); }
  .task-header { flex-wrap: wrap; padding: 16px; } .task-home, .task-workspace { padding: 24px 16px 48px; }
  .task-header span { font-size: 12px; } .task-nav { padding: 0 16px; gap: 8px; }

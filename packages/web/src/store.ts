@@ -43,7 +43,8 @@ interface State {
   experiments: Partial<Record<Task, Experiment>>;
   agentDraft: { pick: number; text: string; method: 'sample' | 'pasted-answer' | 'local-command' };
   agentResults: AgentResult[];
-  agentGate: SavedGate | null;
+  agentSelectedId: string | null;
+  agentGates: SavedGate[];
   agentGatePolicy: Policy | null;
   costDraft: { prices: Prices; boxes: boolean };
   savedDecision: SavedDecision | null;
@@ -105,7 +106,7 @@ export const useStore = create<State>((set, get) => ({
     const experiment = task === 'home' || task === 'city' ? current.experiment : current.experiments[task] ?? experimentFor(task, `${task}-${Date.now()}`);
     set({ task, experiment, ...(experiment ? { experiments: { ...current.experiments, [experiment.task]: experiment } } : {}), showAgent: false, showWorth: false, showReport: false, showEvidence: false, showHijack: false, tune: { ...current.tune, open: false }, forge: { ...current.forge, open: false } });
   },
-  agentDraft: { pick: 0, text: '', method: 'sample' }, agentResults: [], agentGate: null, agentGatePolicy: null,
+  agentDraft: { pick: 0, text: '', method: 'sample' }, agentResults: [], agentSelectedId: null, agentGates: [], agentGatePolicy: null,
   costDraft: { prices: DEFAULT_PRICES, boxes: false }, savedDecision: null, decisionHistory: [], runComplete: false,
   seed: 'neo-osaka-7',
   chaos: 0.04,

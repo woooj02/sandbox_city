@@ -9,6 +9,7 @@ function canvas(size: number, draw: (c: CanvasRenderingContext2D, s: number) => 
 }
 
 export function makeTextures() {
+  const backgrounds: Texture[] = [];
   const glow = canvas(64, (c, s) => {
     const g = c.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
     g.addColorStop(0, 'rgba(255,255,255,1)');
@@ -78,8 +79,12 @@ export function makeTextures() {
     for (let y = 0; y < h; y += 100) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
     // noise speckle
     for (let i = 0; i < 2400; i++) { c.fillStyle = `rgba(160,180,255,${Math.random() * 0.08})`; c.fillRect(Math.random() * w, Math.random() * h, 1, 1); }
-    return Texture.from(el);
+    const texture = Texture.from(el);
+    backgrounds.push(texture);
+    return texture;
   };
-  return { glow, dot, ring, hex, spark, cross, diamond, dashRing, lock, bg };
+  return { glow, dot, ring, hex, spark, cross, diamond, dashRing, lock, bg,
+    destroy: () => { for (const texture of [glow, dot, ring, hex, spark, cross, diamond, dashRing, lock, ...backgrounds]) texture.destroy(true); backgrounds.length = 0; },
+  };
 }
 export type Textures = ReturnType<typeof makeTextures>;

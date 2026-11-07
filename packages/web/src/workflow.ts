@@ -17,6 +17,7 @@ export const experimentFor = (task: Task, id: string): Experiment => ({
   seedOrDataset: task === 'policy-cost' ? 'fair-01…fair-30' : task === 'payment-recovery' ? 'crash-mw42uwv6' : 'portable-regressions@1',
 });
 export interface AgentResult {
+  id: string;
   experiment: Experiment; case: AgentRegression; text: string; method: 'sample' | 'pasted-answer' | 'local-command';
   result: CaseResult; checkedAt: string;
 }
@@ -33,5 +34,28 @@ export function overlayFor(s: { showHijack: boolean; showEvidence: boolean; show
 }
 
 export interface SavedGate {
-  hash: string; name: string; source: AgentResult; result: ReturnType<typeof gateAgentAnswer>;
+  id: string; sourceId: string; checkedAt: string; policy: Policy;
+  hash: string; name: string; result: ReturnType<typeof gateAgentAnswer>;
+  open: { hash: string; name: string; result: ReturnType<typeof gateAgentAnswer> };
+  honest: { case: AgentRegression; answer: unknown; result: CaseResult; open: ReturnType<typeof gateAgentAnswer>; protected: ReturnType<typeof gateAgentAnswer> };
+}
+
+/** Selection is by observation identity, never by case, text or timestamp. */
+export function observationSelection(results: AgentResult[], gates: SavedGate[], id: string | null) {
+  const result = results.find((r) => r.id === id) ?? null;
+  const gate = result ? [...gates].reverse().find((g) => g.sourceId === result.id) ?? null : null;
+  return { result, gate };
+}
+
+export function restoreObservation(results: AgentResult[], gates: SavedGate[], id: string, cases: AgentRegression[]) {
+  const { result, gate } = observationSelection(results, gates, id);
+  if (!result) return null;
+  const pick = cases.findIndex((c) => c.id === result.case.id);
+  if (pick < 0) return null;
+  return { agentSelectedId: result.id, agentDraft: { pick, text: result.text, method: result.method }, agentGatePolicy: gate?.policy ?? null, experiment: result.experiment };
+}
+
+/** The screen and download both inspect this completed recorded experiment. */
+export function recoveryExperiment(experiment: Experiment): Experiment {
+  return { ...experiment, task: 'payment-recovery', phase: 'complete', source: 'recorded-proof', paymentMode: 'paypal-sandbox', scenario: { id: 'crash-recovery', version: '1' }, inputRef: 'recovery-proof', seedOrDataset: 'crash-mw42uwv6' };
 }

@@ -63,7 +63,7 @@ export function Worth() {
   const qualified = ranked.filter((r) => !r.out);
   const flips = KNOBS.flatMap((k) => {
     const flip = nextWinner(ranked, k.key, p, k.min);
-    return flip ? [`${arms.find((a) => a.key === flip.arm.key)?.label ?? flip.arm.name} wins if ${k.flip(k.show(flip.price), flip.price > p[k.key])}.`] : [];
+    return flip ? [{ text: `${arms.find((a) => a.key === flip.arm.key)?.label ?? flip.arm.name} wins if ${k.flip(k.show(flip.price), flip.price > p[k.key])}.`, withinRange: flip.price <= k.max }] : [];
   });
   const chosen = qualified.length ? arms.find((a) => a.key === top.arm.key) : undefined;
   const reason = chosen ? `${chosen.label} meets your ${(p.minAccess * 100).toFixed(2)}% honest-access floor and has the highest value after your priced costs among ${qualified.length} qualifying rulebooks: ${money(top.net)} per simulated day.` : '';
@@ -137,7 +137,8 @@ export function Worth() {
             {!boxes && <p>v4 leads v3 by about $443/day at principal-only theft cost (paired 95% interval $233–$647). v3 stops about $878/day more theft. These intervals describe the recorded default comparison, not arbitrary repriced objectives.</p>}
             {!boxes && <p className="worth-assumption">Held-out failure: empty-box sellers took $2,953/day under v4 and $48 under v3. Standard days omit this attack. Tick empty boxes under Your prices to price the days that include it.</p>}
             {chosen && <p className="cost-equation">{money(top.delivered)} delivered and paid − {money(top.theft)} theft − {money(top.friction)} step-ups − {money(top.holding)} holding = {money(top.net)} / day</p>}
-            {flips.length > 0 && <ul className="worth-flips">{flips.map((f) => <li key={f}>{f}</li>)}</ul>}
+            {flips.some((f) => f.withinRange) ? <ul className="worth-flips" aria-label="Switches within the slider ranges">{flips.filter((f) => f.withinRange).map((f) => <li key={f.text}>{f.text}</li>)}</ul> : chosen && <p>No winner switch falls within the displayed slider ranges at these prices.</p>}
+            {flips.some((f) => !f.withinRange) && <details><summary>Advanced: thresholds outside the slider ranges</summary><p>These extend the same linear pricing equation beyond the displayed controls. They are not new measured conditions or a forecast.</p><ul>{flips.filter((f) => !f.withinRange).map((f) => <li key={f.text}>{f.text}</li>)}</ul></details>}
             {chosen && <p className="at-p">{reason}</p>}
             <p className="at-p">Delivered value less theft, step-up and holding costs at your prices. Left out: {LEFT_OUT}</p>
             <div className="worth-table" role="region" aria-label="Every rulebook, priced" tabIndex={0}>

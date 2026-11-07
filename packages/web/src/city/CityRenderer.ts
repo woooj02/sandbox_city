@@ -1,4 +1,5 @@
 import { Application, Container, Graphics, Sprite, Text, TextStyle, Texture } from 'pixi.js';
+import { releaseFilter } from './releaseFilter';
 import { AdvancedBloomFilter, GlitchFilter, ShockwaveFilter } from 'pixi-filters';
 import { DISTRICTS, SimEvent } from '@sandbox-city/core';
 import type { MerchantLite, TickMsg, WorldSnapshot } from '@sandbox-city/core';
@@ -56,6 +57,8 @@ export class CityRenderer {
   private tps = 8;
   private textCount = 0;
   private ready = false;
+  private disposed = false;
+  private initialized = false;
   private snapshot: WorldSnapshot | null = null;
   // camera: current pose eases toward the active shot; drift + shake are layered on top
   private cam = { x: 0, y: 0, z: 1 };
@@ -71,15 +74,17 @@ export class CityRenderer {
   constructor(private host: HTMLElement, private opts: RendererOptions) {}
 
   async init() {
-    const aspect = (this.host.clientWidth || 16) / (this.host.clientHeight || 10);
-    this.VW = Math.round(Math.max(820, Math.min(2200, VH * aspect)));
-    await this.app.init({ resizeTo: this.host, background: '#03030a', antialias: true, resolution: Math.min(2, window.devicePixelRatio || 1), autoDensity: true, preference: 'webgl' });
-    this.host.appendChild(this.app.canvas);
-    this.tex = makeTextures();
     this.app.stage.addChild(this.root);
     this.root.addChild(this.world);
     for (const l of Object.values(this.layers)) this.world.addChild(l);
     this.world.addChild(this.night, this.lock, this.lockText);
+    const aspect = (this.host.clientWidth || 16) / (this.host.clientHeight || 10);
+    this.VW = Math.round(Math.max(820, Math.min(2200, VH * aspect)));
+    await this.app.init({ resizeTo: this.host, background: '#03030a', antialias: true, resolution: Math.min(2, window.devicePixelRatio || 1), autoDensity: true, preference: 'webgl' });
+    this.initialized = true;
+    if (this.disposed) { this.release(); return; }
+    this.host.appendChild(this.app.canvas);
+    this.tex = makeTextures();
     this.layers.fx.blendMode = 'add';
     this.layers.people.blendMode = 'add';
 
@@ -97,7 +102,24 @@ export class CityRenderer {
     if (this.snapshot) this.setWorld(this.snapshot);
   }
 
-  destroy() { try { this.app.destroy(true, { children: true }); } catch { /* noop */ } }
+  destroy() {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.ready = false;
+    this.snapshot = null;
+    if (this.initialized) this.release();
+  }
+
+  private release() {
+    this.app.stop();
+    this.root.filters = [];
+    // Unbind before textures go away. Programs and pooled textures are shared across lanes.
+    for (const filter of [this.bloom, this.shock, this.glitch]) if (filter) releaseFilter(filter);
+    this.app.destroy({ removeView: true, releaseGlobalResources: false }, { children: true });
+    this.tex?.destroy();
+    this.buildings.clear(); this.people.clear(); this.attackers.clear();
+    this.comets = []; this.fx = []; this.traffic = []; this.districtPlates = [];
+  }
 
   setSpeed(tps: number) { this.tps = tps; }
 
