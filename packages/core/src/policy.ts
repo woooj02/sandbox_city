@@ -103,7 +103,9 @@ export function policyId(p: Policy): string {
 }
 
 /** Same street, same order: forgive case and punctuation. */
-export const sameAddress = (a: string, b: string) => a.toLowerCase().replace(/[^a-z0-9]/g, '') === b.toLowerCase().replace(/[^a-z0-9]/g, '');
+/** Letters and digits of any script, word by word. Nothing is dropped: text in another script is text, and "1 2 Main" is not "12 Main". */
+const addressWords = (s: string) => (s.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).join(' ');
+export const sameAddress = (a: string, b: string) => addressWords(a) === addressWords(b);
 
 /** The owner's address, whole or with the district left off (the rest of a postal address is checked separately). An empty address never matches. */
 export function addressMatches(shipTo: string, owner: string): boolean {

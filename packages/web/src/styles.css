@@ -614,14 +614,11 @@ button.rail-badge { background: transparent; cursor: pointer; }
 @media (max-width: 1700px) { .ledger .panel-title small { display: none; } }
 .hj-grid .ag-grid-scrolling-rows.ag-layout-auto-height, .hj-grid .ag-layout-auto-height .ag-center-cols-viewport, .hj-grid .ag-layout-auto-height .ag-center-cols-container { min-height: 0 !important; }
 .hj-slot { font-weight: 400; color: #ffd166; border: 1px dashed rgba(255,209,102,.5); padding: 0 4px; margin: 0 1px; font-size: .92em; }
-/* laptops: the rail badges give up some room so the clock keeps its own; the hijack badge shrinks to its mark */
+/* laptops: the rail badges give up some room so the clock keeps its own */
 @media (max-width: 1500px) and (min-width: 901px) {
   .rail-badge { letter-spacing: 1px; padding: 5px 8px; gap: 6px; }
   .topbar { gap: 10px; }
   .clock-big { letter-spacing: 1px; }
-  .rail-badge.hijack { font-size: 0; gap: 0; }
-  .rail-badge.hijack::after { content: '◆ HIJACK'; font-size: 13px; }
-  .rail-badge.hijack i { display: none; }
   .clock-big { font-size: 16px; }
 }
 @media (max-width: 1500px) and (min-width: 901px) {
@@ -912,3 +909,10 @@ button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px soli
  .app.simple:not(.cinema) { height: auto; min-height: 100dvh; overflow-y: auto; grid-template-columns: minmax(0,1fr); grid-template-rows: auto auto auto 45vh auto; grid-template-areas: 'top' 'context' 'rules' 'stage' 'hud'; }
  .city-context { max-height: none; }
 }
+
+.ev-scroll { overflow-x: auto; }
+.ev-lab { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 14px; color: #b8c1e8; }
+.ev-lab th { text-align: left; font-weight: 600; color: #fff; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.ev-lab td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,.06); font-variant-numeric: tabular-nums; }
+.ev-lab tr.pick td { color: #fff; background: rgba(60,220,170,.08); }
+.ev-lab tr.pick td:last-child { color: var(--gr); font-weight: 700; }

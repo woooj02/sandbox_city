@@ -9,7 +9,7 @@
  * Anything the gate cannot read fails closed under a rulebook that checks it.
  */
 import { deriveKey, signRequest, SignatureVerifier, type KeyPair, type VerifyResult } from './kya';
-import { addressMatches, evaluateOrder, EVALUATOR_VERSION, policyId, type AgentView, type GateContext, type GateOrder, type MerchantView, type Policy } from './policy';
+import { addressMatches, evaluateOrder, EVALUATOR_VERSION, policyId, sameAddress, type AgentView, type GateContext, type GateOrder, type MerchantView, type Policy } from './policy';
 import type { PostalAddress } from './rails';
 import type { GateResult, Mandate, Passport } from './types';
 
@@ -31,18 +31,30 @@ export interface CheckoutScope {
 
 const cents = (n: number) => Math.round(n * 100);
 const money = (c: number) => c / 100;
+/** How an order is read. The rules have their own version: this one moves when the reading gets stricter, not the rules. */
+export const ORDER_READER_VERSION = 'read-2';
+
+/** Agent output is untrusted: an address field that is not text is no address, invisible characters are not part of one, and a number that is not a number counts as zero and is reported. */
+const text = (v: unknown) => (typeof v === 'string' ? v.replace(/\p{Cf}/gu, '').trim() : '');
+const finite = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+/** Dollars and whole cents. A price of $289.499 is not $289.50, however it rounds. */
+const wholeCents = (n: unknown) => typeof n === 'number' && Number.isFinite(n) && Math.abs(n * 100 - Math.round(n * 100)) < 1e-6;
+const ownerDistrict = (scope: CheckoutScope) => scope.passport.address.split(',').slice(1).join(',').trim() || 'Sandbox City';
 
 /** The address as one string, in the owner's "street, district" form, with anything that makes it a different place kept in. */
 export function shipToOfArgs(a: CheckoutAddress | null | undefined, scope: CheckoutScope): string {
-  if (!a?.address_line_1?.trim()) return '';
-  const line = a.address_line_1.trim(), city = a.admin_area_2?.trim();
-  const base = city && !line.toLowerCase().includes(city.toLowerCase()) ? `${line}, ${city}` : line;
+  const line = text(a?.address_line_1), city = text(a?.admin_area_2);
+  if (!line) return '';
+  // a city only repeats the line if it is the line's whole last part: "Row" is not "Silk Row"
+  const repeats = (line.includes(',') && sameAddress(line.split(',').pop()!, city)) || (sameAddress(line, scope.passport.address) && sameAddress(city, ownerDistrict(scope)));
+  const base = city && !repeats ? `${line}, ${city}` : line;
   const postal = scope.postal ?? OWNER_POSTAL;
   const extra: string[] = [];
-  if (a.address_line_2?.trim()) extra.push(a.address_line_2.trim());
-  if (a.admin_area_1?.trim() && a.admin_area_1.trim().toUpperCase() !== postal.admin_area_1) extra.push(a.admin_area_1.trim());
-  if (a.postal_code?.trim() && a.postal_code.trim() !== postal.postal_code) extra.push(a.postal_code.trim());
-  if (a.country_code?.trim() && a.country_code.trim().toUpperCase() !== postal.country_code) extra.push(a.country_code.trim());
+  const line2 = text(a?.address_line_2), state = text(a?.admin_area_1), zip = text(a?.postal_code), country = text(a?.country_code);
+  if (line2) extra.push(line2);
+  if (state && state.toUpperCase() !== postal.admin_area_1) extra.push(state);
+  if (zip && zip !== postal.postal_code) extra.push(zip);
+  if (country && country.toUpperCase() !== postal.country_code) extra.push(country);
   return extra.length ? `${base} / ${extra.join(' / ')}` : base;
 }
 
@@ -51,44 +63,60 @@ export function shipToOfArgs(a: CheckoutAddress | null | undefined, scope: Check
  * read as the owner's own, so it is filled the same way here. Nothing is replaced.
  */
 export function canonicalAddress(a: CheckoutAddress | null | undefined, scope: CheckoutScope): PostalAddress | undefined {
-  if (!a?.address_line_1?.trim()) return undefined;
+  const line = text(a?.address_line_1);
+  if (!line) return undefined;
   const postal = scope.postal ?? OWNER_POSTAL;
-  const [first, ...rest] = a.address_line_1.split(/,\s*/);
-  const city = a.admin_area_2?.trim();
+  const [first, ...rest] = line.split(/,\s*/);
+  const city = text(a?.admin_area_2), line2 = text(a?.address_line_2);
   return {
-    address_line_1: (city ? a.address_line_1 : first).trim(),
-    ...(a.address_line_2?.trim() ? { address_line_2: a.address_line_2.trim() } : {}),
-    admin_area_2: city || rest.join(', ').trim() || 'Sandbox City',
-    admin_area_1: a.admin_area_1?.trim() || postal.admin_area_1,
-    postal_code: a.postal_code?.trim() || postal.postal_code,
-    country_code: a.country_code?.trim() || postal.country_code,
+    address_line_1: (city ? line : first).trim(),
+    ...(line2 ? { address_line_2: line2 } : {}),
+    admin_area_2: city || rest.join(', ').trim() || ownerDistrict(scope),
+    admin_area_1: text(a?.admin_area_1) || postal.admin_area_1,
+    postal_code: text(a?.postal_code) || postal.postal_code,
+    country_code: text(a?.country_code) || postal.country_code,
   };
 }
+
+/** Fields an order may carry as text; one that holds anything else is reported, because the gate reads it as absent. */
+const ADDRESS_FIELDS = ['address_line_1', 'address_line_2', 'admin_area_2', 'admin_area_1', 'postal_code', 'country_code'] as const;
 
 /** What the order will really charge, in the order's own terms. Anything that does not add up is reported, not corrected. */
 export function checkoutOrder(args: CheckoutArgs, scope: CheckoutScope): GateOrder {
   const problems: string[] = [];
-  const lines = args.items ?? [];
+  const lines: unknown[] = Array.isArray(args?.items) ? args.items : [];
   if (!lines.length) problems.push('no items');
   let qty = 0, total = 0;
-  for (const l of lines) {
+  for (const raw of lines) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) { problems.push('a line is not an item'); continue; }
+    const l = raw as CheckoutLine;
     const q = l.quantity ?? 1, unit = l.itemCost ?? 0, tax = l.taxPercent ?? 0;
-    if (!Number.isInteger(q) || q < 1) problems.push(`quantity ${q}`);
-    if (!Number.isFinite(unit) || unit < 0) problems.push(`item cost ${unit}`);
-    if (!Number.isFinite(tax) || tax < 0) problems.push(`tax ${tax}`);
-    const line = cents(unit) * Math.max(1, Math.round(q) || 1);
-    if (l.itemTotal != null && cents(l.itemTotal) !== line) problems.push(`line total $${l.itemTotal} is not ${q} x $${unit}`);
-    if (scope.listedUnit != null && cents(unit) !== cents(scope.listedUnit)) problems.push(`$${unit} is not the listed $${scope.listedUnit}`);
-    qty += Math.max(1, Math.round(q) || 1);
+    if (!Number.isSafeInteger(q) || q < 1) problems.push(`quantity ${q}`);
+    if (!wholeCents(unit) || (unit as number) <= 0) problems.push(`item cost ${unit}`);
+    if (typeof tax !== 'number' || !Number.isFinite(tax) || tax < 0) problems.push(`tax ${tax}`);
+    const count = Math.max(1, Math.round(finite(q)) || 1), line = cents(finite(unit)) * count;
+    if (l.itemTotal != null && (typeof l.itemTotal !== 'number' || cents(l.itemTotal) !== line)) problems.push(`line total $${l.itemTotal} is not ${q} x $${unit}`);
+    if (scope.listedUnit != null && cents(finite(unit)) !== cents(scope.listedUnit)) problems.push(`$${unit} is not the listed $${scope.listedUnit}`);
+    qty += count;
     // count the larger of what was declared and what the lines say: a hidden charge must not lower the total the gate sees
-    total += Math.max(line, cents(l.itemTotal ?? 0)) * (1 + Math.max(0, tax) / 100);
+    total += Math.max(line, cents(finite(l.itemTotal))) * (1 + Math.max(0, finite(tax)) / 100);
   }
-  const shipping = args.shippingCost ?? 0, discount = args.discount ?? 0;
-  if (!Number.isFinite(shipping) || shipping < 0) problems.push(`shipping ${shipping}`);
-  if (!Number.isFinite(discount) || discount < 0) problems.push(`discount ${discount}`);
-  if (args.currencyCode && args.currencyCode !== 'USD') problems.push(`currency ${args.currencyCode}`);
-  total += cents(Math.max(0, shipping)) - cents(Math.max(0, discount));
-  const order: GateOrder = { amount: money(Math.round(total)), qty, category: scope.category, shipTo: shipToOfArgs(args.shippingAddress, scope) };
+  const shipping = args?.shippingCost ?? 0, discount = args?.discount ?? 0;
+  if (!wholeCents(shipping) || (shipping as number) < 0) problems.push(`shipping ${shipping}`);
+  if (!wholeCents(discount) || (discount as number) < 0) problems.push(`discount ${discount}`);
+  if (args?.currencyCode != null && args.currencyCode !== 'USD') problems.push(`currency ${args.currencyCode}`);
+  const address = args?.shippingAddress as unknown;
+  if (address != null && (typeof address !== 'object' || Array.isArray(address))) problems.push('the address is not an address');
+  else for (const k of new Set([...ADDRESS_FIELDS, ...Object.keys(address ?? {})])) {
+    const v = (address as Record<string, unknown> | null | undefined)?.[k];
+    // a field the gate does not read is refused too: it would be dropped here, and the next reader may not drop it
+    if (v != null && typeof v !== 'string') problems.push(`${k} is not text`);
+    // "#" compares equal to nothing, and would still reach PayPal
+    else if (text(v) && !/[\p{L}\p{N}]/u.test(text(v))) problems.push(`${k} has no letters or digits`);
+  }
+  total += cents(Math.max(0, finite(shipping))) - cents(Math.max(0, finite(discount)));
+  if (lines.length && Math.round(total) <= 0) problems.push('the order charges nothing');
+  const order: GateOrder = { amount: money(Math.round(total)), qty, category: scope.category, shipTo: shipToOfArgs(args?.shippingAddress, scope) };
   if (problems.length) order.malformed = problems.join('; ');
   return order;
 }
@@ -109,13 +137,15 @@ export interface Verdict extends GateResult {
   /** Which rulebook and which evaluator decided: the same pair in the lab and at the checkout. */
   policy: string;
   evaluator: string;
+  /** Which reading of the order the evaluator was given. */
+  reader: string;
   order?: GateOrder;
 }
 
 const verdict = (policy: Policy, gate: GateResult, order?: GateOrder): Verdict => {
   const stop = gate.hits.find((h) => h.action === gate.decision && gate.decision !== 'allow');
   const reason = stop ? `${stop.rule}: ${stop.reason}` : undefined;
-  return { ...gate, ok: gate.decision === 'allow', reason, policy: policyId(policy), evaluator: EVALUATOR_VERSION, order };
+  return { ...gate, ok: gate.decision === 'allow', reason, policy: policyId(policy), evaluator: EVALUATOR_VERSION, reader: ORDER_READER_VERSION, order };
 };
 
 /** What the checkout knows about this store and this agent at the moment of the order. */

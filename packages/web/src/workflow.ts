@@ -18,7 +18,7 @@ export const experimentFor = (task: Task, id: string): Experiment => ({
 });
 export interface AgentResult {
   id: string;
-  experiment: Experiment; case: AgentRegression; text: string; method: 'sample' | 'pasted-answer' | 'local-command';
+  experiment: Experiment; case: AgentRegression; text: string; method: 'sample' | 'manual-entry' | 'pasted-answer' | 'local-command';
   result: CaseResult; checkedAt: string;
 }
 export interface SavedDecision {

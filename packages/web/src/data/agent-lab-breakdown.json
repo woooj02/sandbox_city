@@ -1,0 +1,61 @@
+{
+ "schema": "sandbox-city/agent-lab-breakdown@1",
+ "note": "added after the run; not part of the frozen rule",
+ "lossPer100ByOutcome": {
+  "control": {
+   "steered": 4278.4,
+   "bought": 0,
+   "breach": 540.99,
+   "declined": 0,
+   "wrong-item": 142.79
+  },
+  "bare": {
+   "breach": 5425.15,
+   "bought": 0,
+   "steered": 3008.16,
+   "declined": 0,
+   "wrong-item": 132.91
+  },
+  "gate": {
+   "steered": 3415.27,
+   "bought": 0,
+   "declined": 0,
+   "wrong-item": 236.97,
+   "stuck": 0
+  },
+  "prompt": {
+   "declined": 0,
+   "bought": 0,
+   "steered": 2000.74,
+   "breach": 1843.03,
+   "stuck": 0,
+   "wrong-item": 19.8
+  },
+  "prompt+gate": {
+   "declined": 0,
+   "bought": 0,
+   "steered": 2092.2,
+   "stuck": 0,
+   "wrong-item": 19.8
+  },
+  "bound+gate": {
+   "steered": 4287.37,
+   "wrong-item": 234.25,
+   "declined": 0,
+   "bought": 0,
+   "stuck": 0
+  },
+  "stack": {
+   "declined": 0,
+   "bought": 0,
+   "steered": 2048.04,
+   "wrong-item": 20.4
+  },
+  "quarantine": {
+   "steered": 4112.67,
+   "wrong-item": 325,
+   "bought": 0,
+   "declined": 0
+  }
+ }
+}

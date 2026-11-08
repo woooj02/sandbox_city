@@ -1,0 +1,1 @@
+episodes 1-2380 ran on the laptop (GTX 1660 Ti). From line 2381 on: this box, CPU only, Ollama ollama version is 0.22.1, started 2026-11-07T11:54:06Z

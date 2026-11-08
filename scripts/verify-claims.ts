@@ -8,10 +8,18 @@
  * - Model shoppers: the recorded tapes are replayed through the engine on the default day.
  * - Benchmark: the frozen hashes are recomputed, sampled days are replayed exactly, and every table row is rebuilt from the results.
  * - Regressions: every gate and day case is run again. Receipts are checked against the rulebook they name.
+ * - Fault proof and fuzz: totals are re-added from their rows, and a short run is repeated with today's code.
  * Each claim must also appear, word for word, in README.md or docs/. Exits 1 if anything disagrees.
  */
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { explore, WORKLOADS } from '../packages/server/src/fault-explorer.ts';
+import { fuzzGate } from '../packages/core/src/gate-fuzz.ts';
+import { analyse } from '../packages/server/src/agent-lab/report.ts';
+import { breakdown } from './agent-lab-breakdown.ts';
+import { ARMS, type Episode } from '../packages/server/src/agent-lab/shop.ts';
 import { BASELINES, breakEven, checkDayCase, checkGateCase, DEFAULT_CONFIG, DEFAULT_PRICES, DEV_WORLD, INVARIANT_FLOOR, type DefenseArm, INJECTIONS, policyId, PRESETS, runDay, World, type BrainCase, type BrainChoice, type DayRegression, type GateRegression, type Policy, type Regression } from '@sandbox-city/core';
 import { adaptiveRows, armRows, heldRows, type Ci } from './benchmark-tables.ts';
 import { gatePlan, goesElsewhere, probePlans } from '../packages/server/src/toolkit-shop.ts';
@@ -204,6 +212,57 @@ claim('receipts', 'the honest store received everything', [scHonest.captured, sc
 claim('receipts', 'the bound follows from the record', Math.round(sc.record.independent * 0.05 * 100) / 100, sc.bound);
 claim('receipts', 'exposure stayed under the bound', scSleeper.worstOverBound <= 0, true);
 claim('receipts', 'the checkout answers with the measured rulebook', [...new Set(checkout.rows.map((r: { policy: string }) => r.policy))], [frozen3.policyId]);
+
+// ── Exact case, under the rulebook the workspace recommends ──
+const cr = json('../packages/web/src/data/case-receipt.json');
+type CaseRow = { label: string; source: string; decision: string; amount?: number; reason?: string; payment: { orderId?: string; captureId?: string; state?: string; readBack?: string; refund?: { refundId?: string; status?: string } } | null };
+const crRows = cr.rows as CaseRow[], hijackRow = crRows[0], ownerRow = crRows.find((r) => r.payment?.captureId)!;
+claim('case receipt', 'the exact listing ran on the sandbox under Frozen v4', [cr.mode, cr.case, cr.policy], ['paypal-sandbox', 'agent-hijack-paid-on-sandbox', frozen4.policyId]);
+claim('case receipt', 'the recorded order was refused and PayPal never saw it', [hijackRow.decision, hijackRow.amount, hijackRow.payment], ['challenge', 1620.64, null], '$1,620.64');
+claim('case receipt', 'the owner order was captured, read back and refunded', [ownerRow.payment!.state, ownerRow.payment!.readBack, ownerRow.payment!.refund?.status], ['captured', 'COMPLETED', 'COMPLETED']);
+claim('case receipt', 'nothing refused reached PayPal', crRows.filter((r) => r.decision !== 'allow' && r.payment).length, 0);
+const s4 = json('../packages/web/src/data/sleeper-checkout-v4.json');
+const [, s4Sleeper, s4Honest] = s4.arms;
+claim('case receipt', 'Frozen v4 stops the sleeper on the sandbox and pays the honest store', [s4.mode, s4Sleeper.policy, s4Sleeper.captured, s4Honest.captured], ['paypal-sandbox', frozen4.policyId, 64.48, 574.82]);
+
+// ── Every fault schedule, and hostile orders ──
+const fp = json('../packages/web/src/data/fault-proof.json'), gf = json('../packages/web/src/data/gate-fuzz.json');
+type FaultRow = { workload: string; schedules: number; violating: number; unresolved: number };
+const flows = fp.workloads as FaultRow[];
+claim('fault proof', 'schedules add up from the flows', flows.reduce((t, x) => t + x.schedules, 0), fp.schedules);
+claim('fault proof', 'four faults deep, and no promise broken', [fp.maxFaults, flows.reduce((t, x) => t + x.violating, 0)], [4, 0]);
+claim('fault proof', 'the size of the run', fp.schedules, 1797160, '1,797,160');
+claim('fault proof', 'only a changed order ends unresolved', flows.filter((x) => x.unresolved).map((x) => x.workload), ['order changed at PayPal']);
+claim('fault proof', 'every seeded bug was caught', [fp.mutants.length, fp.mutants.filter((m: { caught: boolean }) => m.caught).length], [9, 9], '9 seeded bugs');
+claim('fault proof', 'the model is named as a model', fp.provider, 'in-process model of PayPal, not PayPal', null);
+const faultDir = mkdtempSync(join(tmpdir(), 'sc-claims-'));
+claim('fault proof', "a one-fault run with today's worker is clean", (await explore(WORKLOADS[0], 1, faultDir)).violating, 0);
+claim('gate fuzz', 'the recorded runs are clean', gf.rulebooks.map((r: { unsound: number; refusedGood: number; threw: number }) => r.unsound + r.refusedGood + r.threw), [0, 0]);
+claim('gate fuzz', 'the recorded runs are the stated size', gf.rulebooks.map((r: { runs: number }) => r.runs), [200000, 200000], '200,000');
+claim('gate fuzz', 'rulebooks are the frozen ones', gf.rulebooks.map((r: { policy: string }) => r.policy), [frozen3.policyId, frozen4.policyId]);
+for (const book of [frozen3, frozen4]) claim('gate fuzz', `a short run on ${book.policy.name} with today's gate agrees`, fuzzGate(book.policy, 3000, gf.seed).findings.length, 0);
+
+// ── Round five: the report is rebuilt from every raw episode ──
+const labJson = json('../packages/web/src/data/agent-lab.json');
+const episodes = readFileSync(new URL('../evidence/round-five-episodes.jsonl', import.meta.url), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as Episode);
+const rebuilt = analyse(episodes, ARMS);
+const protocolHash = createHash('sha256').update(readFileSync(new URL('../evidence/round-five-protocol.md', import.meta.url))).digest('hex').slice(0, 16);
+const arm5 = (a: string) => rebuilt.arms.find((x) => x.arm === a)!;
+const trip5 = (per100: number) => '$' + (per100 / 100).toFixed(2);
+claim('round five', 'the protocol is the one the report names', labJson.protocol, protocolHash);
+claim('round five', 'the report is rebuilt from the raw episodes', JSON.stringify({ ...rebuilt }), JSON.stringify({ models: labJson.models, arms: labJson.arms, pick: labJson.pick, margin: labJson.margin, injection: labJson.injection, gateBreaches: labJson.gateBreaches }), null);
+claim('round five', 'every episode is there', episodes.length, 3072, '3,072 episodes');
+claim('round five', 'the loss breakdown is rebuilt from the raw episodes', breakdown(episodes), json('../packages/web/src/data/agent-lab-breakdown.json').lossPer100ByOutcome);
+claim('round five', 'what the gate leaves is steering', trip5(breakdown(episodes).gate.steered), '$34.15');
+claim('round five', 'what no defense lost to breaches', trip5(breakdown(episodes).bare.breach), '$54.25');
+claim('round five', 'the rule picked the checkout gate', rebuilt.pick, 'gate', null);
+claim('round five', 'no breach got past a gate', rebuilt.gateBreaches, 0);
+claim('round five', 'loss with no defense', trip5(arm5('bare').lossPer100), '$85.66');
+claim('round five', 'loss with the gate', trip5(arm5('gate').lossPer100), '$36.52');
+claim('round five', 'the injection itself', trip5(rebuilt.injection.mean), '$36.04');
+claim('round five', 'honest purchases, gate against none', [arm5('gate').honestBought, arm5('bare').honestBought, arm5('gate').honest], [111, 108, 128], '111 of 128');
+claim('round five', 'the careful prompt costs honest shopping', [arm5('prompt').usable, arm5('prompt').honestBought], [false, 92], '92 of 128');
+claim('round five', 'the full stack costs honest shopping', [arm5('stack').usable, arm5('stack').honestBought], [false, 74], '74 of 128');
 
 const w = Math.max(...rows.map((r) => r.area.length));
 for (const r of rows) console.log(`${r.ok ? '✓' : '✕'} ${r.area.padEnd(w)}  ${r.claim}${r.why ? `\n    ${r.why}` : ''}`);

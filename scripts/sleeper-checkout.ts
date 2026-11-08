@@ -7,7 +7,8 @@
  * Under each rulebook those orders go through the real checkout. The store ships nothing, every buyer complains and
  * every window closes. An honest store with the same record ships the same orders, as the control.
  * The carrier and the complaint desk are this script, stated as such in the receipt. The money is PayPal's answer.
- * Writes packages/web/src/data/sleeper-checkout.json.
+ * --rulebook=frozen-v4 runs another frozen rulebook. Only v3 carries a claim to check: another one's result is written whatever it is.
+ * Writes packages/web/src/data/sleeper-checkout.json, or sleeper-checkout-v4.json for v4.
  */
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
@@ -30,8 +31,9 @@ if (sandbox) {
   const base = `http://127.0.0.1:${(mock.server.address() as AddressInfo).port}`;
   rails = () => new SandboxRails({ clientId: 'mock-client', clientSecret: 'mock-secret', base });
 }
-const frozen = JSON.parse(readFileSync(new URL('../evidence/frozen-v3.json', import.meta.url), 'utf8'));
-const v3: Policy = frozen.policy;
+const book = process.argv.find((a) => a.startsWith('--rulebook='))?.split('=')[1] ?? 'frozen-v3';
+const frozen = JSON.parse(readFileSync(new URL(`../evidence/${book}.json`, import.meta.url), 'utf8'));
+const v3: Policy = frozen.policy, bookName: string = frozen.policy.name;
 
 /**
  * One simulated day, read from the sleeper's side: its record as it starts collecting, and the money it collected.
@@ -63,7 +65,7 @@ if (!earned.record) throw new Error(`no sleeper collected money on ${SEED}`);
 const orders = earned.sold.slice(0, ORDERS);
 if (orders.length < ORDERS) throw new Error(`only ${orders.length} orders after the turn`);
 console.log(`${SEED}: the sleeper turns at minute ${earned.turned}. Under Lab-Tuned it starts collecting at minute ${earned.minute}, with $${earned.record.independent} of independent credit and $${earned.record.exposure} exposed, and collects ${earned.sold.length} orders`);
-console.log(`${SEED}: under Frozen v3 itself it collects ${underV3.sold.length} orders after the turn`);
+console.log(`${SEED}: under ${bookName} itself it collects ${underV3.sold.length} orders after the turn`);
 
 const token = randomBytes(16).toString('hex');
 const app = await buildServer({ rails, labToken: token, journalPath: join(mkdtempSync(join(tmpdir(), 'sc-sleeper-')), 'payments.log') });
@@ -127,15 +129,15 @@ async function arm(label: string, rulebook: string, policy: Policy, ships: boole
 }
 
 const tuned = await arm('Lab-Tuned, sleeper', 'tuned', PRESETS.tuned, false);
-const sleeper = await arm('Frozen v3, sleeper', 'frozen-v3', v3, false);
-const honest = await arm('Frozen v3, honest store', 'frozen-v3', v3, true);
+const sleeper = await arm(`${bookName}, sleeper`, book, v3, false);
+const honest = await arm(`${bookName}, honest store`, book, v3, true);
 
 // the claim this proof exists for, checked here so a bad run writes no receipt
 // Lab-Tuned captured these orders on the simulated day, so it must capture them here: this is the replay's own check
 if (tuned.rows.some((x) => x.escrow)) throw new Error('Lab-Tuned held an order the simulated day captured: the replay does not match the day');
-if (sleeper.captured >= tuned.captured) throw new Error(`Frozen v3 took $${sleeper.captured}, Lab-Tuned $${tuned.captured}`);
+if (book === 'frozen-v3' && sleeper.captured >= tuned.captured) throw new Error(`Frozen v3 took $${sleeper.captured}, Lab-Tuned $${tuned.captured}`);
 if ((sleeper.worstOverBound ?? 0) > 0) throw new Error(`exposure passed the bound by $${sleeper.worstOverBound}`);
-if (honest.captured !== honest.total) throw new Error(`the honest store received $${honest.captured} of $${honest.total}`);
+if (book === 'frozen-v3' && honest.captured !== honest.total) throw new Error(`the honest store received $${honest.captured} of $${honest.total}`);
 if (sleeper.rows.some((x) => x.escrow && (x as { provider?: { capture: string | null } }).provider?.capture)) throw new Error('a hold was captured');
 
 const out = {
@@ -145,7 +147,7 @@ const out = {
   arms: [tuned, sleeper, honest],
 };
 // a mock run prints its result, and only a sandbox run replaces the recorded receipt
-if (sandbox) writeFileSync(new URL('../packages/web/src/data/sleeper-checkout.json', import.meta.url), JSON.stringify(out, null, 2) + '\n');
-console.log(`\n${out.mode}: of $${tuned.total} sold after the turn, the sleeper keeps $${tuned.captured} under Lab-Tuned and $${sleeper.captured} under Frozen v3. The honest store receives $${honest.captured} of $${honest.total}.`);
+if (sandbox) writeFileSync(new URL(`../packages/web/src/data/${book === 'frozen-v3' ? 'sleeper-checkout' : `sleeper-checkout-${book.split('-')[1]}`}.json`, import.meta.url), JSON.stringify(out, null, 2) + '\n');
+console.log(`\n${out.mode}: of $${tuned.total} sold after the turn, the sleeper keeps $${tuned.captured} under Lab-Tuned and $${sleeper.captured} under ${bookName}. The honest store receives $${honest.captured} of $${honest.total}.`);
 await app.close();
 await mock?.close();

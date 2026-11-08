@@ -19,3 +19,5 @@ export * from './policy-patch';
 export * from './worth';
 export * from './history';
 export * from './authority-checkout';
+export * from './gate-fuzz';
+export * from './bound-order';

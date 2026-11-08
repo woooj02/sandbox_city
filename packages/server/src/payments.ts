@@ -86,7 +86,8 @@ export class PaymentJournal {
   private imports = new Map<string, ImportedRecord>();
   private fd: number;
 
-  constructor(readonly path: string) {
+  /** `tap` sees each line before it is written, with the open file. The fault explorer crashes from here. */
+  constructor(readonly path: string, private tap?: (line: string, fd: number) => void) {
     mkdirSync(dirname(path), { recursive: true });
     if (existsSync(path)) this.load();
     this.fd = openSync(path, 'a');
@@ -121,7 +122,7 @@ export class PaymentJournal {
   sawEvent(id: string) { return this.seenEvents.has(id); }
   imported(kind: ImportedRecord['kind'], id: string) { return this.imports.get(`${kind}:${id}`); }
 
-  private write(line: string) { writeSync(this.fd, line + '\n'); fsyncSync(this.fd); }
+  private write(line: string) { this.tap?.(line, this.fd); writeSync(this.fd, line + '\n'); fsyncSync(this.fd); }
 
   /** With `eventId`, the event and its effect are one line, so a crash leaves both or neither. */
   put(key: string, change: Partial<PayRecord> & { state: PayState }, eventId?: string): PayRecord {
@@ -204,32 +205,52 @@ export class PaymentWorker {
     return done;
   }
 
-  private unresolved(r: PayRecord, reason: string) { return this.journal.put(r.key, { state: 'unresolved', reason }); }
+  private unresolved(r: PayRecord, reason: string) { return this.move(r, { state: 'unresolved', reason }); }
+
+  /**
+   * A step decided from `r`, written only if nothing settled the payment meanwhile. A webhook can land while a call is
+   * in flight, and an answer to a question asked earlier must not overwrite what the journal has learned since.
+   */
+  private move(r: PayRecord, change: Partial<PayRecord> & { state: PayState }): PayRecord {
+    const now = this.journal.get(r.key)!;
+    return now !== r && RESTING.has(now.state) ? now : this.journal.put(r.key, change);
+  }
+
+  /** A read can lag. One older than what the journal already proves is no answer: ask again, and running out of tries ends in unresolved. */
+  private async read(r: PayRecord): Promise<OrderReadBack> {
+    const order = await this.api.readOrder(r.orderId!);
+    if (!order) throw new RailsError(503, 'READ_BACK_FAILED', false);
+    const behind = order.status === 'CREATED' || (r.authorizationId && !order.authorizationId) || (r.captureId && !order.captureId);
+    if (behind) throw new RailsError(503, 'READ_BEHIND_JOURNAL', false);
+    return order;
+  }
 
   private async advance(start: PayRecord): Promise<PayRecord> {
     let r = start;
     const tries = this.opts.attempts ?? 4;
     for (let attempt = 0; attempt < tries * 4; attempt++) {
+      r = this.journal.get(r.key) ?? r;
+      if (RESTING.has(r.state)) return r;
       try {
         switch (r.state) {
           case 'recorded': {
             const { orderId } = await this.api.createPending(r.input, `${r.key}-create`);
-            r = this.journal.put(r.key, { state: 'created', orderId });
+            r = this.move(r, { state: 'created', orderId });
             break;
           }
           case 'created': {
             const { status } = await this.api.confirmSource(r.orderId!, `${r.key}-confirm`);
-            r = this.journal.put(r.key, status === 'APPROVED' ? { state: 'approved' } : { state: 'declined', reason: `payment source ${status}` });
+            r = this.move(r, status === 'APPROVED' ? { state: 'approved' } : { state: 'declined', reason: `payment source ${status}` });
             break;
           }
           case 'approved': {
             // the last look before money moves: the order PayPal holds must be the order the gate allowed
-            const held = await this.api.readOrder(r.orderId!);
-            if (!held) throw new RailsError(503, 'READ_BACK_FAILED', false);
+            const held = await this.read(r);
             const differs = disagreement(held, r.input);
             if (differs) return this.unresolved(r, differs);
-            if (r.input.intent === 'AUTHORIZE') { r = this.journal.put(r.key, { state: 'authorizing' }); break; }
-            r = this.journal.put(r.key, { state: 'capturing' });
+            if (r.input.intent === 'AUTHORIZE') { r = this.move(r, { state: 'authorizing' }); break; }
+            r = this.move(r, { state: 'capturing' });
+            if (r.state !== 'capturing') break;
             this.opts.fault?.('before-capture');
             const res = await this.api.captureOrder(r.orderId!, `${r.key}-capture`);
             this.opts.fault?.('after-capture-response');
@@ -263,19 +284,18 @@ export class PaymentWorker {
   private afterCapture(r: PayRecord, res: { captureId?: string; status: string; amount?: number }): PayRecord {
     if (res.status === 'COMPLETED' && res.captureId) {
       if (res.amount != null && cents(res.amount) !== cents(r.input.amount)) return this.unresolved(r, `capture reads $${res.amount}, expected $${r.input.amount}`);
-      return this.journal.put(r.key, { state: 'captured', captureId: res.captureId });
+      return this.move(r, { state: 'captured', captureId: res.captureId });
     }
-    if (res.status === 'PENDING') return this.journal.put(r.key, { state: 'pending', captureId: res.captureId });
-    if (res.status === 'DECLINED' || res.status === 'FAILED') return this.journal.put(r.key, { state: 'declined', reason: `capture ${res.status}` });
+    if (res.status === 'PENDING') return this.move(r, { state: 'pending', captureId: res.captureId });
+    if (res.status === 'DECLINED' || res.status === 'FAILED') return this.move(r, { state: 'declined', reason: `capture ${res.status}` });
     return r; // stays in flight: the next pass reads the order back
   }
 
   /** We may or may not have captured. Ask PayPal about this order, by id, and believe only that. */
   private async resolveCapture(r: PayRecord): Promise<PayRecord> {
-    const order = await this.api.readOrder(r.orderId!);
-    if (!order) throw new RailsError(503, 'READ_BACK_FAILED', false);
+    const order = await this.read(r);
     if (order.captureId) return this.fromCapture(r, order);
-    if (order.status === 'APPROVED' && r.state === 'capturing') return this.journal.put(r.key, { state: 'approved' }); // the capture never landed; safe to send
+    if (order.status === 'APPROVED' && r.state === 'capturing') return this.move(r, { state: 'approved' }); // the capture never landed; safe to send
     return this.unresolved(r, `order is ${order.status} with no capture`);
   }
 
@@ -283,18 +303,17 @@ export class PaymentWorker {
     if (cents(order.amount) !== cents(r.input.amount)) return this.unresolved(r, `order reads back at $${order.amount}, expected $${r.input.amount}`);
     const recovered = r.state === 'pending' ? {} : { recovered: true };
     switch (order.captureStatus) {
-      case 'COMPLETED': return this.journal.put(r.key, { state: 'captured', captureId: order.captureId, ...recovered });
-      case 'PENDING': return r.state === 'pending' ? r : this.journal.put(r.key, { state: 'pending', captureId: order.captureId, ...recovered });
-      case 'DECLINED': case 'FAILED': return this.journal.put(r.key, { state: 'declined', captureId: order.captureId, reason: `capture ${order.captureStatus}` });
-      case 'REFUNDED': return this.journal.put(r.key, { state: 'refunded', captureId: order.captureId });
+      case 'COMPLETED': return this.move(r, { state: 'captured', captureId: order.captureId, ...recovered });
+      case 'PENDING': return r.state === 'pending' ? r : this.move(r, { state: 'pending', captureId: order.captureId, ...recovered });
+      case 'DECLINED': case 'FAILED': return this.move(r, { state: 'declined', captureId: order.captureId, reason: `capture ${order.captureStatus}` });
+      case 'REFUNDED': return this.move(r, { state: 'refunded', captureId: order.captureId });
       default: return this.unresolved(r, `capture ${order.captureId} is ${order.captureStatus ?? 'of unknown status'}`);
     }
   }
 
   /** The authorization may already exist. Read first, so a retry after a crash cannot make a second hold. */
   private async resolveAuthorization(r: PayRecord): Promise<PayRecord> {
-    const order = await this.api.readOrder(r.orderId!);
-    if (!order) throw new RailsError(503, 'READ_BACK_FAILED', false);
+    const order = await this.read(r);
     if (order.authorizationId) return this.fromAuthorization(r, order.authorizationId, order.authorizationStatus);
     if (order.status !== 'APPROVED') return this.unresolved(r, `order is ${order.status} with no authorization`);
     const a = await this.api.authorizeOrder!(r.orderId!, `${r.key}-authorize`);
@@ -302,16 +321,15 @@ export class PaymentWorker {
   }
 
   private fromAuthorization(r: PayRecord, authorizationId: string, status?: string) {
-    if (status === 'CREATED' || status === 'PENDING') return this.journal.put(r.key, { state: 'held', authorizationId });
-    if (status === 'DENIED') return this.journal.put(r.key, { state: 'declined', authorizationId, reason: 'authorization denied' });
+    if (status === 'CREATED' || status === 'PENDING') return this.move(r, { state: 'held', authorizationId });
+    if (status === 'DENIED') return this.move(r, { state: 'declined', authorizationId, reason: 'authorization denied' });
     return this.unresolved(r, `authorization ${authorizationId} is ${status ?? 'of unknown status'}`);
   }
 
   private async resolveRelease(r: PayRecord): Promise<PayRecord> {
-    const order = await this.api.readOrder(r.orderId!);
-    if (!order) throw new RailsError(503, 'READ_BACK_FAILED', false);
+    const order = await this.read(r);
     if (order.captureId) return this.fromCapture(r, order);
-    if (order.authorizationStatus === 'VOIDED') return this.journal.put(r.key, { state: 'voided' });
+    if (order.authorizationStatus === 'VOIDED') return this.move(r, { state: 'voided' });
     if (order.authorizationStatus !== 'CREATED' && order.authorizationStatus !== 'PENDING') return this.unresolved(r, `authorization is ${order.authorizationStatus} with no capture`);
     this.opts.fault?.('before-capture');
     const res = await this.api.captureAuthorization!(r.authorizationId!, `${r.key}-release`);
@@ -320,12 +338,11 @@ export class PaymentWorker {
   }
 
   private async resolveVoid(r: PayRecord): Promise<PayRecord> {
-    const order = await this.api.readOrder(r.orderId!);
-    if (!order) throw new RailsError(503, 'READ_BACK_FAILED', false);
-    if (order.authorizationStatus === 'VOIDED') return this.journal.put(r.key, { state: 'voided' });
+    const order = await this.read(r);
+    if (order.authorizationStatus === 'VOIDED') return this.move(r, { state: 'voided' });
     if (order.captureId) return this.unresolved(r, `asked to void, but capture ${order.captureId} exists`);
     await this.api.voidAuthorization!(r.authorizationId!, `${r.key}-void`);
-    return this.journal.put(r.key, { state: 'voided' });
+    return this.move(r, { state: 'voided' });
   }
 
   /**

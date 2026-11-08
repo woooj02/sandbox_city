@@ -67,6 +67,23 @@ npx tsx scripts/checkout-proof.ts
 
 Without keys they run on the local mock and print `contract-mock`. With `--sandbox` and `.env` keys they run on the PayPal sandbox and write a `paypal-sandbox` receipt. A mock run never replaces a receipt.
 
+## Every crash, up to a depth
+
+One SIGKILL proves one crash. `scripts/fault-explore.ts` proves more. Every journal write and PayPal call in the real worker is a choice point: crash before, crash after, tear the write, lose the answer, deliver a webhook there. It runs every combination of up to 4 faults, fewest first, across 9 payment flows, so the first failure found is a smallest one.
+
+- 1,797,160 schedules ran. None broke a promise: no double charge, no money the journal denies, no held order captured, no refund lost.
+- Every flow reached a final state, except an order changed at PayPal after the gate allowed it. All 22,996 of those stop as `unresolved` with nothing captured, which is the intended ending.
+- Without the journal, 2,892 of 16,105 schedules charged twice or more, up to 4 charges.
+- 9 seeded bugs went into the worker and journal to test the test. All 9 were caught within 2 faults.
+
+It found a real bug at 3 faults: `webhook@capture -> dashboard refund -> webhook@capture` left the journal saying captured while the ledger said refunded. A worker that had just written a result could overwrite a newer one a webhook had settled. Lagging reads also left about 2,200 schedules unresolved. The worker now re-reads the journal before each write, and treats a read that is behind the journal as a retry, not a difference.
+
+PayPal in this run is an in-process model, not PayPal. It proves the worker's logic against the failures the model can produce. The sandbox receipts above are the evidence about PayPal itself.
+
+```bash
+npx tsx scripts/fault-explore.ts --faults=4 --write   # about 25 minutes
+```
+
 ## Limits
 
 ### Live city

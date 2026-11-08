@@ -1,0 +1,271 @@
+{
+  "schema": "sandbox-city/fault-proof@1",
+  "maxFaults": 4,
+  "schedules": 1797160,
+  "violating": 0,
+  "unresolved": 22996,
+  "workloads": [
+    {
+      "workload": "pay",
+      "schedules": 132691,
+      "choicePoints": 39,
+      "maxFaults": 4,
+      "violating": 0,
+      "unresolved": 0,
+      "crashes": 220364,
+      "outcomes": {
+        "captured": 123982,
+        "declined": 8709
+      },
+      "reasons": {},
+      "ms": 71525
+    },
+    {
+      "workload": "pay, PayPal forgets request ids",
+      "schedules": 108041,
+      "choicePoints": 38,
+      "maxFaults": 4,
+      "violating": 0,
+      "unresolved": 0,
+      "crashes": 190583,
+      "outcomes": {
+        "captured": 108041
+      },
+      "reasons": {},
+      "ms": 69022
+    },
+    {
+      "workload": "pay with webhooks in any order",
+      "schedules": 109406,
+      "choicePoints": 31,
+      "maxFaults": 4,
+      "violating": 0,
+      "unresolved": 0,
+      "crashes": 196033,
+      "outcomes": {
+        "captured": 101545,
+        "declined": 7861
+      },
+      "reasons": {},
+      "ms": 69110
+    },
+    {
+      "workload": "pay, then refund mid-flight",
+      "schedules": 166685,
+      "choicePoints": 33,
+      "maxFaults": 4,
+      "violating": 0,
+      "unresolved": 0,
+      "crashes": 349746,
+      "outcomes": {
+        "refunded": 166685
+      },
+      "reasons": {},
+      "ms": 107047
+    },
+    {
+      "workload": "hold, then release",
+      "schedules": 392469,
+      "choicePoints": 30,
+      "maxFaults": 4,
+      "violating": 0,
+      "unresolved": 0,
+      "crashes": 609211,
+      "outcomes": {
+        "captured": 369034,
+        "declined": 23435
+      },
+      "reasons": {},
+      "ms": 228869
+    },
+    {
+      "workload": "hold, then void",
+      "schedules": 341318,
+      "choicePoints": 29,
+      "maxFaults": 4,
+      "violating": 0,
+      "unresolved": 0,
+      "crashes": 548355,
+      "outcomes": {
+        "voided": 341318
+      },
+      "reasons": {},
+      "ms": 238762
+    },
+    {
+      "workload": "hold, release and void race",
+      "schedules": 261777,
+      "choicePoints": 31,
+      "maxFaults": 4,
+      "violating": 0,
+      "unresolved": 0,
+      "crashes": 460309,
+      "outcomes": {
+        "captured": 261777
+      },
+      "reasons": {},
+      "ms": 148730
+    },
+    {
+      "workload": "hold, void and release race",
+      "schedules": 261777,
+      "choicePoints": 31,
+      "maxFaults": 4,
+      "violating": 0,
+      "unresolved": 0,
+      "crashes": 460309,
+      "outcomes": {
+        "voided": 261777
+      },
+      "reasons": {},
+      "ms": 139452
+    },
+    {
+      "workload": "order changed at PayPal",
+      "schedules": 22996,
+      "choicePoints": 15,
+      "maxFaults": 4,
+      "violating": 0,
+      "unresolved": 22996,
+      "crashes": 45606,
+      "outcomes": {
+        "unresolved": 22996
+      },
+      "reasons": {
+        "order reads back at $142.5, the gate allowed $42.5": 22996
+      },
+      "ms": 11690
+    }
+  ],
+  "mutants": [
+    {
+      "name": "a restart starts the payment over with a new order",
+      "workload": "pay, PayPal forgets request ids",
+      "caught": true,
+      "schedules": 27,
+      "faults": [
+        "journal:captured=crash-before-write"
+      ],
+      "violations": [
+        "charged twice: 2 captures for one key",
+        "journal says captured, the ledger has CAP-2 COMPLETED",
+        "after repeats: charged twice: 2 captures for one key",
+        "after repeats: journal says captured, the ledger has CAP-2 COMPLETED"
+      ]
+    },
+    {
+      "name": "a lost capture answer is treated as declined",
+      "workload": "pay",
+      "caught": true,
+      "schedules": 25,
+      "faults": [
+        "paypal:capture=landed-answer-lost"
+      ],
+      "violations": [
+        "money moved but the journal says declined",
+        "after repeats: money moved but the journal says declined"
+      ]
+    },
+    {
+      "name": "PENDING is counted as captured",
+      "workload": "pay",
+      "caught": true,
+      "schedules": 563,
+      "faults": [
+        "paypal:capture-outcome=PENDING",
+        "paypal:pending-fate=denied"
+      ],
+      "violations": [
+        "journal says captured, the ledger has no capture",
+        "after repeats: journal says captured, the ledger has no capture"
+      ]
+    },
+    {
+      "name": "the read-back before capture is skipped",
+      "workload": "order changed at PayPal",
+      "caught": true,
+      "schedules": 1,
+      "faults": [],
+      "violations": [
+        "captured an order that differs from the one the gate allowed",
+        "after repeats: captured an order that differs from the one the gate allowed"
+      ]
+    },
+    {
+      "name": "a void that failed is recorded as voided",
+      "workload": "hold, then void",
+      "caught": true,
+      "schedules": 41,
+      "faults": [
+        "paypal:void=never-arrived"
+      ],
+      "violations": [
+        "journal says voided, the ledger shows no void",
+        "after repeats: journal says voided, the ledger shows no void"
+      ]
+    },
+    {
+      "name": "a webhook is marked seen before its effect is written",
+      "workload": "pay, then refund mid-flight",
+      "caught": true,
+      "schedules": 36,
+      "faults": [
+        "journal:event=crash-after-write"
+      ],
+      "violations": [
+        "journal says captured, the ledger has CAP-2 REFUNDED",
+        "money came back but the journal says captured",
+        "after repeats: journal says captured, the ledger has CAP-2 REFUNDED",
+        "after repeats: money came back but the journal says captured"
+      ]
+    },
+    {
+      "name": "giving up reports success",
+      "workload": "order changed at PayPal",
+      "caught": true,
+      "schedules": 1,
+      "faults": [],
+      "violations": [
+        "a changed order ended captured, not unresolved",
+        "journal says captured, the ledger has no capture",
+        "after repeats: a changed order ended captured, not unresolved",
+        "after repeats: journal says captured, the ledger has no capture"
+      ]
+    },
+    {
+      "name": "a hold is reported released before PayPal answers",
+      "workload": "hold, then release",
+      "caught": true,
+      "schedules": 41,
+      "faults": [
+        "paypal:capture-hold=never-arrived"
+      ],
+      "violations": [
+        "journal says captured, the ledger has no capture",
+        "after repeats: journal says captured, the ledger has no capture"
+      ]
+    },
+    {
+      "name": "a torn journal tail is not cut off",
+      "workload": "pay, then refund mid-flight",
+      "caught": true,
+      "schedules": 35,
+      "faults": [
+        "journal:refunded=crash-torn-write"
+      ],
+      "violations": [
+        "journal says captured, the ledger has CAP-2 REFUNDED",
+        "money came back but the journal says captured"
+      ]
+    }
+  ],
+  "control": {
+    "schedules": 16105,
+    "doubled": 2892,
+    "worst": 4,
+    "first": [
+      "paypal:capture=landed-answer-lost"
+    ]
+  },
+  "provider": "in-process model of PayPal, not PayPal"
+}

@@ -39,7 +39,7 @@ export function TopBar() {
       )}
       {full && <ModelBadge />}
       <button className="rail-badge evidence" title="The failure, what stopping it costs, what still gets through, and the money across a crash (E)" onClick={() => useStore.setState({ showEvidence: true })}><i />EVIDENCE</button>
-      {full && <button className="rail-badge hijack" title="A real model talked into an attacker's order on the PayPal sandbox, and what the gate did (H)" onClick={() => useStore.setState({ showHijack: true })}><i />◆ THE HIJACK</button>}
+      {full && <button className="rail-badge hijack" title="A real model talked into an attacker's order on the PayPal sandbox, and what the gate did (H)" onClick={() => useStore.setState({ showHijack: true })}>◆ HIJACK</button>}
       <button className="rail-badge agent" title="Run a case that fooled a real model against your own agent" onClick={() => useStore.setState({ showAgent: true })}>TEST MY AGENT</button>
       <button className="rail-badge worth-badge" title="Price every rulebook with your own costs" onClick={() => useStore.setState({ showWorth: true })}>IS IT WORTH IT?</button>
       <div className="clockbox">

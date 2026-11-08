@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { policyId, PRESETS, type Policy } from '@sandbox-city/core';
 import { useStore } from '../store';
+import { waitingMetrics } from '../run-status';
 import { client } from '../sim/client';
 import { money } from './meta';
 import raw from '../data/evidence.json';
@@ -48,7 +49,8 @@ export function SimpleRules() {
 /** The first screen's right panel: three numbers and one sentence. */
 export function SimpleHud() {
   const m = useStore((s) => s.lanes[0]?.metrics);
-  if (!m) return <aside className="hud panel simple-hud"><h2 className="simple-h"><i>2</i>Read the result</h2><p className="simple-note">The city is starting…</p></aside>;
+  const ready = useStore((s) => !!s.lanes[0]?.world), running = useStore((s) => s.running);
+  if (!m) { const wait = waitingMetrics(ready, running); return <aside className="hud panel simple-hud"><h2 className="simple-h"><i>2</i>Read the result</h2><p className="simple-note" role="status"><b>{wait.title}</b> {wait.detail}</p></aside>; }
   const held = m.honest.heldDollarMinutes / Math.max(m.t, 60);
   const waiting = m.money.pending + m.money.unresolved > 0;
   const resolvedFraud = m.fraud.prevented + m.fraud.leaked;

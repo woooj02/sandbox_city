@@ -51,7 +51,8 @@ describe('a malformed command cannot take the server down', () => {
     ws.addEventListener('message', (e) => { const m = JSON.parse(String(e.data)); if (m.type === 'error') errors.push(m.message); });
     ws.send('{not json');
     for (const m of bad) ws.send(JSON.stringify(m));
-    await new Promise((r) => setTimeout(r, 400));
+    // wait for the answers, not for a guess at how long they take on a busy machine
+    for (let waited = 0; errors.length <= 15 && waited < 8000; waited += 50) await new Promise((r) => setTimeout(r, 50));
     expect(errors.length).toBeGreaterThan(15);
     ws.close();
 
@@ -61,7 +62,7 @@ describe('a malformed command cannot take the server down', () => {
     expect(await world).toBe(true);
     next.close();
     expect((await app.inject({ url: '/api/health' })).json().ok).toBe(true);
-  });
+  }, 15000);
 });
 
 describe('a capture is money only when PayPal says COMPLETED', () => {

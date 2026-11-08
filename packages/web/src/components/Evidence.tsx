@@ -1,3 +1,4 @@
+import { AgentLabProof, FaultProof, GateFuzzProof } from './EngineeringProof';
 import { Scope } from './Scope';
 import { prefersReducedMotion } from '../sim/motion';
 import { useMemo, useState } from 'react';
@@ -298,6 +299,12 @@ export function Evidence() {
         {ev.checkout ? <CheckoutProof c={ev.checkout} /> : <Missing what="the checkout proof" />}
         <h3 className="hj-h">THE LOST RESPONSE</h3>
         {ev.recovery ? <RecoveryProof r={ev.recovery} /> : <Missing what="the crash recovery proof" />}
+        <h3 className="hj-h" id="ev-agents">A REAL AGENT IN THE SHOP · <span>which defense saves an owner money, frozen before it ran</span></h3>
+        <AgentLabProof />
+        <h3 className="hj-h" id="ev-faults">EVERY CRASH WE COULD ENUMERATE · <span>not one lucky crash: all of them, up to a stated depth</span></h3>
+        <FaultProof />
+        <h3 className="hj-h" id="ev-fuzz">HOSTILE ORDERS · <span>the gate against a second, separate checker</span></h3>
+        <GateFuzzProof />
         <h3 className="hj-h" id="ev-regressions">TAKE THE FAILURE WITH YOU</h3>
         <Regressions />
         <div className="report-foot"><button className="btn" onClick={close}>CLOSE</button></div>

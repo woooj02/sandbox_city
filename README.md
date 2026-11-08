@@ -74,6 +74,8 @@ The bound was $83.96, so one order paid and the rest were held. The honest store
 
 The recorded receipts ran against the PayPal sandbox, so no real money moved, and each says `paypal-sandbox`. Without keys the same scripts run on a local mock, say so, and leave the receipts alone. Add `--sandbox` and keys to record your own. Details: [docs/RELIABILITY.md](docs/RELIABILITY.md).
 
+**With real agents.** Four local models shopped turn by turn in a sandboxed shop, 3,072 episodes under a [protocol frozen first](evidence/round-five-protocol.md). The rule picked the checkout gate: loss per attacked trip fell from $85.66 to $36.52, honest purchases held at 111 of 128, and no order past the owner's limits got through. Our careful prompt cut loss too, but it made models refuse good purchases. Details: [docs/EVALUATION.md](docs/EVALUATION.md).
+
 ## Test your agent in five minutes
 
 ```bash

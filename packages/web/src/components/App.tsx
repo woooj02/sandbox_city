@@ -1,6 +1,7 @@
 import { useShallow } from 'zustand/react/shallow';
 import { useEffect } from 'react';
 import { useStore } from '../store';
+import { pageShortcut } from '../shortcuts';
 import { client, policiesFromUrl } from '../sim/client';
 import { TopBar } from './TopBar';
 import { CityView } from './CityView';
@@ -37,12 +38,11 @@ export function App() {
     if (auto === '1') setTimeout(() => client.send({ cmd: 'play' }), 600);
     // H opens the hijack exhibit from anywhere outside a text field (not over the film: Esc leaves cinema first)
     const key = (e: KeyboardEvent) => {
-      if ((e.key === 'h' || e.key === 'H') && !e.metaKey && !e.ctrlKey && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement) && !useStore.getState().cinema.on)
-        useStore.setState((s) => ({ showHijack: !s.showHijack }));
-      if ((e.key === 'e' || e.key === 'E') && !e.metaKey && !e.ctrlKey && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement) && !useStore.getState().cinema.on)
-        useStore.setState((s) => ({ showEvidence: !s.showEvidence }));
-      if ((e.key === 'l' || e.key === 'L') && !e.metaKey && !e.ctrlKey && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement) && !useStore.getState().cinema.on)
-        useStore.setState((s) => ({ fullLab: !s.fullLab }));
+      if (!pageShortcut(e) || useStore.getState().cinema.on) return;
+      const k = e.key.toLowerCase();
+      if (k === 'h') useStore.setState((st) => ({ showHijack: !st.showHijack }));
+      if (k === 'e') useStore.setState((st) => ({ showEvidence: !st.showEvidence }));
+      if (k === 'l') useStore.setState((st) => ({ fullLab: !st.fullLab }));
     };
     const unsubscribe = useStore.subscribe((next, previous) => {
       const requested = next.showEvidence && !previous.showEvidence ? 'evidence' : next.showHijack && !previous.showHijack ? 'hijack' : next.showReport && !previous.showReport ? 'report' : next.tune.open && !previous.tune.open ? 'tune' : next.forge.open && !previous.forge.open ? 'forge' : null;

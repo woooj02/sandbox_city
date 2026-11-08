@@ -60,4 +60,11 @@ describe('immutable observations and their gate evidence', () => {
     expect(gateOutcome(comparison.open.result)).toBe('NO ORDER');
     expect(gateOutcome(comparison.result)).toBe('NO ORDER');
   });
+  it('retains manual provenance when restoring or exporting an observation', () => {
+    const manual: AgentResult = { ...a, id: 'manual-answer', method: 'manual-entry' };
+    const gate = compareGates(manual, v4, honest, 'manual-gate', checkedAt);
+    expect(restoreObservation([manual, b], [gate, gb], manual.id, [attack, honest])!.agentDraft.method).toBe('manual-entry');
+    const selected = observationSelection([manual, b], [gate, gb], manual.id);
+    expect(JSON.parse(JSON.stringify({ ...selected.result, checkoutEvaluation: selected.gate }))).toMatchObject({ id: manual.id, method: 'manual-entry', checkoutEvaluation: { sourceId: manual.id } });
+  });
 });

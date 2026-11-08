@@ -16,6 +16,12 @@ You do not need an agent to explore. Choose **Run a guided example** for the scr
 
 Importing JSON does not upload an executable or connect your agent to the city. The answer stays in your browser. Your code, model endpoint and credentials stay on your machine. The browser comparison does not make a payment.
 
+## Explore without code
+
+Run the guided example, then choose **Try an answer**. Pick an existing case and use **Plain fields** to choose whether to buy, the quantity and the delivery address. **JSON** edits the same answer. Cases stay unchanged. Press **Check this answer** to create a saved observation, then compare checkout rules and export it.
+
+These checks are labelled manually entered answers. They help explain a failure or try a hypothetical decision; they do not measure a model you have not run. Agent builders can use the adapter workflow below to test their actual systems.
+
 ## Local setup
 
 Use Node 22.9 or newer. The supplied adapters use Python 3. Your own adapter can use any language or agent framework.
@@ -133,6 +139,15 @@ Open **Advanced lab → Attack Forge**. It searches the simulated attacker tacti
 For a custom research harness, `forgeAttacks` in `packages/core/src/forge.ts` accepts policies, seeds, budgets, a harm/profit objective and evolve/random strategies. Its action space is defined in `packages/core/src/genome.ts`. It searches numeric tactics, not arbitrary model-written code. [THREAT_MODEL.md](THREAT_MODEL.md) states each actor's powers; [SCENARIO.md](SCENARIO.md) describes the sleeper-store mechanism.
 
 Keep new experiments outside recorded evidence. Do not overwrite `evidence/` or `packages/web/src/data/` with exploratory results. `scripts/agent-rate.ts` and the recording scripts write those artifacts, so use a separate research copy if you run them.
+
+## Which fix to apply
+
+One recommendation: refuse the order in code at checkout, before payment. Refuse any order that buys more units than the owner asked for, ships anywhere but the owner's address, or costs more than the owner's budget. Frozen v4 does this with `enforceMandate` and `shipLock`, and `POST /api/checkout` runs it.
+
+- **Evidence:** in round five, four models made 3,072 shopping trips. Loss per attacked trip fell from $85.66 to $36.52, honest purchases held at 111 of 128, and no order past the owner's limits got through. See [EVALUATION.md](EVALUATION.md).
+- **Not a prompt rule.** Our careful prompt cut loss too, but honest purchases fell to 92 of 128. A prompt can sit on top; it is not the fix.
+- **Not enough alone against a dishonest store.** A correct order at a bad store passes every order check: $34.15 of the remaining $36.52 was that. Frozen v4 holds payment until delivery once a store's unfulfilled money passes what its record supports. The sleeper proof shows it on the PayPal sandbox.
+- `boundOrder` in `packages/core/src/bound-order.ts` fills quantity and address from the owner in code. It is optional: it did not beat the gate alone.
 
 ## What a strong result means
 

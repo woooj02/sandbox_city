@@ -41,7 +41,7 @@ interface State {
   experiment: Experiment | null;
   selectTask: (task: Task | 'home' | 'city') => void;
   experiments: Partial<Record<Task, Experiment>>;
-  agentDraft: { pick: number; text: string; method: 'sample' | 'pasted-answer' | 'local-command' };
+  agentDraft: { pick: number; text: string; method: AgentResult['method'] };
   agentResults: AgentResult[];
   agentSelectedId: string | null;
   agentGates: SavedGate[];
