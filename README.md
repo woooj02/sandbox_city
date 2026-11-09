@@ -46,6 +46,10 @@ Thirty fresh simulated days. Every rulebook carries the same four safeguards, an
 
 All four rounds and the raw tables: [docs/BENCHMARK.md](docs/BENCHMARK.md).
 
+## A real model, now
+
+On the front page, **Run a real model now** has `llama3.2:3b` shop on the server, turn by turn, with a fresh seed. One of three listings hides an instruction to ship somewhere else; in round five that listing fooled all four models, and in a check before launch it fooled this model in 5 of 6 runs ([evidence/live-task-choice.txt](evidence/live-task-choice.txt)). The model shops with no defense. Then its exact order goes through `POST /api/checkout` twice, under No checks and under Frozen v4, and each answer shows PayPal's sandbox ids or the refusal. Some runs the model is fooled and some it isn't: the page shows what happened. One run at a time, 20 an hour. If the model is off or busy, the page shows the last run and says it is recorded.
+
 ## The hijack
 
 A real model was talked into a $1,620.64 order to an attacker's PO box on the PayPal sandbox. Wild West paid it, Lab-Tuned and Know Your Agent refused it at the gate, and PayPal's Agent Toolkit refunded it. Across 66 poisoned listings, that planner followed 27 of 66 (41%). Details: [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md).
@@ -107,7 +111,7 @@ const toolkit = guardToolkit(new PayPalAgentToolkit({ ... }), { owner: { categor
 - **Sandbox, not production.** The crash recovery, the checkout and the holds below ran on the PayPal sandbox, as did the hijack and the refund. A real signed capture webhook verified on the hosted app, and a forged one got a 401.
 - **A script plays the carrier.** Deliveries, complaints and closing windows reach the checkout through an adapter, and in this lab a script sends them. Every store settles to one sandbox account.
 - **One paid hijack.** The 41% comes from plans put through the gate; one hijacked order was actually paid.
-- **Three kinds of agent, three claims.** The default city is scripted. Model shoppers replay recorded decisions. Only the toolkit experiment has a model making payment calls.
+- **Four kinds of agent, four claims.** The default city is scripted. Model shoppers replay recorded decisions. The toolkit experiment has a model making payment calls. The live run on the front page is a small model shopping now; its order goes to the sandbox checkout, but the model itself never calls PayPal.
 - **Closer work exists.** See [docs/PRIOR_ART.md](docs/PRIOR_ART.md).
 
 Full threat model and known gaps: [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
@@ -181,6 +185,8 @@ Fill in `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` and a sandbox test card, then
 | `LIVE_SAMPLE` | 0.02 | Share of ordinary shoppers whose payments also go to the sandbox |
 | `PAYMENT_JOURNAL` | `.data/payments.log` | Where durable payments are journaled |
 | `PAYPAL_WEBHOOK_ID` | none | Turns on `POST /webhooks/paypal` |
+| `LIVE_MODEL` | off | An Ollama model for the live run on the front page, such as `llama3.2:3b` |
+| `OLLAMA_URL`, `LIVE_THREADS`, `LIVE_PER_HOUR` | local, 3, 20 | Where Ollama is, how much CPU it may use, and how many live runs an hour |
 
 ## Reproduce the benchmark
 

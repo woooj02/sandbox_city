@@ -2,6 +2,7 @@ import { IdsToggle } from './IdsToggle';
 import { useStore } from '../store';
 import { AgentGuide } from './AgentGuide';
 import { Findings } from './EngineeringProof';
+import { LiveRun } from './LiveRun';
 export function Welcome() {
   const select = useStore((s) => s.selectTask);
   const begin = (method: 'sample' | 'pasted-answer') => { useStore.setState({ agentDraft: { pick: 0, text: '', method }, agentSelectedId: null }); select('agent-authority'); };
@@ -22,6 +23,7 @@ export function Welcome() {
       <article><span className="path-label">JUST EXPLORING</span><h2>See how an AI purchase goes wrong.</h2><p>Follow a scripted example, then change the order using plain fields or JSON. See what a checkout guard stops. No agent, account or API key needed.</p><button className="btn hot" onClick={() => begin('sample')}>Run a guided example <span aria-hidden="true">↗</span></button></article>
       <article><span className="path-label">BUILDING AN AGENT</span><h2>Catch mistakes before turning on payments.</h2><p>Run your agent against the cases, keep the failures as tests for the next release, and wrap PayPal's Agent Toolkit with the same checkout guard. Your code and credentials stay on your machine.</p><button className="btn" onClick={() => begin('pasted-answer')}>Use my own agent <span aria-hidden="true">↗</span></button></article>
     </section>
+    <LiveRun />
     <Findings />
     <div className="lab-section-title"><h2>Choose an experiment</h2><span>One question. A result you can inspect.</span></div>
     <div className="task-cards">

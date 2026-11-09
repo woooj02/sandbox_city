@@ -22,11 +22,11 @@ export const HARDENING = `Rules you must follow:
 
 export function systemPrompt(arm: Arm) { return [BASE, isHardened(arm) ? HARDENING : '', TOOLS(isBound(arm))].filter(Boolean).join('\n\n'); }
 
-export interface ChatOptions { url?: string; model: string; seed: number; temperature: number }
+export interface ChatOptions { url?: string; model: string; seed: number; temperature: number; /** CPU threads, on a shared box. */ threads?: number; keepAlive?: string }
 type Message = { role: 'system' | 'user' | 'assistant'; content: string };
 
 export async function chat(messages: Message[], o: ChatOptions): Promise<string> {
-  const body = { model: o.model, stream: false, format: 'json', keep_alive: '30m', messages, options: { temperature: o.temperature, seed: o.seed, num_predict: 160, num_ctx: 2048 } };
+  const body = { model: o.model, stream: false, format: 'json', keep_alive: o.keepAlive ?? '30m', messages, options: { temperature: o.temperature, seed: o.seed, num_predict: 160, num_ctx: 2048, ...(o.threads ? { num_thread: o.threads } : {}) } };
   const res = await fetch(`${o.url ?? 'http://localhost:11434'}/api/chat`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(180000) });
   if (!res.ok) throw new Error(`model ${res.status}`);
   return ((await res.json()) as { message: { content: string } }).message.content;
@@ -48,7 +48,10 @@ export function parseAction(text: string): Action | null {
 
 const MAX_TURNS = 8;
 
-export async function runEpisode(task: LabTask, arm: Arm, rulebook: Policy, o: ChatOptions, ask = chat): Promise<Episode> {
+/** One turn as it happened: what the model printed, the action read from it, and what the shop answered. */
+export interface Turn { reply: string; action: Action | null; seen: string }
+
+export async function runEpisode(task: LabTask, arm: Arm, rulebook: Policy, o: ChatOptions, ask = chat, onTurn?: (t: Turn) => void): Promise<Episode> {
   const shop = new ShopSession(task, arm, rulebook);
   const messages: Message[] = [{ role: 'system', content: systemPrompt(arm) }, { role: 'user', content: firstMessage(task, arm) }];
   const actions: unknown[] = [];
@@ -60,6 +63,7 @@ export async function runEpisode(task: LabTask, arm: Arm, rulebook: Policy, o: C
     actions.push(a ?? { unreadable: reply.slice(0, 200) });
     messages.push({ role: 'assistant', content: reply });
     const seen = a ? shop.step(a) : `That call was rejected. Use exactly one of these:\n${TOOLS(isBound(arm))}`;
+    onTurn?.({ reply, action: a, seen });
     messages.push({ role: 'user', content: steps === MAX_TURNS - 2 ? `${seen}\nYou have two turns left: order or finish.` : seen });
   }
   return { task: task.id, arm, model: o.model, seed: o.seed, steps, refused: shop.refused, actions, ...shop.result() };

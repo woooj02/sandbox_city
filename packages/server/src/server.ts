@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { SimRunner, round2, type FromSim, type SimEvent, type ToSim } from '@sandbox-city/core';
 import { registerCheckout } from './checkout-api';
+import { registerLiveRun, type LiveOptions } from './live-run';
 import { SandboxRails, type CallLog } from './paypal';
 
 export interface ServerOptions {
@@ -23,6 +24,8 @@ export interface ServerOptions {
   journalPath?: string;
   /** Lets a caller report deliveries and complaints, which can release held money. Default: LAB_TOKEN. */
   labToken?: string;
+  /** Overrides for the live model run. */
+  live?: LiveOptions;
 }
 
 /** What the sim says moved on the sandbox lane, summed the same way the twin ledger is. */
@@ -60,6 +63,12 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
   const checkout = registerCheckout(app, {
     rails: makeRails, journalPath: opts.journalPath ?? process.env.PAYMENT_JOURNAL ?? '.data/payments.log', webhookId: process.env.PAYPAL_WEBHOOK_ID, labToken: opts.labToken ?? process.env.LAB_TOKEN,
     log: (m) => app.log.info(m),
+  });
+  // a real model shopping now: off unless LIVE_MODEL names an Ollama model
+  const journalPath = opts.journalPath ?? process.env.PAYMENT_JOURNAL ?? '.data/payments.log';
+  registerLiveRun(app, {
+    model: process.env.LIVE_MODEL || undefined, ollamaUrl: process.env.OLLAMA_URL ?? 'http://127.0.0.1:11434',
+    threads: Number(process.env.LIVE_THREADS ?? 3), perHour: Number(process.env.LIVE_PER_HOUR ?? 20), lastPath: `${journalPath}.live-last.json`, ...opts.live,
   });
   // whatever a previous process left open is finished before this one takes traffic
   app.addHook('onReady', async () => {

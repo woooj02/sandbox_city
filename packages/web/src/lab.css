@@ -257,3 +257,30 @@
 .lab-theme .hj-stat b { font: 650 26px var(--ui); text-shadow: none; }
 .lab-theme .hj-stat span { color: #c9d6e6; }
 .lab-theme .report :is(.hj-stat span, .hj-stat em, .hj-step, .hj-step *) { text-shadow: none; }
+
+/* a real model, live */
+.live-run { margin: 0 0 36px; padding: 24px; border: 1px solid #3d6f5f; border-radius: 8px; background: #0f1d1c; }
+.live-head { display: flex; gap: 24px; align-items: center; justify-content: space-between; }
+.live-head h2 { margin: 10px 0 8px; font-size: 21px; font-weight: 600; letter-spacing: -.025em; }
+.live-head p { margin: 0; max-width: 760px; color: #a9bfba; font-size: 14px; line-height: 1.6; }
+.live-head .btn { flex: none; display: flex; gap: 18px; align-items: center; }
+.live-off, .live-meta { color: #9fb2ca; font-size: 14px; }
+.live-meta { margin: 12px 0 0; }
+.live-job { margin-top: 18px; font-size: 14px; color: #d5e2ee; line-height: 1.55; }
+.live-job details summary { cursor: pointer; color: #a9c7e8; }
+.live-listing { white-space: pre-wrap; font: 13px var(--mono); color: #ffcf8a; background: #1d1810; border-left: 3px solid #d79a3c; padding: 10px 12px; }
+.live-owner span, .live-recorded { color: #8fa4bb; font-size: 13px; }
+.live-recorded { border-left: 3px solid #8fa4bb; padding-left: 10px; }
+.live-turns { margin: 12px 0; padding-left: 22px; font: 13px/1.7 var(--mono); color: #cfe0f0; }
+.live-thinking { color: #7fd6b8; }
+.live-outcome b { color: #fff; font-size: 15px; }
+.live-error { color: #ff9a9a; font-size: 14px; }
+.live-gates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.live-gate { padding: 14px 16px; border: 1px solid #2c3b50; border-radius: 6px; background: #101925; }
+.live-gate.allow { border-color: #8a3a4a; }
+.live-gate.refuse { border-color: #3d8f6f; }
+.live-gate > span { color: #9fb2ca; font-size: 13px; }
+.live-gate b { display: block; margin: 4px 0 6px; font-size: 18px; color: #fff; }
+.live-gate p { margin: 0; color: #c2d2e2; font-size: 13px; overflow-wrap: anywhere; }
+.live-gate code { font: 12px var(--mono); color: #a9c7e8; }
+@media (max-width: 760px) { .live-head { flex-direction: column; align-items: start; } .live-gates { grid-template-columns: minmax(0, 1fr); } }
