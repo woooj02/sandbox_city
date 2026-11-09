@@ -84,7 +84,7 @@ export function LiveRun() {
 
   const running = job?.status === 'running';
   const fallback = !job && status?.last && (!status.enabled || note) ? status.last : null;
-  return <section className="live-run" aria-label="A real model, live">
+  return <section className="live-run" id="live-run" aria-label="A real model, live">
     <div className="live-head">
       <div><span className="path-label">LIVE · REAL MODEL · PAYPAL SANDBOX</span>
         <h2>Watch a real model shop, now.</h2>

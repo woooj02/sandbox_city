@@ -19,11 +19,11 @@ export function Welcome() {
         <div className="preview-flow"><span>Proposed order</span><i>→</i><span>Checkout rules</span><i>→</i><span>Test report</span></div>
       </aside>
     </section>
+    <LiveRun />
     <section className="entry-paths" aria-label="Start testing">
       <article><span className="path-label">JUST EXPLORING</span><h2>See how an AI purchase goes wrong.</h2><p>Follow a scripted example, then change the order using plain fields or JSON. See what a checkout guard stops. No agent, account or API key needed.</p><button className="btn hot" onClick={() => begin('sample')}>Run a guided example <span aria-hidden="true">↗</span></button></article>
       <article><span className="path-label">BUILDING AN AGENT</span><h2>Catch mistakes before turning on payments.</h2><p>Run your agent against the cases, keep the failures as tests for the next release, and wrap PayPal's Agent Toolkit with the same checkout guard. Your code and credentials stay on your machine.</p><button className="btn" onClick={() => begin('pasted-answer')}>Use my own agent <span aria-hidden="true">↗</span></button></article>
     </section>
-    <LiveRun />
     <Findings />
     <div className="lab-section-title"><h2>Choose an experiment</h2><span>One question. A result you can inspect.</span></div>
     <div className="task-cards">

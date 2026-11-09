@@ -94,7 +94,7 @@ export function Worth() {
           </div>
 
         </div>
-        <Scope experiment={decision?.experiment ?? state.experiment} title={`${boxes ? 'Recorded empty-box days' : 'Recorded standard world'} · ${round.protocol.testDays} simulated days · identical safeguards · terminal outcomes`} />
+        <Scope experiment={decision?.experiment ?? state.experiment} title={`${round.protocol.testDays} recorded simulated days${boxes ? ' with empty-box stores' : ''} · the same safeguards in every rulebook · every order followed to the end`} />
                 <div className="worth-grid">
           <section className="worth-prices" aria-label="Your prices">
             <h3 className="simple-h"><i>1</i>Your prices</h3>

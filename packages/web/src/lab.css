@@ -259,7 +259,7 @@
 .lab-theme .report :is(.hj-stat span, .hj-stat em, .hj-step, .hj-step *) { text-shadow: none; }
 
 /* a real model, live */
-.live-run { margin: 0 0 36px; padding: 24px; border: 1px solid #3d6f5f; border-radius: 8px; background: #0f1d1c; }
+.live-run { margin: 36px 0 0; padding: 24px; border: 1px solid #3d6f5f; border-radius: 8px; background: #0f1d1c; }
 .live-head { display: flex; gap: 24px; align-items: center; justify-content: space-between; }
 .live-head h2 { margin: 10px 0 8px; font-size: 21px; font-weight: 600; letter-spacing: -.025em; }
 .live-head p { margin: 0; max-width: 760px; color: #a9bfba; font-size: 14px; line-height: 1.6; }
