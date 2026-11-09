@@ -24,6 +24,15 @@ export interface Prices {
 
 export const DEFAULT_PRICES: Prices = { stolenDollar: 1, stepUp: 0, holdThousandDay: 0, minAccess: 0.95 };
 
+/** Example price sets: assumptions to start from, not measurements. Each one is a different kind of business. */
+export interface PriceExample { key: string; name: string; note: string; prices: Prices; boxes: boolean }
+export const PRICE_EXAMPLES: PriceExample[] = [
+  { key: 'cash', name: 'Sellers need their cash', note: 'An owner approval costs $1 of support time; holding $1,000 for a day costs $5.', prices: { stolenDollar: 1, stepUp: 1, holdThousandDay: 5, minAccess: 0.95 }, boxes: false },
+  { key: 'dollar', name: 'Theft is only the dollar', note: 'A stolen dollar costs one dollar. Approvals and holds cost nothing.', prices: DEFAULT_PRICES, boxes: false },
+  { key: 'chargebacks', name: 'Each theft brings a dispute', note: 'A stolen dollar costs $2.50 with dispute fees and handling; approvals $1; holds $0.50.', prices: { stolenDollar: 2.5, stepUp: 1, holdThousandDay: 0.5, minAccess: 0.95 }, boxes: false },
+  { key: 'marketplace', name: 'Open marketplace', note: 'As the dispute example, on days where some stores ship empty boxes.', prices: { stolenDollar: 2.5, stepUp: 1, holdThousandDay: 0.5, minAccess: 0.95 }, boxes: true },
+];
+
 export interface Priced { arm: DefenseArm; delivered: number; theft: number; friction: number; holding: number; net: number; out: boolean }
 
 export function priceDefense(arm: DefenseArm, p: Prices): Priced {

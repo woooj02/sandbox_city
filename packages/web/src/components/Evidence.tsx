@@ -1,3 +1,5 @@
+import { NAME_KEY, plainName } from '../rulebook-names';
+import { labelBox, placeLabels } from '../chart-labels';
 import { AgentLabProof, FaultProof, GateFuzzProof } from './EngineeringProof';
 import { Scope } from './Scope';
 import { prefersReducedMotion } from '../sim/motion';
@@ -52,7 +54,7 @@ function Incident({ b }: { b: Bench }) {
     <ol className="hj-story">
       <li className="hj-step s-page"><div className="hj-n">01 · THE RECORD</div><h4>A store sells honestly</h4><p>It ships what it sells. A good record is what unlocks <b>instant capture</b>: money reaches the store when the buyer pays, not when the parcel moves.</p></li>
       <li className="hj-step s-plan"><div className="hj-n">02 · THE TURN</div><h4>Then it stops shipping</h4><p>It buys reach, discounts and bundles, and takes orders for goods that will never leave. It breaks no rule at the gate: every order is a normal order.</p></li>
-      <li className="hj-step s-gate"><div className="hj-n">03 · THE LOSS</div><h4>Buyers pay, the store is gone</h4><p>The rule it breaks: no store may hold more unfulfilled money than its delivered record supports. Under Lab-Tuned it takes <b>{money(tuned.sleeper.stolen.mean)}</b> a day and clears <b>{money(tuned.sleeper.profit.mean)}</b> after warm-up and ad costs.</p></li>
+      <li className="hj-step s-gate"><div className="hj-n">03 · THE LOSS</div><h4>Buyers pay, the store is gone</h4><p>The rule it breaks: no store may hold more unfulfilled money than its delivered record supports. Under the Auto-tuned rulebook it takes <b>{money(tuned.sleeper.stolen.mean)}</b> a day and clears <b>{money(tuned.sleeper.profit.mean)}</b> after warm-up and ad costs.</p></li>
       <li className="hj-step s-audit"><div className="hj-n">04 · THE BOUND</div><h4>Exposure is capped by record</h4><p>Past the bound, capture waits for proof of delivery. The frozen rulebook takes the attacker to <b>{money(fz.sleeper.stolen.mean)}</b> stolen and <b>{money(fz.sleeper.profit.mean)}</b> profit a day, over {b.protocol.testDays} simulated days. What profit remains is margin on goods it delivered.</p></li>
     </ol>
   );
@@ -71,6 +73,10 @@ function Frontier({ b }: { b: Bench }) {
   const columnX = Math.max(0, ...close.map((a) => x(a.stolen.mean))) + 70, columnTop = Math.min(H, ...close.map((a) => y(a.kept.mean))) - 12;
   const slot = new Map([...close].sort((p, q) => q.kept.mean - p.kept.mean || p.stolen.mean - q.stolen.mean).map((a, i) => [a.key, columnTop + i * 17]));
   const ticks = (m: number) => { const s = m > 60000 ? 20000 : 10000; return Array.from({ length: Math.floor(m / s) + 1 }, (_, i) => i * s); };
+  // the column is placed first; every other label takes the first clear spot around its point
+  const name = (a: ArmRow) => plainName(a.label ?? a.name);
+  const fixedBoxes = close.map((a) => labelBox({ x: columnX, y: slot.get(a.key)!, anchor: 'start' }, name(a)));
+  const free = placeLabels(b.arms.filter((a) => !slot.has(a.key)).sort((p, q) => q.kept.mean - p.kept.mean).map((a) => ({ key: a.key, x: x(a.stolen.mean), y: y(a.kept.mean), text: name(a) })), fixedBoxes, { l: L, r: W - 4, t: 0, b: H - B });
   return (
     <div className="ev-chart">
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Value kept against money stolen for each rulebook. The table below has the same numbers.">
@@ -79,7 +85,7 @@ function Frontier({ b }: { b: Bench }) {
         <text x={(L + W - R) / 2} y={H - 6} textAnchor="middle" className="ev-axis">stolen per day (less is better)</text>
         <text transform={`translate(13 ${(T + H - B) / 2}) rotate(-90)`} textAnchor="middle" className="ev-axis">value kept per day</text>
         {b.arms.map((a) => {
-          const mine = a.key === 'frozen', px = x(a.stolen.mean), py = y(a.kept.mean), left = px > W - 210;
+          const mine = a.key === 'frozen', px = x(a.stolen.mean), py = y(a.kept.mean), spot = free.get(a.key);
           return (
             <g key={a.key} onMouseEnter={() => setHover(a)} onMouseLeave={() => setHover(null)}>
               <line x1={x(a.stolen.lo)} x2={x(a.stolen.hi)} y1={py} y2={py} className="ev-whisker" />
@@ -87,13 +93,14 @@ function Frontier({ b }: { b: Bench }) {
               <circle cx={px} cy={py} r={mine ? 7 : 5} className={mine ? 'ev-dot mine' : 'ev-dot'} />
               <circle cx={px} cy={py} r={16} fill="transparent" />
               {slot.has(a.key)
-                ? <><line x1={px} y1={py} x2={columnX - 4} y2={slot.get(a.key)! - 4} className="ev-leader" /><text x={columnX} y={slot.get(a.key)} className={mine ? 'ev-label mine' : 'ev-label'}>{a.label ?? a.name}</text></>
-                : <text x={px + (left ? -11 : 11)} y={left ? py + 20 : py - 8} textAnchor={left ? 'end' : 'start'} className={mine ? 'ev-label mine' : 'ev-label'}>{a.label ?? a.name}</text>}
+                ? <><line x1={px} y1={py} x2={columnX - 4} y2={slot.get(a.key)! - 4} className="ev-leader" /><text x={columnX} y={slot.get(a.key)} className={mine ? 'ev-label mine' : 'ev-label'}>{name(a)}</text></>
+                : spot && <text x={spot.x} y={spot.y} textAnchor={spot.anchor} className={mine ? 'ev-label mine' : 'ev-label'}>{name(a)}</text>}
             </g>
           );
         })}
       </svg>
-      {hover && <div className="ev-tip"><b>{hover.label ?? hover.name}</b> kept {ci(hover.kept)} · stolen {ci(hover.stolen)} · honest access {(hover.access.mean * 100).toFixed(1)}%{hover.policyId && <> · policy <code>{hover.policyId}</code></>}</div>}
+      <p className="ev-namekey">Names in the docs and data: {NAME_KEY}.</p>
+      {hover && <div className="ev-tip"><b>{plainName(hover.label ?? hover.name)}</b> kept {ci(hover.kept)} · stolen {ci(hover.stolen)} · honest access {(hover.access.mean * 100).toFixed(1)}%{hover.policyId && <span className="prov"> · policy <code>{hover.policyId}</code></span>}</div>}
     </div>
   );
 }
@@ -106,23 +113,24 @@ function FairPick({ b }: { b: Bench }) {
   const stolen = (n: string) => money(box.find((a) => a.name === n)?.stolen.mean ?? 0);
   return (
     <>
-      <p className="ev-p"><b>The declared rule picks Frozen v4:</b> the most value among rulebooks that meet the bar, {money(v4.kept.mean - v3.kept.mean)} a day more than v3, holding {Math.round(100 * (1 - v4.heldDollarHours.mean / v3.heldDollarHours.mean))}% less honest money. <b>It is not the safest.</b> v3 stops {money(v4.stolen.mean - v3.stolen.mean)} a day more, and it is the only rulebook that stops empty boxes: {stolen('Frozen v3')} a day against {stolen('Frozen v4')}. Those stores are not on these days. Which to use depends on what these things cost you.</p>
+      <p className="ev-p"><b>The declared rule picks v4, the recommended rulebook:</b> the most value among rulebooks that meet the bar, {money(v4.kept.mean - v3.kept.mean)} a day more than v3, holding {Math.round(100 * (1 - v4.heldDollarHours.mean / v3.heldDollarHours.mean))}% less honest money. <b>It is not the safest.</b> v3 stops {money(v4.stolen.mean - v3.stolen.mean)} a day more, and it is the only rulebook that stops empty boxes: {stolen('Frozen v3')} a day against {stolen('Frozen v4')}. Those stores are not on these days. Which to use depends on what these things cost you.</p>
       <p className="ev-p"><button className="btn" onClick={() => useStore.setState({ showEvidence: false, showWorth: true })}>PRICE THEM WITH MY NUMBERS</button></p>
     </>
   );
 }
 
 function CostTable({ b }: { b: Bench }) {
+  const showIds = useStore((st) => st.showIds);
   const cols = useMemo<ColDef<ArmRow>[]>(() => [
-    { headerName: 'RULEBOOK', width: 220, pinned: 'left', valueGetter: (p) => p.data?.label ?? p.data?.name },
-    { field: 'policyId', headerName: 'POLICY HASH', width: 170 },
+    { headerName: 'RULEBOOK', width: 250, pinned: 'left', valueGetter: (p) => plainName(p.data?.label ?? p.data?.name ?? '') },
+    { field: 'policyId', headerName: 'POLICY HASH', width: 170, hide: !showIds },
     { headerName: 'VALUE KEPT', flex: 1, minWidth: 170, valueGetter: (p) => p.data?.kept.mean, valueFormatter: (p) => (p.data ? ci(p.data.kept) : '') },
     { headerName: 'STOLEN', flex: 1, minWidth: 160, valueGetter: (p) => p.data?.stolen.mean, valueFormatter: (p) => (p.data ? ci(p.data.stolen) : '') },
     { headerName: 'HONEST ACCESS', width: 118, valueGetter: (p) => p.data?.access.mean, valueFormatter: (p) => `${((p.value ?? 0) * 100).toFixed(1)}%` },
     { headerName: 'NEW STORES REFUSED', width: 142, valueGetter: (p) => (p.data ? p.data.cohorts.new_store.refused / Math.max(1, p.data.cohorts.new_store.attempts) : 0), valueFormatter: (p) => `${((p.value ?? 0) * 100).toFixed(1)}%` },
     { field: 'challengedPer100', headerName: 'STEP-UPS /100', width: 112 },
     { headerName: 'HELD $·HOURS', width: 112, valueGetter: (p) => p.data?.heldDollarHours.mean, valueFormatter: (p) => money(p.value ?? 0) },
-  ], []);
+  ], [showIds]);
   return <div className="hj-grid"><AgGridReact<ArmRow> theme={gridTheme} rowData={b.arms} columnDefs={cols} domLayout="autoHeight" getRowClass={(p) => (p.data?.key === 'frozen' ? 'ev-mine' : '')} defaultColDef={{ resizable: true, suppressMovable: true }} /></div>;
 }
 
@@ -147,10 +155,10 @@ function HeldOut({ first, second, third }: { first: Bench | null; second: Bench 
             <div className="ev-case-head"><b>{h.label}</b><span>{v}</span></div>
             <small>{repaired.has(h.label) ? 'beat the first rulebook, then became development data: not a blind result any more' : 'never tuned on and not repaired'}</small>
             <dl>
-              {before && <><dt>Frozen v1, blind</dt><dd>{money(before.stolen.mean)}</dd></>}
-              {repair && <><dt>Frozen v2</dt><dd>{money(repair.stolen.mean)}</dd></>}
+              {before && <><dt>First pick (v1), blind</dt><dd>{money(before.stolen.mean)}</dd></>}
+              {repair && <><dt>Second pick (v2)</dt><dd>{money(repair.stolen.mean)}</dd></>}
               <dt>No defense</dt><dd>{open ? money(open.stolen.mean) : '—'}</dd>
-              <dt>Frozen v3</dt><dd>{mine ? money(mine.stolen.mean) : '—'}</dd>
+              <dt>Strict hold (v3)</dt><dd>{mine ? money(mine.stolen.mean) : '—'}</dd>
             </dl>
           </div>
         );
@@ -181,13 +189,13 @@ function SleeperAtCheckout({ s }: { s: SleeperCheckout }) {
   const cents = (n: number) => `$${n.toFixed(2)}`;
   return (
     <>
-      <p className="ev-p"><span className="ev-tag">{RAIL[s.mode]}</span> The store's record and its orders come from simulated day <code>{s.seed}</code>: {cents(s.record.independent)} of independent credit, so a bound of {cents(s.bound)} under rulebook <code>{s.policy}</code>. Past the bound the checkout places a PayPal authorization, so no money moves. The evaluator sees the store's exposure grow with each order.</p>
+      <p className="ev-p"><span className="ev-tag">{RAIL[s.mode]}</span> The store's record and its orders come from one simulated day<span className="prov"> <code>{s.seed}</code></span>: {cents(s.record.independent)} of independent credit, so a bound of {cents(s.bound)} under this rulebook<span className="prov"> <code>{s.policy}</code></span>. Past the bound the checkout places a PayPal authorization, so no money moves. The evaluator sees the store's exposure grow with each order.</p>
       <div className="ev-held" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
         {s.arms.map((a) => {
           const held = a.rows.filter((r) => r.escrow).length, voided = a.rows.filter((r) => r.provider.authorization === 'VOIDED').length, released = a.rows.filter((r) => r.provider.authorization === 'CAPTURED').length;
           return (
             <div key={a.label} className={`ev-case ${a.captured < a.total || a.ships ? 'v-caught' : 'v-missed'}`}>
-              <div className="ev-case-head"><b>{a.label}</b></div>
+              <div className="ev-case-head"><b>{plainName(a.label)}</b></div>
               <small>{a.ships ? 'ships everything, nobody complains' : 'ships nothing, every buyer complains'}</small>
               <dl>
                 <dt>Sold</dt><dd>{cents(a.total)}</dd>
@@ -207,7 +215,7 @@ function SleeperAtCheckout({ s }: { s: SleeperCheckout }) {
 function CheckoutProof({ c }: { c: Checkout }) {
   return (
     <>
-      <p className="ev-p"><span className="ev-tag">{RAIL[c.mode]}</span> Every answer below names rulebook <code>{c.policy}</code>, the id the benchmark measured. The evaluator is one function, called by the simulation and by <code>POST /api/checkout</code>.</p>
+      <p className="ev-p"><span className="ev-tag">{RAIL[c.mode]}</span> Every answer below names the rulebook the benchmark measured<span className="prov"> (<code>{c.policy}</code>)</span>. The evaluator is one function, called by the simulation and by <code>POST /api/checkout</code>.</p>
       <div className="ev-rows">
         {c.rows.map((r) => (
           <div key={r.label} className={`ev-row ${r.payment ? 'paid' : 'stop'}`}>
@@ -268,12 +276,12 @@ export function Evidence() {
         <div className="report-head">
           <span className="glyph ev-glyph">EVD</span>
           <div>
-            <h2>THE EVIDENCE</h2>
+            <h2>The evidence</h2>
             <p>One failure, what stopping it costs, what still gets through, and what happens to the money when a process dies. Simulated days are simulation; each proof says what it ran against.</p>
           </div>
         </div>
         <Scope experiment={experiment} title="Evidence library · recorded runs with separate populations, policies and dates" />
-        {decision && <p className="worth-assumption">Kept decision: {decision.selected.label} · policy {decision.selected.policyHash} · experiment {decision.experiment?.id}. Receipts below retain their recorded policies; they are not executions of this decision unless their hashes match. Owner/order context must match too.</p>}
+        {decision && <p className="worth-assumption">Kept decision: {decision.selected.label}<span className="prov"> · policy {decision.selected.policyHash} · experiment {decision.experiment?.id}</span>. Receipts below retain their recorded policies; they are not executions of this decision unless their hashes match. Owner/order context must match too.</p>}
         <button className="btn" onClick={close}>Return to the same task and result</button>
         {!b ? <Missing what="the benchmark" /> : <>
           <nav className="ev-path" aria-label="The path through the evidence">
@@ -282,30 +290,30 @@ export function Evidence() {
             ))}
           </nav>
           <Incident b={b} />
-          <h3 className="hj-h" id="ev-cost">THE COST OF STOPPING IT · <span>{f!.protocol.testDays} fresh simulated days, the same safeguards on every rulebook, the rule for a winner written first</span></h3>
+          <h3 className="hj-h" id="ev-cost">The cost of stopping it · <span>{f!.protocol.testDays} fresh simulated days, the same safeguards on every rulebook, the rule for a winner written first</span></h3>
           <Frontier b={f!} />
           <CostTable b={f!} />
           <FairPick b={f!} />
-          <p className="ev-p">{f!.sensitivity ? (flips.length === f!.sensitivity.rows.length ? `On value kept, this rulebook did not come first under any of ${f!.sensitivity.rows.length} changed assumptions. Frozen v1 keeps more; v3 stops more.` : flips.length ? `The frozen rulebook lost first place under ${flips.length} of ${f!.sensitivity.rows.length} changed assumptions: ${flips.map((f) => f.label).join('; ')}.` : `The frozen rulebook kept first place under all ${f!.sensitivity.rows.length} changed assumptions.`) : ''} Fees, cost of goods and owner approval rates are stated assumptions, not measurements.</p>
-          <h3 className="hj-h" id="ev-missed">WHAT IT WAS NOT TUNED ON · <span>stolen per day. A miss is reported as a miss. Each round ran on its own days, so compare within a round, not across them</span></h3>
+          <p className="ev-p">{f!.sensitivity ? (flips.length === f!.sensitivity.rows.length ? `On value kept, this rulebook did not come first under any of ${f!.sensitivity.rows.length} changed assumptions. First pick (v1) keeps more; Strict hold (v3) stops more.` : flips.length ? `The frozen rulebook lost first place under ${flips.length} of ${f!.sensitivity.rows.length} changed assumptions: ${flips.map((f) => f.label).join('; ')}.` : `The frozen rulebook kept first place under all ${f!.sensitivity.rows.length} changed assumptions.`) : ''} Fees, cost of goods and owner approval rates are stated assumptions, not measurements.</p>
+          <h3 className="hj-h" id="ev-missed">What it was not tuned on · <span>stolen per day. A miss is reported as a miss. Each round ran on its own days, so compare within a round, not across them</span></h3>
           {ev.third ? <HeldOut first={ev.first} second={ev.second} third={ev.third} /> : <Missing what="the third frozen rulebook" />}
-          <h3 className="hj-h">AN ATTACKER THAT ADAPTS · <span>a search for the most profitable sleeper against the frozen rulebook</span></h3>
+          <h3 className="hj-h">An attacker that adapts · <span>a search for the most profitable sleeper against the frozen rulebook</span></h3>
           <Adaptive b={b} />
           {ev.defender && <Defender d={ev.defender} />}
         </>}
-        <h3 className="hj-h" id="ev-checkout">THE SAME FAILURE AT THE CHECKOUT · <span>orders PayPal really held, voided or captured</span></h3>
+        <h3 className="hj-h" id="ev-checkout">The same failure at the checkout · <span>orders PayPal really held, voided or captured</span></h3>
         {ev.sleeperCheckout ? <SleeperAtCheckout s={ev.sleeperCheckout} /> : <Missing what="the sleeper at the checkout" />}
-        <h3 className="hj-h">THE SAME RULEBOOK, ORDER BY ORDER</h3>
+        <h3 className="hj-h">The same rulebook, order by order</h3>
         {ev.checkout ? <CheckoutProof c={ev.checkout} /> : <Missing what="the checkout proof" />}
-        <h3 className="hj-h">THE LOST RESPONSE</h3>
+        <h3 className="hj-h">The lost response</h3>
         {ev.recovery ? <RecoveryProof r={ev.recovery} /> : <Missing what="the crash recovery proof" />}
-        <h3 className="hj-h" id="ev-agents">A REAL AGENT IN THE SHOP · <span>which defense saves an owner money, frozen before it ran</span></h3>
+        <h3 className="hj-h" id="ev-agents">A real agent in the shop · <span>which defense saves an owner money, frozen before it ran</span></h3>
         <AgentLabProof />
-        <h3 className="hj-h" id="ev-faults">EVERY CRASH WE COULD ENUMERATE · <span>not one lucky crash: all of them, up to a stated depth</span></h3>
+        <h3 className="hj-h" id="ev-faults">Every crash we could enumerate · <span>not one lucky crash: all of them, up to a stated depth</span></h3>
         <FaultProof />
-        <h3 className="hj-h" id="ev-fuzz">HOSTILE ORDERS · <span>the gate against a second, separate checker</span></h3>
+        <h3 className="hj-h" id="ev-fuzz">Hostile orders · <span>the gate against a second, separate checker</span></h3>
         <GateFuzzProof />
-        <h3 className="hj-h" id="ev-regressions">TAKE THE FAILURE WITH YOU</h3>
+        <h3 className="hj-h" id="ev-regressions">Take the failure with you</h3>
         <Regressions />
         <div className="report-foot"><button className="btn" onClick={close}>CLOSE</button></div>
       </div>

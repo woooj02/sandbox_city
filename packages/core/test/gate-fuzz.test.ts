@@ -39,6 +39,15 @@ describe('bypasses the fuzzer found, kept as cases', () => {
     ['items that are not a list', { items: 'all' as never, shippingAddress: owner }],
   ])('refuses %s', (_n, args) => expect(allowed(args)).toBe(false));
 
+  it.each(['quantity', 'itemCost', 'itemTotal', 'taxPercent'])('a %s that refuses to become text is refused, not thrown', (k) => {
+    expect(() => session().checkOrder(order(owner, { [k]: JSON.parse('{"toString":null}') }))).not.toThrow();
+    expect(allowed(order(owner, { [k]: JSON.parse('{"toString":null}') }))).toBe(false);
+  });
+
+  it.each(['shippingCost', 'discount', 'currencyCode'])('an order %s that refuses to become text is refused, not thrown', (k) => {
+    expect(allowed(order(owner, {}, { [k]: JSON.parse('{"toString":null}') }))).toBe(false);
+  });
+
   it('reads junk without throwing', () => {
     for (const junk of [null, 0, 'x', [], {}, [null], { items: [null] }, { items: [[]], shippingAddress: 7 }]) expect(() => session().checkOrder(junk as never)).not.toThrow();
   });

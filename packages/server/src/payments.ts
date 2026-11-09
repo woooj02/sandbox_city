@@ -35,6 +35,11 @@ const cents = (n?: number) => (n == null ? null : Math.round(n * 100));
 export interface DecisionContext {
   session: string; owner: string; rulebook: string; policy: string; evaluator: string;
   decision: string; escrow: boolean; merchant: string; agent: string; decidedAt: string;
+  /**
+   * Which order reader and which build decided. A policy hash names the rules; parsing can change under the same hash.
+   * Decisions recorded before these were kept have neither, and are reported as unknown, never filled in.
+   */
+  reader?: string; source?: string | null;
   /** The history the evaluator saw. */
   facts: { merchant: MerchantView; agent: AgentView };
 }

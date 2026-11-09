@@ -81,6 +81,19 @@ export function canonicalAddress(a: CheckoutAddress | null | undefined, scope: C
 /** Fields an order may carry as text; one that holds anything else is reported, because the gate reads it as absent. */
 const ADDRESS_FIELDS = ['address_line_1', 'address_line_2', 'admin_area_2', 'admin_area_1', 'postal_code', 'country_code'] as const;
 
+/**
+ * An untrusted value, safe to put in a message. It is never converted implicitly: valid JSON such as {"toString":null}
+ * throws when a template string tries, so an object is named by its kind, and text is quoted and cut short.
+ */
+export function show(v: unknown): string {
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (typeof v === 'string') return JSON.stringify(v.length > 40 ? `${v.slice(0, 40)}…` : v);
+  if (v === null) return 'null';
+  if (v === undefined) return 'missing';
+  return Array.isArray(v) ? 'a list' : 'an object';
+}
+const price = (v: unknown) => (typeof v === 'number' ? `$${v}` : show(v));
+
 /** What the order will really charge, in the order's own terms. Anything that does not add up is reported, not corrected. */
 export function checkoutOrder(args: CheckoutArgs, scope: CheckoutScope): GateOrder {
   const problems: string[] = [];
@@ -91,28 +104,28 @@ export function checkoutOrder(args: CheckoutArgs, scope: CheckoutScope): GateOrd
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) { problems.push('a line is not an item'); continue; }
     const l = raw as CheckoutLine;
     const q = l.quantity ?? 1, unit = l.itemCost ?? 0, tax = l.taxPercent ?? 0;
-    if (!Number.isSafeInteger(q) || q < 1) problems.push(`quantity ${q}`);
-    if (!wholeCents(unit) || (unit as number) <= 0) problems.push(`item cost ${unit}`);
-    if (typeof tax !== 'number' || !Number.isFinite(tax) || tax < 0) problems.push(`tax ${tax}`);
+    if (!Number.isSafeInteger(q) || q < 1) problems.push(`quantity ${show(q)}`);
+    if (!wholeCents(unit) || (unit as number) <= 0) problems.push(`item cost ${show(unit)}`);
+    if (typeof tax !== 'number' || !Number.isFinite(tax) || tax < 0) problems.push(`tax ${show(tax)}`);
     const count = Math.max(1, Math.round(finite(q)) || 1), line = cents(finite(unit)) * count;
-    if (l.itemTotal != null && (typeof l.itemTotal !== 'number' || cents(l.itemTotal) !== line)) problems.push(`line total $${l.itemTotal} is not ${q} x $${unit}`);
-    if (scope.listedUnit != null && cents(finite(unit)) !== cents(scope.listedUnit)) problems.push(`$${unit} is not the listed $${scope.listedUnit}`);
+    if (l.itemTotal != null && (typeof l.itemTotal !== 'number' || cents(l.itemTotal) !== line)) problems.push(`line total ${price(l.itemTotal)} is not ${show(q)} x ${price(unit)}`);
+    if (scope.listedUnit != null && cents(finite(unit)) !== cents(scope.listedUnit)) problems.push(`${price(unit)} is not the listed $${scope.listedUnit}`);
     qty += count;
     // count the larger of what was declared and what the lines say: a hidden charge must not lower the total the gate sees
     total += Math.max(line, cents(finite(l.itemTotal))) * (1 + Math.max(0, finite(tax)) / 100);
   }
   const shipping = args?.shippingCost ?? 0, discount = args?.discount ?? 0;
-  if (!wholeCents(shipping) || (shipping as number) < 0) problems.push(`shipping ${shipping}`);
-  if (!wholeCents(discount) || (discount as number) < 0) problems.push(`discount ${discount}`);
-  if (args?.currencyCode != null && args.currencyCode !== 'USD') problems.push(`currency ${args.currencyCode}`);
+  if (!wholeCents(shipping) || (shipping as number) < 0) problems.push(`shipping ${show(shipping)}`);
+  if (!wholeCents(discount) || (discount as number) < 0) problems.push(`discount ${show(discount)}`);
+  if (args?.currencyCode != null && args.currencyCode !== 'USD') problems.push(`currency ${show(args.currencyCode)}`);
   const address = args?.shippingAddress as unknown;
   if (address != null && (typeof address !== 'object' || Array.isArray(address))) problems.push('the address is not an address');
   else for (const k of new Set([...ADDRESS_FIELDS, ...Object.keys(address ?? {})])) {
     const v = (address as Record<string, unknown> | null | undefined)?.[k];
     // a field the gate does not read is refused too: it would be dropped here, and the next reader may not drop it
-    if (v != null && typeof v !== 'string') problems.push(`${k} is not text`);
+    if (v != null && typeof v !== 'string') problems.push(`${show(k)} is not text`);
     // "#" compares equal to nothing, and would still reach PayPal
-    else if (text(v) && !/[\p{L}\p{N}]/u.test(text(v))) problems.push(`${k} has no letters or digits`);
+    else if (text(v) && !/[\p{L}\p{N}]/u.test(text(v))) problems.push(`${show(k)} has no letters or digits`);
   }
   total += cents(Math.max(0, finite(shipping))) - cents(Math.max(0, finite(discount)));
   if (lines.length && Math.round(total) <= 0) problems.push('the order charges nothing');

@@ -806,6 +806,13 @@ button.rail-badge { background: transparent; cursor: pointer; }
 .worth-table tr.out { opacity: .6; }
 .worth-table small { font: 13px var(--ui); color: var(--am); }
 @media (max-width: 900px) { .worth-grid { grid-template-columns: minmax(0, 1fr); } }
+.worth-examples { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.worth-examples small { flex-basis: 100%; font-size: 14px; line-height: 1.35; color: #aab4dc; }
+.worth-examples button { padding: 6px 10px; font: 600 14px var(--ui); color: #dfe6ff; background: transparent; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+.worth-examples button:hover { border-color: var(--cy); }
+.worth-examples button.on { color: #03030a; background: var(--cy); border-color: var(--cy); }
+.worth-stats { margin: 10px 0; }
+.worth-stats summary { cursor: pointer; font-size: 15px; color: #a9b6ff; }
 .worth-check { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 10px; padding: 10px; border: 1px solid var(--line); cursor: pointer; }
 .worth-check input { width: 18px; height: 18px; margin-top: 2px; flex: none; accent-color: var(--cy); }
 .worth-check b { display: block; font-size: 15px; color: #fff; }
@@ -868,7 +875,8 @@ button.rail-badge { background: transparent; cursor: pointer; }
 .task-cards span { color: var(--cy); font: 12px var(--mono); }
 .task-cards h2 { font-size: 25px; line-height: 1.3; }
 .task-cards p, .task-panel p { line-height: 1.6; color: #b9c7df; }
-.task-nav { display: flex; flex-wrap: wrap; gap: 12px; width: min(1240px,100%); margin: 20px auto 0; padding: 0 24px; }
+.task-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; width: min(1240px,100%); margin: 20px auto 0; padding: 0 24px; }
+.task-nav .simple-link { align-self: center; padding: 9px 12px; line-height: inherit; }
 .task-panel, .task-panel.agent-test { width: 100%; min-width: 0; }
 .task-panel h1 { font-size: clamp(28px,3vw,40px); line-height: 1.2; margin: 0 0 22px; }
 .task-panel h2 { margin: 26px 0 12px; }
@@ -916,3 +924,7 @@ button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px soli
 .ev-lab td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,.06); font-variant-numeric: tabular-nums; }
 .ev-lab tr.pick td { color: #fff; background: rgba(60,220,170,.08); }
 .ev-lab tr.pick td:last-child { color: var(--gr); font-weight: 700; }
+
+/* one switch for every hash, UUID, seed and run id (IdsToggle) */
+body:not(.show-ids) .prov { display: none !important; }
+.ev-namekey { margin: 6px 0 0; font-size: 12px; color: var(--dim); }

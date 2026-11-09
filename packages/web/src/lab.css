@@ -231,3 +231,29 @@
 
 .lab-theme .fix-evidence { margin-top: 12px; padding: 12px 14px; border-left: 2px solid #6cbaa6; background: #111f24; }
 .lab-theme .fix-evidence p { margin: 6px 0; }
+
+.lab-theme .findings { margin: 34px 0 6px; }
+.lab-theme .findings-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.lab-theme .findings-cards button { text-align: left; border: 1px solid #2c3f55; border-radius: 7px; background: #101b28; color: #b0c0d3; padding: 18px; cursor: pointer; display: flex; flex-direction: column; gap: 8px; font: inherit; }
+.lab-theme .findings-cards button:hover, .lab-theme .findings-cards button:focus-visible { border-color: #6cbaa6; background: #111f24; }
+.lab-theme .findings-cards span { font-size: 11px; letter-spacing: .06em; color: #90a8c2; }
+.lab-theme .findings-cards b { font-size: 22px; color: #e0eaf6; font-weight: 650; }
+.lab-theme .findings-cards p { margin: 0; font-size: 13.5px; line-height: 1.5; }
+.lab-theme .findings-cards i { font-style: normal; color: #9cdbc7; font-size: 13px; margin-top: auto; }
+.lab-theme .measured-result { margin: 16px 0 4px; padding: 12px 14px; border-left: 2px solid #6cbaa6; background: #111f24; font-size: 14px; line-height: 1.55; }
+@media (max-width: 760px) { .lab-theme .findings-cards { grid-template-columns: minmax(0, 1fr); } }
+
+/* The evidence and hijack pages in the same style as the task pages: sentence-case headings, quiet cards, no glow. */
+.lab-theme .report-head .glyph { display: none; }
+.lab-theme .report-head h2 { letter-spacing: -.02em; font-weight: 650; }
+.lab-theme .hj-h { font: 650 17px/1.35 var(--ui); letter-spacing: -.005em; color: #e7effa; margin: 30px 0 12px; }
+.lab-theme .hj-h span { font: 400 13.5px/1.5 var(--ui); letter-spacing: 0; color: #9fb2ca; }
+.lab-theme .hj-n { font: 600 11px var(--ui); letter-spacing: .06em; color: #90a8c2; }
+.lab-theme :is(.hj-step, .hj-stat) { background: #101b28; border-color: #2c3f55; border-radius: 7px; }
+.lab-theme .hj-step:is(.s-page, .s-plan, .s-gate, .s-audit) { box-shadow: none; }
+.lab-theme .hj-step:not(:last-child)::after { color: #4d627a; }
+.lab-theme .hj-step p { color: #b0c0d3; }
+.lab-theme .hj-stat { box-shadow: inset 2px 0 0 var(--k); }
+.lab-theme .hj-stat b { font: 650 26px var(--ui); text-shadow: none; }
+.lab-theme .hj-stat span { color: #c9d6e6; }
+.lab-theme .report :is(.hj-stat span, .hj-stat em, .hj-step, .hj-step *) { text-shadow: none; }

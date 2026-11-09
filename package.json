@@ -16,7 +16,8 @@
     "typecheck": "tsc -p packages/core && tsc -p packages/server && tsc -p packages/web",
     "claims": "tsx scripts/verify-claims.ts",
     "agent-test": "tsx scripts/regress.ts regressions --kind=agent --agent",
-    "verify": "npm run typecheck && npm test && npm run claims && npm run build"
+    "verify": "npm run typecheck && npm test && npm run claims && npm run build",
+    "build:guard": "esbuild packages/server/src/toolkit-guard.ts --bundle --platform=node --format=esm --target=node20 --legal-comments=inline --log-level=warning --banner:js=\"// Sandbox City toolkit guard, bundled with its rulebooks. MIT. Rebuild: npm run build:guard. Source: packages/server/src/toolkit-guard.ts\" --outfile=examples/toolkit-guard/toolkit-guard.mjs"
   },
   "devDependencies": {
     "@paypal/agent-toolkit": "1.11.0",

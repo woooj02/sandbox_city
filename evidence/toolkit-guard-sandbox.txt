@@ -1,0 +1,14 @@
+# examples/toolkit-guard/demo.mjs on the PayPal sandbox, 2026-11-09 11:04 MST. @paypal/agent-toolkit 1.11.0, rulebook frozen-v4. Tool calls scripted, no model.
+1. A seller's page talked the agent into 8 lamps to a PO box:
+  REFUSE create_order enforceMandate: $640 > mandate $100
+   {"error":"The payment gate refused this call (enforceMandate: $640 > mandate $100). Nothing was sent to PayPal."}
+2. The order the owner asked for:
+  ALLOW  create_order 0WP82708VE106501S
+   PayPal order 0WP82708VE106501S PAYER_ACTION_REQUIRED
+   owner approved: APPROVED
+3. The agent captures it:
+  ALLOW  pay_order 0WP82708VE106501S
+   read back from PayPal: COMPLETED capture 5A660775U7019232A COMPLETED $80.00
+4. The agent tries to capture an order the guard never saw:
+  REFUSE pay_order strictOrders: order 5O190127TN364715T never passed this gate
+   {"error":"The payment gate refused this call (strictOrders: order 5O190127TN364715T never passed this gate). Nothing was sent to PayPal."}

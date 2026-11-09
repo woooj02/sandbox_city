@@ -1,3 +1,4 @@
+import { plainName } from '../rulebook-names';
 import { useMemo } from 'react';
 import { describePolicy, type Policy, type TunePoint } from '@sandbox-city/core';
 import { AgGridReact } from 'ag-grid-react';
@@ -143,7 +144,7 @@ export function AutoTune() {
                   <div><b className="gr">{pct(b.mean.access)}</b><span>honest get through</span></div>
                 </div>
                 <div className="tune-rules">
-                  <h4>{isPreset ? `BEST SO FAR: ${b.policy.name.toUpperCase()}` : 'BEST RULEBOOK SO FAR'}</h4>
+                  <h4>{isPreset ? `BEST SO FAR: ${plainName(b.policy.name).toUpperCase()}` : 'BEST RULEBOOK SO FAR'}</h4>
                   <ul>{describePolicy(b.policy).map((r) => <li key={r}>{r}</li>)}</ul>
                 </div>
               </>

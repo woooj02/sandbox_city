@@ -1,5 +1,6 @@
+import { plainName } from '../rulebook-names';
 import { useMemo, useState } from 'react';
-import { DEFAULT_PRICES, nextWinner, policyId, rankDefenses, type DefenseArm, type Policy, type PriceKnob, type Prices } from '@sandbox-city/core';
+import { nextWinner, PRICE_EXAMPLES, policyId, rankDefenses, type DefenseArm, type Policy, type PriceKnob, type Prices } from '@sandbox-city/core';
 import { useStore } from '../store';
 import { client } from '../sim/client';
 import { prefersReducedMotion } from '../sim/motion';
@@ -18,7 +19,7 @@ const arms: PricedArm[] = (round?.arms ?? []).map((a) => ({
 
 const KNOBS: { key: PriceKnob; label: string; help: string; min: number; max: number; step: number; show: (n: number) => string; flip: (n: string, more: boolean) => string }[] = [
   { key: 'stolenDollar', label: 'One stolen dollar costs you', help: '$1 is the dollar alone. More counts fees, disputes and lost trust.', min: 1, max: 5, step: 0.05, show: (n) => `$${n.toFixed(2)}`, flip: (n, more) => `a stolen dollar costs you ${more ? 'more' : 'less'} than ${n}` },
-  { key: 'stepUp', label: 'One step-up costs you', help: 'Support time, and owners who give up when asked to approve.', min: 0, max: 5, step: 0.05, show: (n) => `$${n.toFixed(2)}`, flip: (n, more) => `a step-up costs you ${more ? 'more' : 'less'} than ${n}` },
+  { key: 'stepUp', label: 'Asking the owner to approve costs you', help: 'Each order sent to the owner for approval: support time, and owners who give up.', min: 0, max: 5, step: 0.05, show: (n) => `$${n.toFixed(2)}`, flip: (n, more) => `an owner approval costs you ${more ? 'more' : 'less'} than ${n}` },
   { key: 'holdThousandDay', label: 'Holding $1,000 for a day costs you', help: "A store's cash waiting on a hold. Think of what that money would earn, or what the store would pay to get it sooner.", min: 0, max: 20, step: 0.1, show: (n) => `$${n.toFixed(2)}`, flip: (n, more) => `holding $1,000 for a day costs you ${more ? 'more' : 'less'} than ${n}` },
 ];
 
@@ -63,10 +64,10 @@ export function Worth() {
   const qualified = ranked.filter((r) => !r.out);
   const flips = KNOBS.flatMap((k) => {
     const flip = nextWinner(ranked, k.key, p, k.min);
-    return flip ? [{ text: `${arms.find((a) => a.key === flip.arm.key)?.label ?? flip.arm.name} wins if ${k.flip(k.show(flip.price), flip.price > p[k.key])}.`, withinRange: flip.price <= k.max }] : [];
+    return flip ? [{ text: `${plainName(arms.find((a) => a.key === flip.arm.key)?.label ?? flip.arm.name)} wins if ${k.flip(k.show(flip.price), flip.price > p[k.key])}.`, withinRange: flip.price <= k.max }] : [];
   });
   const chosen = qualified.length ? arms.find((a) => a.key === top.arm.key) : undefined;
-  const reason = chosen ? `${chosen.label} meets your ${(p.minAccess * 100).toFixed(2)}% honest-access floor and has the highest value after your priced costs among ${qualified.length} qualifying rulebooks: ${money(top.net)} per simulated day.` : '';
+  const reason = chosen ? `${plainName(chosen.label)} meets your ${(p.minAccess * 100).toFixed(2)}% honest-access floor and has the highest value after your priced costs among ${qualified.length} qualifying rulebooks: ${money(top.net)} per simulated day.` : '';
   const decision = chosen ? {
     schema: 'sandbox-city/decision@1',
     experiment: { ...state.experiment!, task: 'policy-cost' as const, phase: 'complete' as const, source: 'recorded-benchmark' as const, paymentMode: 'simulated' as const, scenario: { id: boxes ? 'empty-box' : 'standard', version: 'benchmark-v4' }, candidatePolicyHash: chosen.policyId, prices: { ...p } },
@@ -89,15 +90,19 @@ export function Worth() {
           <span className="glyph ev-glyph">$</span>
           <div>
             <h1>Which payment defense is worth using?</h1>
-            <p>Every defense costs something. These are {round.protocol.testDays} simulated days, the same for every rulebook, and all of them carry the same four safeguards. The results are measured here. The prices are yours, and they decide the answer.</p>
+            <p>Every defense stops some theft and costs something: honest sales refused, owners asked to approve, sellers' money held. We measured those on {round.protocol.testDays} simulated days. You set what each costs your business, and the answer changes with it.</p>
           </div>
 
         </div>
         <Scope experiment={decision?.experiment ?? state.experiment} title={`${boxes ? 'Recorded empty-box days' : 'Recorded standard world'} · ${round.protocol.testDays} simulated days · identical safeguards · terminal outcomes`} />
-        <p><b>Reprice recorded results.</b> Prices change the arithmetic instantly; they do not rerun agents or the benchmark.</p>
-        <div className="worth-grid">
+                <div className="worth-grid">
           <section className="worth-prices" aria-label="Your prices">
             <h3 className="simple-h"><i>1</i>Your prices</h3>
+            <div className="worth-examples" role="group" aria-label="Example businesses">
+              <small>Start from an example business (example prices, not measurements):</small>
+              {PRICE_EXAMPLES.map((e) => { const on = e.boxes === boxes && (Object.keys(e.prices) as (keyof Prices)[]).every((k) => e.prices[k] === p[k]); return <button key={e.key} className={on ? 'on' : ''} aria-pressed={on} title={e.note} onClick={() => useStore.setState({ costDraft: { prices: { ...e.prices }, boxes: e.boxes } })}>{e.name}</button>; })}
+              {PRICE_EXAMPLES.filter((e) => e.boxes === boxes && (Object.keys(e.prices) as (keyof Prices)[]).every((k) => e.prices[k] === p[k])).map((e) => <small key={e.key}>{e.note}</small>)}
+            </div>
             {KNOBS.map((k) => (
               <div key={k.key} className="worth-knob">
                 <span>{k.label} <b>{k.show(p[k.key])}</b></span>
@@ -120,7 +125,7 @@ export function Worth() {
               <input type="checkbox" checked={boxes} onChange={(e) => setBoxes(e.target.checked)} />
               <span><b>Stores on my platform could ship empty boxes</b><small>The standard days do not include this attack. Tick it to use the days that do.</small></span>
             </label>
-            <button className="simple-link" onClick={() => { useStore.setState({ costDraft: { prices: DEFAULT_PRICES, boxes: false } }); }}>Reset my prices</button>
+            <button className="simple-link" onClick={() => { useStore.setState({ costDraft: { prices: { ...PRICE_EXAMPLES[0].prices }, boxes: PRICE_EXAMPLES[0].boxes } }); }}>Reset my prices</button>
           </section>
           <section aria-label="Your answer">
             <h3 className="simple-h"><i>2</i>Your answer</h3>
@@ -128,26 +133,28 @@ export function Worth() {
             {chosen ? (
               <div className="worth-answer">
                 <label>At your prices, use</label>
-                <b>{chosen.key === 'frozen_v3' ? 'Wait through the complaint window' : chosen.key === 'frozen' ? 'Release earlier with an exposure limit' : chosen.label}</b><span>{chosen.label}</span>
-                <code>Policy {chosen.policyId}</code>
+                <b>{chosen.key === 'frozen_v3' ? 'Wait through the complaint window' : chosen.key === 'frozen' ? 'Release earlier with an exposure limit' : chosen.label}</b><span>{plainName(chosen.label)}</span>
+                <code className="prov">Policy {chosen.policyId}</code>
                 <span>{money(top.net)} a day after the costs you priced</span>
               </div>
             ) : <div className="worth-answer"><label>No rulebook here accepts that many honest purchases.</label><span>Lower the floor to compare them.</span></div>}
-            {chosen && <p>Honest purchases accepted: {(top.arm.access * 100).toFixed(2)}% · held capital: {top.arm.heldDollarHours.toLocaleString('en-US')} dollar-hours/day.</p>}
-            {!boxes && <p>v4 leads v3 by about $443/day at principal-only theft cost (paired 95% interval $233–$647). v3 stops about $878/day more theft. These intervals describe the recorded default comparison, not arbitrary repriced objectives.</p>}
-            {!boxes && <p className="worth-assumption">Held-out failure: empty-box sellers took $2,953/day under v4 and $48 under v3. Standard days omit this attack. Tick empty boxes under Your prices to price the days that include it.</p>}
-            {chosen && <p className="cost-equation">{money(top.delivered)} delivered and paid − {money(top.theft)} theft − {money(top.friction)} step-ups − {money(top.holding)} holding = {money(top.net)} / day</p>}
+            {chosen && <p>Accepts {(top.arm.access * 100).toFixed(1)}% of honest purchases. Sellers' money waiting on holds: about {money(top.arm.heldDollarHours / 24)} at any moment.</p>}
+                        {!boxes && <p className="worth-assumption">Watch out: where stores can ship empty boxes, they took $2,953 a day under v4 and $48 under v3. These days have none. Tick empty boxes to price days that do.</p>}
+            {chosen && <p className="cost-equation">{money(top.delivered)} delivered and paid − {money(top.theft)} theft − {money(top.friction)} approvals − {money(top.holding)} holding = {money(top.net)} a day</p>}
             {flips.some((f) => f.withinRange) ? <ul className="worth-flips" aria-label="Switches within the slider ranges">{flips.filter((f) => f.withinRange).map((f) => <li key={f.text}>{f.text}</li>)}</ul> : chosen && <p>No winner switch falls within the displayed slider ranges at these prices.</p>}
             {flips.some((f) => !f.withinRange) && <details><summary>Advanced: thresholds outside the slider ranges</summary><p>These extend the same linear pricing equation beyond the displayed controls. They are not new measured conditions or a forecast.</p><ul>{flips.filter((f) => !f.withinRange).map((f) => <li key={f.text}>{f.text}</li>)}</ul></details>}
-            {chosen && <p className="at-p">{reason}</p>}
-            <p className="at-p">Delivered value less theft, step-up and holding costs at your prices. Left out: {LEFT_OUT}</p>
+            <details className="worth-stats"><summary>How sure is this?</summary>
+              {chosen && <p className="at-p">{reason}</p>}
+              <p className="at-p">Worth a day is honest sales delivered and kept paid, less theft, approvals and holding at your prices. Left out: {LEFT_OUT}</p>
+              <p className="at-p">Measured gap, with a dollar of theft costing a dollar: v4 keeps about $443 a day more than v3 (95% interval $233 to $647, same days for both). v3 stops about $878 a day more theft. The intervals are for that comparison only; your prices only change the arithmetic, they do not rerun anything.</p>
+            </details>
             <div className="worth-table" role="region" aria-label="Every rulebook, priced" tabIndex={0}>
               <table>
-                <thead><tr><th>Rulebook</th><th>Delivered</th><th>Theft</th><th>Step-ups</th><th>Holding</th><th>Worth / day</th></tr></thead>
+                <thead><tr><th>Rulebook</th><th>Delivered</th><th>Theft</th><th>Approvals</th><th>Holding</th><th>Worth a day</th></tr></thead>
                 <tbody>
                   {ranked.map((r, i) => (
                     <tr key={r.arm.key} className={r.out ? 'out' : i === 0 ? 'top' : ''}>
-                      <th>{arms.find((a) => a.key === r.arm.key)?.label ?? r.arm.name}<code className="policy-hash">{arms.find((a) => a.key === r.arm.key)?.policyId}</code>{r.out && <small> {(r.arm.access * 100).toFixed(1)}% accepted</small>}</th>
+                      <th>{plainName(arms.find((a) => a.key === r.arm.key)?.label ?? r.arm.name)}<code className="policy-hash prov">{arms.find((a) => a.key === r.arm.key)?.policyId}</code>{r.out && <small> {(r.arm.access * 100).toFixed(1)}% accepted</small>}</th>
                       <td>{money(r.delivered)}</td><td>-{money(r.theft)}</td><td>-{money(r.friction)}</td><td>-{money(r.holding)}</td><td><b>{r.out ? 'out' : money(r.net)}</b></td>
                     </tr>
                   ))}
@@ -165,7 +172,7 @@ export function Worth() {
           <button className="btn" onClick={evidence}>SEE A RULEBOOK AT THE CHECKOUT</button>
         </div>
         <p className="scope-banner">Exploring carries over the policy only. The new default city has a different population and seed; it does not replay these benchmark days or create empty-box sellers. Your decision stays pinned beside it. The new city starts paused.</p>
-        {state.savedDecision && <p>Kept decision: {state.savedDecision.selected.label} · {state.savedDecision.experiment?.id} · {state.savedDecision.scenario.key}. Export or keep again to replace this saved snapshot.</p>}
+        {state.savedDecision && <p>Kept decision: {state.savedDecision.selected.label}<span className="prov"> · {state.savedDecision.experiment?.id}</span> · {state.savedDecision.scenario.key}. Export or keep again to replace this saved snapshot.</p>}
         <p className="at-p">Simulated days, and prices you chose: this ranks these rulebooks in this world. It does not predict your fraud rate. The rulebook is the JSON the gate reads. {chosen && AT_CHECKOUT[chosen.key] ? <>At the checkout, ask for <code>"rulebook": "{AT_CHECKOUT[chosen.key]}"</code>. </> : null}<code>docs/CHECKOUT.md</code> shows the call.</p>
         {chosen && <>
           <h4>Use these rules at your local checkout</h4>

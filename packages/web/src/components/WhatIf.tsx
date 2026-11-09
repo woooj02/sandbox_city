@@ -1,3 +1,4 @@
+import { plainName } from '../rulebook-names';
 import { useMemo } from 'react';
 import type { DaySummary } from '@sandbox-city/core';
 import { AgGridReact } from 'ag-grid-react';
@@ -27,10 +28,10 @@ function verdict(me: DaySummary, alts: DaySummary[]): string {
   const safest = [...alts].sort((a, b) => a.stolen - b.stolen)[0];
   const lost = (x: DaySummary) => x.stolen + x.duplicate;
   if (best.net > me.net) {
-    return `Switching to ${best.name} would have kept ${money(best.net - me.net)} more accepted GMV less losses: ${money(Math.max(0, lost(me) - lost(best)))} less lost to fraud and double charges, ${best.honestLost > me.honestLost ? `at the cost of ${money(best.honestLost - me.honestLost)} more honest sales turned away` : `and ${money(me.honestLost - best.honestLost)} fewer honest sales turned away`}.`;
+    return `Switching to ${plainName(best.name)} would have kept ${money(best.net - me.net)} more accepted GMV less losses: ${money(Math.max(0, lost(me) - lost(best)))} less lost to fraud and double charges, ${best.honestLost > me.honestLost ? `at the cost of ${money(best.honestLost - me.honestLost)} more honest sales turned away` : `and ${money(me.honestLost - best.honestLost)} fewer honest sales turned away`}.`;
   }
   if (safest.stolen < me.stolen) {
-    return `No preset beats your rules on accepted GMV less losses. ${safest.name} would have stopped ${money(me.stolen - safest.stolen)} more fraud, but turned away ${money(Math.max(0, safest.honestLost - me.honestLost))} more honest sales.`;
+    return `No preset beats your rules on accepted GMV less losses. ${plainName(safest.name)} would have stopped ${money(me.stolen - safest.stolen)} more fraud, but turned away ${money(Math.max(0, safest.honestLost - me.honestLost))} more honest sales.`;
   }
   return 'Your rules beat every preset on this day, on both fraud stopped and accepted GMV less losses.';
 }
@@ -70,7 +71,7 @@ export function WhatIf() {
   if (!w) return null;
   if (w === 'pending') return <div className="whatif"><div className="whatif-head"><b>WHAT IF</b><em>/replay</em><span>replaying this exact day under every other rulebook…</span></div><div className="whatif-loading"><i /></div></div>;
   const me = w.mine[0];
-  const rows = [...w.mine.map((m, i) => ({ ...m, mine: true, label: w.mine.length > 1 ? `${LANE_NAMES[i]} · ${m.name}` : `${m.name} (yours)` })), ...[...w.alternatives].sort((a, b) => b.net - a.net).map((a) => ({ ...a, mine: false, label: a.name }))];
+  const rows = [...w.mine.map((m, i) => ({ ...m, mine: true, label: w.mine.length > 1 ? `${LANE_NAMES[i]} · ${plainName(m.name)}` : `${plainName(m.name)} (yours)` })), ...[...w.alternatives].sort((a, b) => b.net - a.net).map((a) => ({ ...a, mine: false, label: a.name }))];
   const bestNet = Math.max(...rows.map((r) => r.net));
   const data: WRow[] = rows.map((r) => ({ ...r, best: r.net === bestNet, delta: r.key === me.key ? null : r.net - me.net }));
   const ctx = { stolen: Math.max(...data.map((r) => r.stolen)), duplicate: Math.max(...data.map((r) => r.duplicate)), honestLost: Math.max(...data.map((r) => r.honestLost)), net: Math.max(...data.map((r) => r.net)) };

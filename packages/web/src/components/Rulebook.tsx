@@ -1,3 +1,4 @@
+import { plainName } from '../rulebook-names';
 import { useState } from 'react';
 import { Policy, PRESETS, RULES } from '@sandbox-city/core';
 import { useStore } from '../store';
@@ -29,12 +30,12 @@ export function Rulebook() {
       <div className="panel-title"><span>RULEBOOK</span><em>/gate/rules</em><button className="rm-open" title="Compare and edit every rule against every preset" onClick={() => setMatrix(true)}>⊞ MATRIX</button></div>
       {multi && (
         <div className="seg lanes">
-          {policies.map((p, i) => <button key={i} className={`${lane === i ? 'on' : ''} lane-${i}`} onClick={() => setEdit(i)}>{LANE_NAMES[i]} · {(draft ?? policies)[i].name}</button>)}
+          {policies.map((p, i) => <button key={i} className={`${lane === i ? 'on' : ''} lane-${i}`} onClick={() => setEdit(i)}>{LANE_NAMES[i]} · {plainName((draft ?? policies)[i].name)}</button>)}
         </div>
       )}
       <div className="presets">
         {Object.entries(PRESETS).map(([k, p]) => (
-          <button key={k} className={`chip ${cur.name.replace('*', '') === p.name ? 'on' : ''}`} onClick={() => update({ ...p, name: p.name })}>{p.name}</button>
+          <button key={k} className={`chip ${cur.name.replace('*', '') === p.name ? 'on' : ''}`} onClick={() => update({ ...p, name: p.name })}>{plainName(p.name)}</button>
         ))}
       </div>
       <div className="rules">

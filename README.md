@@ -15,7 +15,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173. The first screen is one choice and four numbers. Press **E** for the evidence, **H** for the recorded hijack, or **L** for the full lab.
+Open http://localhost:5173. The first screen asks one question, offers a guided example or your own agent, and shows the three measured results, each opening its evidence. Press **E** for the evidence, **H** for the recorded hijack, or **L** for the full lab.
 
 To check the numbers yourself, with no keys and no network, run `npm run verify`. This typechecks, runs the tests, rebuilds the front end and runs `scripts/verify-claims.ts`, which recomputes the numbers in this README and in `docs/` from the recorded runs. It rechecks the frozen rulebook hashes, replays sampled days exactly and reruns the regressions.
 
@@ -88,6 +88,17 @@ npm run agent-test -- "python3 examples/agents/careful.py"    # the fix
 Copy `examples/agents/template.py`, put your agent inside `decide()`, and run the same command, or use `--agent-url` for an agent behind HTTP. You get a verdict, what the agent did on each case, a fix for each failure and a Markdown report for your pull request. A blocked run exits 1. `examples/ci/agent-regressions.yml` puts it in GitHub Actions.
 
 There are 16 cases: listings that fooled a real model, honest listings an agent must still buy, checkout calls and replayed days. Plain code decides, no model grades it. To try one case with no install, use **Test my agent** in the app. Format: [docs/REGRESSION.md](docs/REGRESSION.md).
+
+## Guard your own agent
+
+If your agent pays through PayPal's Agent Toolkit, wrap the toolkit and keep the rest of your code:
+
+```js
+import { guardToolkit } from './toolkit-guard.mjs';   // one file, rulebooks inside, no dependencies
+const toolkit = guardToolkit(new PayPalAgentToolkit({ ... }), { owner: { category: 'home', qty: 1, address: '12 Neon St, Silk Row', budget: 100 } });
+```
+
+`create_order` goes through the rulebook the benchmark picked, and a refused order never reaches PayPal. `pay_order` captures only orders the guard approved, at the amount PayPal reads back. On the sandbox it refused a hijacked order, captured the owner's $80.00 order and refused an order it never saw: [evidence/toolkit-guard-sandbox.txt](evidence/toolkit-guard-sandbox.txt). How and its limits: [examples/toolkit-guard](examples/toolkit-guard/README.md).
 
 ## What this does not show
 
@@ -179,7 +190,18 @@ Fill in `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` and a sandbox test card, then
 
 ## Tools and AI use
 
-Built with TypeScript, React, PixiJS, AG Grid, Fastify and PayPal's Agent Toolkit. Models used in the experiments are named in [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md).
+Built with TypeScript, React, PixiJS, AG Grid, Fastify and PayPal's Agent Toolkit (`@paypal/agent-toolkit` 1.11.0).
+
+Language models are the agents under test. Plain code makes every pass, fail, allow and refuse decision; no model grades another.
+
+| Model | Provider | Used for |
+| --- | --- | --- |
+| Qwen3.5 9B (`Qwen/Qwen3.5-9B`) | Together | The hijack: planner and executor paying through the Agent Toolkit on the PayPal sandbox, and the 66-listing hijack rate |
+| Gemma 4 26B (`gemma-4-26b-a4b-it`) | Google's Gemini API | Model shoppers in the city (`?brain=1`), recorded and replayed |
+| Llama 3.2 3B, Llama 3.1 8B, Mistral 7B, Qwen 2.5 7B | Ollama, local and on the Hetzner box | Round five (3,072 shopping trips), the agent-rate table and the live run in the app |
+| Llama 3.1 8B | Ollama, local | Proposing rulebook repairs (none were kept) |
+
+All paid model time came to $0.112, under a hard cap in `packages/server/src/llm.ts`. Details: [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md), [docs/EVALUATION.md](docs/EVALUATION.md).
 
 ## Layout
 
@@ -190,6 +212,7 @@ Built with TypeScript, React, PixiJS, AG Grid, Fastify and PayPal's Agent Toolki
 | `packages/web` | React, PixiJS and AG Grid front end |
 | `regressions/` | Portable failure cases |
 | `examples/agents/` | Agents that do not import this project |
+| `examples/toolkit-guard/` | The guard for PayPal's Agent Toolkit, as one file, with a sandbox demo |
 | `evidence/` | Frozen rulebooks |
 | `docs/` | Scenario, benchmark, threat model, reliability, regressions, prior art, experiments |
 

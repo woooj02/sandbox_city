@@ -1,3 +1,4 @@
+import { plainName } from '../rulebook-names';
 import { useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AgGridReact } from 'ag-grid-react';
@@ -32,7 +33,7 @@ export function RuleMatrix({ policy, onChange, onApply, onClose, dirty }: {
   const cols = useMemo<ColDef<Row>[]>(() => [
     { field: 'label', headerName: 'RULE', pinned: 'left', width: 250, tooltipField: 'blurb', cellClass: 'rm-label' },
     {
-      field: 'yours', headerName: `YOURS · ${policy.name}`, width: 150, editable: true, singleClickEdit: true, cellDataType: false,
+      field: 'yours', headerName: `YOURS · ${plainName(policy.name)}`, width: 150, editable: true, singleClickEdit: true, cellDataType: false,
       cellRenderer: Cell, cellClass: 'rm-yours', headerClass: 'rm-yours-h',
       cellEditorSelector: (p) => p.data?.kind === 'bool'
         ? { component: 'agSelectCellEditor', params: { values: [true, false] } }
@@ -48,7 +49,7 @@ export function RuleMatrix({ policy, onChange, onApply, onClose, dirty }: {
       },
     },
     ...Object.entries(PRESETS).map(([k, p]): ColDef<Row> => ({
-      field: k, headerName: p.name.toUpperCase(), width: 128, cellRenderer: Cell,
+      field: k, headerName: plainName(p.name).toUpperCase(), width: 128, cellRenderer: Cell,
       cellClassRules: { 'rm-diff': (c: CellClassParams<Row>) => !!c.data && c.value !== c.data.yours },
     })),
   ], [policy.name]);

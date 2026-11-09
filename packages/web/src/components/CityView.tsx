@@ -1,3 +1,4 @@
+import { plainName } from '../rulebook-names';
 import { useEffect, useRef } from 'react';
 import { CityRenderer } from '../city/CityRenderer';
 import { director } from '../sim/director';
@@ -35,7 +36,7 @@ function Lane({ lane }: { lane: number }) {
       <div ref={host} className="lane-canvas" />
       {multi && (
         <div className={`lane-tag lane-${lane}`}>
-          <b>{LANE_NAMES[lane]}</b><span>{policy?.name}</span>
+          <b>{LANE_NAMES[lane]}</b><span>{policy && plainName(policy.name)}</span>
         </div>
       )}
       {sale && <div className="sale-banner">FLASH SALE · ALL AGENTS BUYING</div>}

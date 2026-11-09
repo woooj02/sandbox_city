@@ -20,7 +20,7 @@ import { fuzzGate } from '../packages/core/src/gate-fuzz.ts';
 import { analyse } from '../packages/server/src/agent-lab/report.ts';
 import { breakdown } from './agent-lab-breakdown.ts';
 import { ARMS, type Episode } from '../packages/server/src/agent-lab/shop.ts';
-import { BASELINES, breakEven, checkDayCase, checkGateCase, DEFAULT_CONFIG, DEFAULT_PRICES, DEV_WORLD, INVARIANT_FLOOR, type DefenseArm, INJECTIONS, policyId, PRESETS, runDay, World, type BrainCase, type BrainChoice, type DayRegression, type GateRegression, type Policy, type Regression } from '@sandbox-city/core';
+import { BASELINES, breakEven, checkDayCase, checkGateCase, DEFAULT_CONFIG, DEFAULT_PRICES, DEV_WORLD, INVARIANT_FLOOR, PRICE_EXAMPLES, rankDefenses, type DefenseArm, INJECTIONS, policyId, PRESETS, runDay, World, type BrainCase, type BrainChoice, type DayRegression, type GateRegression, type Policy, type Regression } from '@sandbox-city/core';
 import { adaptiveRows, armRows, heldRows, type Ci } from './benchmark-tables.ts';
 import { gatePlan, goesElsewhere, probePlans } from '../packages/server/src/toolkit-shop.ts';
 import rate from '../packages/web/src/data/hijack-rate.json' with { type: 'json' };
@@ -180,6 +180,9 @@ const scenarioNet = (name: string) => { const s = box.find((a: { name: string })
 claim('round four', 'priced in full on the empty-box days', [whole(scenarioNet('Frozen v3')), whole(scenarioNet('Frozen v4'))], ['$98,677', '$96,171'], 'v3 is worth $98,677 a day and v4 $96,171');
 const priced = (k: string): DefenseArm => { const a = four(k); return { key: k, name: a.name, fulfilled: a.fulfilled.mean, stolen: a.stolen.mean, access: a.exact.access, heldDollarHours: a.heldDollarHours.mean, stepUps: (a.challengedPer100 / 100) * a.ordersPerDay }; };
 claim('round four', 'where v3 passes v4', `$${breakEven(priced('frozen'), priced('frozen_v3'), 'stolenDollar', DEFAULT_PRICES)!.toFixed(2)}`, '$1.50', 'more than $1.50');
+const boxPriced = (k: string): DefenseArm => { const a = priced(k); const s = box.find((b: { name: string }) => b.name === four(k).name)?.scenario; return s ? { ...a, ...s } : a; };
+const exampleArms = (boxes: boolean) => fourth.arms.filter((a: { key: string; name: string }) => !boxes || box.some((b: { name: string; scenario?: unknown }) => b.name === a.name && b.scenario)).map((a: { key: string }) => (boxes ? boxPriced : priced)(a.key));
+claim('round four', 'the example prices pick different rulebooks', PRICE_EXAMPLES.map((e) => rankDefenses(exampleArms(e.boxes), e.prices)[0].arm.key), ['frozen', 'frozen', 'frozen_v3', 'frozen_v3']);
 const steps = fourth.arms.filter((a: { key: string }) => a.key !== 'fortress').map((a: { challengedPer100: number }) => a.challengedPer100);
 claim('round four', 'step-ups barely differ with the same safeguards', [Math.min(...steps), Math.max(...steps)], [17.2, 18.1], 'between 17.2 and 18.1');
 claim('round four', 'who led under changed assumptions', ['frozen', 'frozen_v3'].map((k) => fourth.sensitivity.rows.filter((r: { ranking: string[] }) => r.ranking[0] === k).length), [11, 1], 'v4 came first under 11');

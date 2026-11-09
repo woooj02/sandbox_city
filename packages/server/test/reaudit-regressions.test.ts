@@ -209,3 +209,63 @@ describe('a webhook and its effect are one durable write', () => {
     expect(new PaymentJournal(path).sawEvent('OLD')).toBe(true);
   });
 });
+
+describe('a value that refuses to become text gets a refusal, not a 500', () => {
+  // found by an outside review: {"toString":null} is valid JSON, and a template string throws on it
+  const poison = () => JSON.parse('{"toString":null}');
+  const body = () => ({
+    key: 'poison-1', rulebook: 'frozen-v4', listedUnit: 202.58,
+    owner: { category: 'electronics', qty: 1, address: '679 Willow Row, Data Docks', budget: 304 },
+    args: { currencyCode: 'USD', shippingCost: 0, discount: 0, items: [{ name: 'Velvet Earbuds', quantity: 1, itemCost: 202.58, itemTotal: 202.58, taxPercent: 0 }], shippingAddress: { address_line_1: '679 Willow Row, Data Docks', admin_area_1: 'CA', postal_code: '94107', country_code: 'US' } },
+  });
+  const leaves = (o: unknown, path: string[] = []): string[][] => (o && typeof o === 'object' ? Object.entries(o).flatMap(([k, v]) => [[...path, k], ...leaves(v, [...path, k])]) : []);
+  const set = (o: Record<string, unknown>, path: string[], v: unknown) => { let x = o; for (const k of path.slice(0, -1)) x = x[k] as Record<string, unknown>; x[path.at(-1)!] = v; };
+
+  it('every field of the request, one at a time', async () => {
+    const app = await buildServer({ rails: () => null, journalPath: join(dir(), 'payments.log') });
+    const paths = leaves(body());
+    expect(paths.length).toBeGreaterThan(20);
+    for (const [i, path] of paths.entries()) {
+      const b = body() as unknown as Record<string, unknown>;
+      set(b, path, poison());
+      (b as { key: string }).key = `poison-${i}`;
+      const res = await app.inject({ method: 'POST', url: '/api/checkout', payload: b });
+      expect(res.statusCode, path.join('.')).toBeLessThan(500);
+    }
+    await app.close();
+  });
+
+  it('names the field and never reaches PayPal', async () => {
+    const app = await buildServer({ rails: () => null, journalPath: join(dir(), 'payments.log') });
+    const b = body();
+    (b.args.items[0] as Record<string, unknown>).quantity = poison();
+    const r = (await app.inject({ method: 'POST', url: '/api/checkout', payload: b })).json();
+    expect(r.ok).toBe(false);
+    expect(r.payment ?? null).toBeNull();
+    expect(JSON.stringify(r)).toContain('quantity an object');
+    await app.close();
+  });
+});
+
+describe('a decision records which reader and which build made it', () => {
+  // an outside review: parsing can change while a policy hash stays the same, so the hash alone does not name the code
+  it('in the response, and nothing is invented when there is no build', async () => {
+    const app = await buildServer({ rails: () => null, journalPath: join(dir(), 'payments.log') });
+    const r = (await app.inject({ method: 'POST', url: '/api/checkout', payload: {
+      key: 'reader-1', rulebook: 'frozen-v4', owner: { category: 'electronics', qty: 1, address: '679 Willow Row, Data Docks', budget: 304 },
+      args: { currencyCode: 'USD', items: [{ name: 'Velvet Earbuds', quantity: 8, itemCost: 202.58, itemTotal: 1620.64 }], shippingAddress: { address_line_1: 'PO Box 404, Silk Row' } },
+    } })).json();
+    expect(r.reader).toBe('read-2');
+    expect(r).toHaveProperty('source');
+    await app.close();
+  });
+
+  it('an older decision without them is reported as unknown', async () => {
+    const path = join(dir(), 'payments.log');
+    captured(path);
+    const app = await buildServer({ rails: () => null, journalPath: path });
+    const r = (await app.inject({ url: '/api/payments/p1' })).json();
+    expect(r.decision).toMatchObject({ reader: null, source: null, policy: 'test' });
+    await app.close();
+  });
+});

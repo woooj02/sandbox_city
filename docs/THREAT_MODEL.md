@@ -55,6 +55,8 @@ Hostile orders found more. `scripts/gate-fuzz.ts` mutates orders and judges each
 
 The last recorded run tried 200,000 orders on each of Frozen v3 and v4 on a fresh seed, with no disagreement, and the seed that found the last bug is clean too. Signatures are off in this test so it reaches the order rules. The checker and the gate share an author.
 
+An outside review then found what the fuzzer had not tried: valid JSON such as `{"toString":null}` in a number field. The gate refused the order, but writing the reason converted the value to text, which throws, so the API answered 500. Reasons now name an untrusted value by its kind and never convert it (`show` in `packages/core/src/checkout.ts`). The fuzzer's junk now includes such objects, and an HTTP test puts one in every field of a request. A rerun of 200,000 orders on each rulebook found nothing. This came after round five and changes only the wording of refusals. The lab checks quantity and address before the gate is called, so no round-five decision could have met such a value.
+
 ## What this does not cover
 
 - **The owner.** A stolen owner account can sign any mandate. In the lab API the caller states the mandate, so that endpoint proves the gate, not owner identity.

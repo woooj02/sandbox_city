@@ -1,3 +1,4 @@
+import { plainName } from '../rulebook-names';
 import { useState } from 'react';
 import { policyId, PRESETS, type Policy } from '@sandbox-city/core';
 import { useStore } from '../store';
@@ -34,12 +35,12 @@ export function SimpleRules() {
       <div className="choices" role="radiogroup" aria-label="Rulebook">
         {choices.map(({ policy, plain }) => (
           <button key={policy.name} role="radio" aria-checked={hash === policyId(policy)} className={`choice ${hash === policyId(policy) ? 'on' : ''}`} onClick={() => replay(policy)}>
-            <b>{policy.name === 'Frozen v3' ? 'Wait through the complaint window' : policy.name === 'Frozen v4' ? 'Release earlier with an exposure limit' : policy.name}</b><span>{policy.name} · {plain}</span>
+            <b>{policy.name === 'Frozen v3' ? 'Wait through the complaint window' : policy.name === 'Frozen v4' ? 'Recommended: release earlier with an exposure limit' : policy.name}</b><span>{policy.name} · {plain}</span>
           </button>
         ))}
       </div>
       <button className="simple-link" onClick={() => setAdvanced(!advanced)}>{advanced ? 'Show the main tradeoff' : 'All historical rulebooks'}</button>
-      {current && <p className="simple-note">City: {current.name} · policy <code>{hash}</code>. The comparison labels safeguards added to its benchmark arms.</p>}
+      {current && <p className="simple-note">City: {plainName(current.name)}<span className="prov"> · policy <code>{hash}</code></span>. The comparison labels safeguards added to its benchmark arms.</p>}
       <p className="simple-note">Same shoppers, same attackers, every time. Only the rules change.</p>
       <button className="simple-link" onClick={() => useStore.setState({ fullLab: true })}>Change individual rules →</button>
     </aside>

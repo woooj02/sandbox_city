@@ -68,11 +68,13 @@ export function buildMockPayPal(opts: { clientId?: string; clientSecret?: string
       if (itemTotal === null || Math.abs(itemTotal - amount) > 0.001) return err('UNPROCESSABLE_ENTITY', 'AMOUNT_MISMATCH');
       if (Math.round(sumItems * 100) !== Math.round(itemTotal * 100)) return err('UNPROCESSABLE_ENTITY', 'ITEM_TOTAL_MISMATCH');
       // no payment source: an order waiting for the payer, nothing has moved yet
-      if (!b.payment_source) {
+      // a PayPal wallet source (what the Agent Toolkit sends) also waits for the payer: PayPal answers PAYER_ACTION_REQUIRED
+      const wallet = !!b.payment_source?.paypal && !b.payment_source?.card;
+      if (!b.payment_source || wallet) {
         if (pu.invoice_id) { if (invoices.has(pu.invoice_id)) return err('UNPROCESSABLE_ENTITY', 'DUPLICATE_INVOICE_ID'); invoices.add(pu.invoice_id); }
         const o: Pending = { id: id(), intent: b.intent, status: 'CREATED', amount, custom: pu.custom_id, invoice: pu.invoice_id, items: pu.items, shipping: pu.shipping };
         orders.set(o.id, o);
-        return { status: 201, body: { id: o.id, status: 'CREATED' } };
+        return { status: 201, body: wallet ? { id: o.id, status: 'PAYER_ACTION_REQUIRED', links: [{ href: `https://www.sandbox.paypal.com/checkoutnow?token=${o.id}`, rel: 'payer-action', method: 'GET' }] } : { id: o.id, status: 'CREATED' } };
       }
       if (!b.payment_source?.card?.number || !/^\d{4}-\d{2}$/.test(b.payment_source.card.expiry ?? '')) return err('INVALID_REQUEST', 'MISSING_REQUIRED_PARAMETER', 400);
       if (pu.invoice_id) { if (invoices.has(pu.invoice_id)) return err('UNPROCESSABLE_ENTITY', 'DUPLICATE_INVOICE_ID'); invoices.add(pu.invoice_id); }

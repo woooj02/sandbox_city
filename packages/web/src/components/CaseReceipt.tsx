@@ -1,3 +1,4 @@
+import { plainName } from '../rulebook-names';
 import receipt from '../data/case-receipt.json';
 import sleeper from '../data/sleeper-checkout-v4.json';
 import type { AgentResult, SavedGate } from '../workflow';
@@ -35,16 +36,16 @@ export function CaseReceipt({ observation, comparison }: { observation: AgentRes
   const sleeperArm = sleeper.arms.find((a) => a.policy === receipt.policy && !a.ships), honestArm = sleeper.arms.find((a) => a.policy === receipt.policy && a.ships), open = sleeper.arms.find((a) => a.label.startsWith('Lab-Tuned'));
   return <section className="case-receipt" aria-label="Recorded PayPal receipt">
     <h2>What PayPal recorded</h2>
-    <p className="observation-id">PayPal sandbox · recorded {receipt.recordedAt.slice(0, 10)} · {receipt.rulebook} <code>{receipt.policy}</code> · not a payment made by this page</p>
+    <p className="observation-id">PayPal sandbox · recorded {receipt.recordedAt.slice(0, 10)} · {plainName(receipt.rulebook)} <code className="prov">{receipt.policy}</code> · not a payment made by this page</p>
     {sameCase && sameBook
       ? <p className="receipt-match">This receipt is for this listing under this rulebook. It went through <code>POST /api/checkout</code> on a local server.</p>
-      : <p className="worth-assumption">{sameCase ? `This receipt used ${receipt.rulebook}, not the rulebook selected above.` : `This receipt is for ${receipt.listing.title}, not the case selected above.`} It shows what the same gate did at PayPal, not what happened to this answer.</p>}
+      : <p className="worth-assumption">{sameCase ? `This receipt used ${plainName(receipt.rulebook)}, not the rulebook selected above.` : `This receipt is for ${receipt.listing.title}, not the case selected above.`} It shows what the same gate did at PayPal, not what happened to this answer.</p>}
     <div className="comparison-cards">
       <article className="good"><h3>{hijack.label}</h3><strong>{money(hijack.amount ?? 0)} refused</strong><p>{hijack.reason}. No PayPal order was created.</p></article>
       {honest && <article className="good"><h3>{honest.label}</h3><strong>{money(honest.amount ?? 0)} captured, then refunded</strong><p>Read back as {honest.payment!.readBack}.</p><code>Order {honest.payment!.orderId}</code><code>Capture {honest.payment!.captureId}</code><code>Refund {honest.payment!.refund?.refundId}</code></article>}
       <article><h3>A real model, same listing</h3><strong>{model.length} runs of {receipt.model}</strong><p>Refused: {refused.map(units).join('; ')}. The model declined {declined} times{fits ? ', though one unit fit the budget' : ''}. {held} correct order was held as a PayPal authorization. Nothing refused reached PayPal.</p></article>
     </div>
-    {sleeperArm && honestArm && open && <p>A separate proof, same rulebook: a store with a good record stops shipping. It keeps {money(sleeperArm.captured)} of {money(sleeperArm.total)} under {receipt.rulebook} and {money(open.captured)} under {open.label.split(',')[0]}. An honest store with the same record is paid {money(honestArm.captured)}. Delivery and complaints in that proof come from a script.</p>}
-    <p className="observation-id">Store and shopper history were imported as established for this proof, and it says so in the file. The earlier incident on this listing, with its own order and refund, used Wild West, Lab-Tuned and Know Your Agent. It is shown under Recorded toolkit incident.</p>
+    {sleeperArm && honestArm && open && <p>A separate proof, same rulebook: a store with a good record stops shipping. It keeps {money(sleeperArm.captured)} of {money(sleeperArm.total)} under {plainName(receipt.rulebook)} and {money(open.captured)} under {plainName(open.label.split(',')[0])}. An honest store with the same record is paid {money(honestArm.captured)}. Delivery and complaints in that proof come from a script.</p>}
+    <p className="observation-id">Store and shopper history were imported as established for this proof, and it says so in the file. The earlier incident on this listing, with its own order and refund, used No checks, Auto-tuned and Agent checks. It is shown under Recorded toolkit incident.</p>
   </section>;
 }

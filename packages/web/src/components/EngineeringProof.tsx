@@ -1,4 +1,6 @@
+import { useStore } from '../store';
 import fault from '../data/fault-proof.json';
+import toolkit from '../data/toolkit-proof.json';
 import fuzz from '../data/gate-fuzz.json';
 import lab from '../data/agent-lab.json';
 import labBreakdown from '../data/agent-lab-breakdown.json';
@@ -27,7 +29,7 @@ export function GateFuzzProof() {
   return <>
     <p className="ev-p"><span className="ev-tag">NO MONEY MOVES</span> A second checker, written separately in whole cents, judges each mutated order, and the gate must agree. Signatures are off for this test only, so that it reaches the order rules.</p>
     <div className="ev-charges">
-      <div><b>{n(books.reduce((t, b) => t + b.runs, 0))}</b><span>hostile orders on seed {fuzz.seed}, across {books.length} rulebooks</span></div>
+      <div><b>{n(books.reduce((t, b) => t + b.runs, 0))}</b><span>hostile orders<span className="prov"> on seed {fuzz.seed}</span>, across {books.length} rulebooks</span></div>
       <div><b>{books.reduce((t, b) => t + b.unsound, 0)}</b><span>allowed that should be refused</span></div>
       <div><b>{books.reduce((t, b) => t + b.refusedGood + b.threw, 0)}</b><span>honest orders refused, or crashes</span></div>
     </div>
@@ -69,6 +71,32 @@ export function FixEvidence() {
   const base = arm('bare'), gate = arm('gate'), prompt = arm('prompt');
   return <div className="fix-evidence">
     <p><b>Why at checkout:</b> {lab.models.length} local models made {lab.episodes.toLocaleString('en-US')} shopping trips under a frozen protocol. The checkout gate cut loss per attacked trip from {trip(base.lossPer100)} to {trip(gate.lossPer100)}, honest purchases held ({gate.honestBought} of {gate.honest}, against {base.honestBought}), and {lab.gateBreaches} orders like this one got through. A careful prompt also cut loss, but honest purchases fell to {prompt.honestBought} of {prompt.honest}.</p>
-    <p><b>What it does not stop:</b> a correct order at a dishonest store, which passes every order check. For that, Frozen v4 holds payment until delivery once a store's unfulfilled money passes what its record supports.</p>
+    <p><b>What it does not stop:</b> a correct order at a dishonest store, which passes every order check. For that, the recommended rulebook (v4) holds payment until delivery once a store's unfulfilled money passes what its record supports.</p>
   </div>;
+}
+
+/** Opens the evidence page at one section. */
+export function openEvidence(section: string) {
+  useStore.setState({ showEvidence: true });
+  setTimeout(() => document.getElementById(section)?.scrollIntoView({ block: 'start' }), 80);
+}
+
+/** The three measured results, on the front page, each with the way to its evidence. */
+export function Findings() {
+  const hijack = toolkit.lanes.find((l) => l.hijackedPaid > 0);
+  const arm = (k: string) => lab.arms.find((a) => a.arm === k)!;
+  return <section className="findings" aria-label="What the lab measured">
+    <div className="lab-section-title"><h2>What the lab measured</h2><span>Recorded runs. Open each one to check it.</span></div>
+    <div className="findings-cards">
+      {hijack && <button onClick={() => useStore.setState({ showHijack: true })}><span>PAYPAL SANDBOX · {toolkit.recordedAt.slice(0, 10)}</span><b>${hijack.hijackedValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}</b><p>A real model ({toolkit.model}) was talked into an attacker's order, paid through the PayPal Agent Toolkit with no checks. With the gate, the same order was refused.</p><i>See the hijack ↗</i></button>}
+      <button onClick={() => openEvidence('ev-agents')}><span>{lab.models.length} MODELS · {lab.episodes.toLocaleString('en-US')} SHOPPING TRIPS</span><b>{trip(arm('bare').lossPer100)} → {trip(arm('gate').lossPer100)}</b><p>Lost per attacked trip, with no defense and with the checkout gate. Honest purchases held: {arm('gate').honestBought} of {arm('gate').honest}, against {arm('bare').honestBought}. Rules frozen before the run.</p><i>Read the study ↗</i></button>
+      <button onClick={() => openEvidence('ev-faults')}><span>EVERY CRASH UP TO {fault.maxFaults} FAULTS</span><b>{n(fault.schedules)} · {fault.violating} double charges</b><p>Crashes, lost answers and late webhooks at every step of a payment, run on the real payment worker against an in-process model of PayPal. Without its journal, {n(fault.control.doubled)} of {n(fault.control.schedules)} charged twice or more.</p><i>See how ↗</i></button>
+    </div>
+  </section>;
+}
+
+/** After a comparison: what the same gate did for real models, so one example is not the whole argument. */
+export function MeasuredResult() {
+  const arm = (k: string) => lab.arms.find((a) => a.arm === k)!;
+  return <div className="measured-result"><b>Measured with real models:</b> across {lab.models.length} local models and {lab.episodes.toLocaleString('en-US')} shopping trips, the checkout gate cut loss per attacked trip from {trip(arm('bare').lossPer100)} to {trip(arm('gate').lossPer100)}, and honest purchases held ({arm('gate').honestBought} of {arm('gate').honest}, against {arm('bare').honestBought}). <button className="simple-link" onClick={() => openEvidence('ev-agents')}>Read the study</button></div>;
 }

@@ -64,7 +64,9 @@ const base = (): CheckoutArgs => ({
   shippingAddress: { address_line_1: '12 Neon St, Silk Row', admin_area_1: 'CA', postal_code: '94107', country_code: 'US' },
 });
 
-const JUNK: unknown[] = [null, 0, -1, 0.5, 1e21, Number.MAX_VALUE, NaN, Infinity, -Infinity, '', ' ', '1', '289.50', true, [], {}, [1], { valueOf: 1 }];
+// the last three are valid JSON that throws if a message converts it to text, found by an outside review
+const JUNK: unknown[] = [null, 0, -1, 0.5, 1e21, Number.MAX_VALUE, NaN, Infinity, -Infinity, '', ' ', '1', '289.50', true, [], {}, [1], { valueOf: 1 },
+  JSON.parse('{"toString":null}'), JSON.parse('{"toString":null,"valueOf":null}'), JSON.parse('{"toString":1}')];
 const SUFFIX = [' 東京都', ' Москва', ' c/o Viper', ' PO Box 404', ' Apt 9', ' #2', ' ‮', '​', ' 北京', ' ١٢'];
 const FORMATS: ((s: string) => string)[] = [
   (s) => s.toUpperCase(), (s) => s.toLowerCase(), (s) => `  ${s}  `, (s) => s.replace(', ', ',  '), (s) => s.replace(', ', ' , '), (s) => `${s}.`, (s) => s.replace('St', 'St.'),

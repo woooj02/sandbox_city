@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { BrainPrompt, Metrics, Policy } from '@sandbox-city/core';
-import { DEFAULT_PRICES, PRESETS, type Prices } from '@sandbox-city/core';
+import { PRESETS, PRICE_EXAMPLES, type Prices } from '@sandbox-city/core';
 import { experimentFor, type Experiment, type Task, type AgentResult, type SavedDecision, type SavedGate } from './workflow';
 import type { DaySummary, ForgeScore, Genomes, Policy as PolicyT, TunePoint, WorldSnapshot } from '@sandbox-city/core';
 
@@ -65,6 +65,8 @@ interface State {
   showHijack: boolean;
   /** The evidence exhibit: the benchmark, the proofs and the regressions. */
   showEvidence: boolean;
+  /** Hashes, UUIDs, seeds and run ids on screen. Off by default; they are provenance, not the story. */
+  showIds: boolean;
   /** Prices a developer's own costs against the measured rulebooks. */
   showWorth: boolean;
   /** The bring-your-own-agent page. */
@@ -107,7 +109,7 @@ export const useStore = create<State>((set, get) => ({
     set({ task, experiment, ...(experiment ? { experiments: { ...current.experiments, [experiment.task]: experiment } } : {}), showAgent: false, showWorth: false, showReport: false, showEvidence: false, showHijack: false, tune: { ...current.tune, open: false }, forge: { ...current.forge, open: false } });
   },
   agentDraft: { pick: 0, text: '', method: 'sample' }, agentResults: [], agentSelectedId: null, agentGates: [], agentGatePolicy: null,
-  costDraft: { prices: DEFAULT_PRICES, boxes: false }, savedDecision: null, decisionHistory: [], runComplete: false,
+  costDraft: { prices: PRICE_EXAMPLES[0].prices, boxes: PRICE_EXAMPLES[0].boxes }, savedDecision: null, decisionHistory: [], runComplete: false,
   seed: 'neo-osaka-7',
   chaos: 0.04,
   policies: [PRESETS.open],
@@ -121,6 +123,7 @@ export const useStore = create<State>((set, get) => ({
   showReport: false,
   showHijack: new URLSearchParams(location.search).has('hijack'),
   showEvidence: new URLSearchParams(location.search).has('evidence'),
+  showIds: new URLSearchParams(location.search).has('ids') || (typeof localStorage !== 'undefined' && localStorage.getItem('sc-show-ids') === '1'),
   showAgent: new URLSearchParams(location.search).has('agent'),
   showWorth: new URLSearchParams(location.search).has('worth'),
   fullLab: new URLSearchParams(location.search).has('lab'),

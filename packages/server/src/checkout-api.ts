@@ -29,6 +29,8 @@ export interface CheckoutOptions {
   rulebooks?: Record<string, Policy>;
   perMinute?: number;
   log?: (msg: string) => void;
+  /** The build that decides, recorded with each decision. Default: read from the web build's build.json. */
+  source?: string | null;
   /** Where store and agent history comes from. Default: folded from the payment journal. */
   history?: HistorySource;
   /** Bearer token for POST /api/history/events, which can release held money. Unset turns the route off. */
@@ -73,7 +75,16 @@ function invalid(b: Body): string | null {
 
 const sameOrder = (a: CreateOrderInput, b: CreateOrderInput) => a.amount === b.amount && a.shipTo === b.shipTo && a.item.qty === b.item.qty && JSON.stringify(a.address) === JSON.stringify(b.address);
 
+/** Revision and source hash of the build being served, or null when there is no build. */
+export function buildSource(path = new URL('../../web/dist/build.json', import.meta.url)): string | null {
+  try {
+    const b = JSON.parse(readFileSync(path, 'utf8')) as { revision?: string | null; sourceHash?: string };
+    return `${b.revision?.slice(0, 7) ?? 'uncommitted'}:${b.sourceHash?.slice(0, 12) ?? 'unknown'}`;
+  } catch { return null; }
+}
+
 export function registerCheckout(app: FastifyInstance, opts: CheckoutOptions) {
+  const builtFrom = opts.source !== undefined ? opts.source : buildSource();
   const rulebooks = opts.rulebooks ?? frozenRulebooks();
   const fallback = ['frozen-v3', 'frozen-v2', 'frozen-v1'].find((k) => rulebooks[k]) ?? 'tuned';
   const sessions = new Map<string, { session: CheckoutSession; owner: string; rulebook: string }>();
@@ -159,19 +170,19 @@ export function registerCheckout(app: FastifyInstance, opts: CheckoutOptions) {
       if (!sameOrder(known.input, asked)) return reply.code(409).send({ error: 'this key already paid for a different order' });
       if (!p) return reply.code(503).send({ error: 'PayPal keys are not configured' });
       const r = await p.worker.pay(key, known.input);
-      return { decision: was!.decision, ok: true, replay: true, decidedAt: was!.decidedAt, rulebook: was!.rulebook, policy: was!.policy, evaluator: was!.evaluator, escrow: was!.escrow, history: was!.facts, payment: view(r), rail: rail(p.rails) };
+      return { decision: was!.decision, ok: true, replay: true, decidedAt: was!.decidedAt, rulebook: was!.rulebook, policy: was!.policy, evaluator: was!.evaluator, reader: was!.reader ?? null, source: was!.source ?? null, escrow: was!.escrow, history: was!.facts, payment: view(r), rail: rail(p.rails) };
     }
 
     const facts = { merchant: history().merchant(merchant), agent: history().agent(agent) };
     const v: Verdict = entry.session.checkOrder(b.args!, facts);
-    const head = { decision: v.decision, ok: v.ok, reason: v.reason, rulebook: name, policy: v.policy, evaluator: v.evaluator, hits: v.hits, escrow: v.escrow, history: facts, order: v.order && { amount: v.order.amount, qty: v.order.qty, shipTo: v.order.shipTo } };
+    const head = { decision: v.decision, ok: v.ok, reason: v.reason, rulebook: name, policy: v.policy, evaluator: v.evaluator, reader: v.reader, source: builtFrom, hits: v.hits, escrow: v.escrow, history: facts, order: v.order && { amount: v.order.amount, qty: v.order.qty, shipTo: v.order.shipTo } };
     if (!v.ok) return { ...head, payment: null, rail: 'not sent: the gate stopped it' };
     if (!p) return { ...head, payment: null, rail: 'none: PayPal keys are not configured, so the gate ran and nothing was paid' };
 
     // reserved before the first await, so two calls in the same moment cannot both spend the same mandate.
     // pay() journals synchronously, so the store's exposure is on record before the next call is judged too.
     entry.session.created(key, v.order!);
-    const context: DecisionContext = { session: sessionId, owner: ownerId, rulebook: name, policy: v.policy, evaluator: v.evaluator, decision: v.decision, escrow: v.escrow, merchant, agent, decidedAt: new Date().toISOString(), facts };
+    const context: DecisionContext = { session: sessionId, owner: ownerId, rulebook: name, policy: v.policy, evaluator: v.evaluator, reader: v.reader, source: builtFrom, decision: v.decision, escrow: v.escrow, merchant, agent, decidedAt: new Date().toISOString(), facts };
     const r = await p.worker.pay(key, input(key, agent, merchant, v.order!, v.escrow, canonicalAddress(b.args!.shippingAddress, entry.session.scope)), context);
     giveBack(r);
     return { ...head, payment: view(r), rail: rail(p.rails) };
@@ -181,7 +192,7 @@ export function registerCheckout(app: FastifyInstance, opts: CheckoutOptions) {
     const r = journal().get(req.params.key);
     if (!r) return reply.code(404).send({ error: 'no such payment' });
     const c = r.context;
-    return { ...view(r), decision: c && { rulebook: c.rulebook, policy: c.policy, evaluator: c.evaluator, decision: c.decision, escrow: c.escrow, merchant: c.merchant, decidedAt: c.decidedAt, facts: c.facts } };
+    return { ...view(r), decision: c && { rulebook: c.rulebook, policy: c.policy, evaluator: c.evaluator, reader: c.reader ?? null, source: c.source ?? null, decision: c.decision, escrow: c.escrow, merchant: c.merchant, decidedAt: c.decidedAt, facts: c.facts } };
   });
 
   app.get<{ Params: { id: string } }>('/api/history/merchants/:id', async (req) => history().merchant(req.params.id));

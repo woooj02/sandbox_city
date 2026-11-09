@@ -1,3 +1,4 @@
+import { plainName } from '../rulebook-names';
 import { ATTACK_KINDS, DEFAULT_CONFIG, Metrics } from '@sandbox-city/core';
 
 /** Families the default day runs. The others appear on the board only when a world has them. */
@@ -62,7 +63,7 @@ function LaneHud({ lane }: { lane: number }) {
   const awaitingFraud = m.money.pending + m.money.unresolved > 0 && m.fraud.prevented + m.fraud.leaked === 0;
   return (
     <div className="hud-lane">
-      {multi && <div className={`hud-lane-title lane-${lane}`}><b>{LANE_NAMES[lane]}</b> {policy?.name}</div>}
+      {multi && <div className={`hud-lane-title lane-${lane}`}><b>{LANE_NAMES[lane]}</b> {policy && plainName(policy.name)}</div>}
       <div className="gauges">
         <Gauge value={m.safety} unknown={awaitingFraud} label="FRAUD STOPPED" sub={awaitingFraud ? 'Awaiting payment confirmation' : `${money(m.fraud.prevented)} of ${money(m.fraud.prevented + m.fraud.leaked)}`} color="#7bb4f5" code="SAFE" />
         <Gauge value={m.access} label="HONEST GET THROUGH" sub={`${m.honest.completed.toLocaleString()} of ${m.honest.attempts.toLocaleString()} buys`} color="#65c7ae" code="PASS" />

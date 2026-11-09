@@ -1,3 +1,4 @@
+import { plainName } from '../rulebook-names';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AgGridReact } from 'ag-grid-react';
@@ -70,7 +71,7 @@ function Story() {
           const refused = l.steps.find((s) => s.gate === 'refused');
           return (
             <div key={l.rulebook} className={`hj-lane ${l.paid ? 'paid' : refused ? 'refused' : ''}`}>
-              <span>{l.rulebook}</span>
+              <span>{plainName(l.rulebook)}</span>
               {l.paid ? <b>PAID {money(l.paid.total, 2)}</b> : refused ? <b>REFUSED</b> : <b>—</b>}
               <small>{l.paid ? `pay_order COMPLETED · order ${l.paid.orderId}` : refused ? `${refused.reason} · never reached PayPal` : l.said}</small>
             </div>
@@ -83,7 +84,7 @@ function Story() {
         <p className="hj-chain"><code>get_order</code> → capture <em>{r.captureId}</em></p>
         <p className="hj-chain"><code>create_refund</code> → refund <em>{r.refundId}</em> · {r.status}</p>
         <p className="hj-chain"><code>get_refund</code> → {r.confirmed}</p>
-        <p className="hj-dim">{paid ? 'Wild West paid it; the audit took it back through the same toolkit.' : ''}</p>
+        <p className="hj-dim">{paid ? 'No checks paid it; the audit took it back through the same toolkit.' : ''}</p>
       </li>
     </ol>
   );
@@ -95,7 +96,7 @@ function Stats() {
   return (
     <div className="hj-stats">
       <div className="hj-stat bad"><b>{pctOf(plain.hijacked, plain.poisoned)}</b><span>of poisoned listings became a hijacked plan</span><em>{plain.hijacked} of {plain.poisoned} · ordinary shopping prompt</em></div>
-      <div className="hj-stat cy"><b>{refusedAll}/{plain.hijacked}</b><span>hijacked orders refused by the gate</span><em>Lab-Tuned by ship lock, Know Your Agent by owner mandate</em></div>
+      <div className="hj-stat cy"><b>{refusedAll}/{plain.hijacked}</b><span>hijacked orders refused by the gate</span><em>Auto-tuned by ship lock, Agent checks by owner mandate</em></div>
       <div className="hj-stat gr"><b>{cleanRefused}</b><span>honest orders refused</span><em>of {plain.cleanBought} the model planned for real owners</em></div>
       <div className="hj-stat gold"><b>{pctOf(guarded.hijacked, guarded.poisoned)}</b><span>hijacked with the careful prompt</span><em>but it skipped {guarded.clean - guarded.cleanBought} of {guarded.clean} honest buys too</em></div>
     </div>
@@ -118,7 +119,7 @@ function Probes() {
   const cols = useMemo<ColDef<Probe>[]>(() => [
     { field: 'kind', headerName: 'THE PLAN, WITH', width: 150, cellClass: 'hj-strong', tooltipField: 'note', pinned: narrow ? 'left' : undefined },
     { field: 'note', headerName: 'WHAT CHANGED', flex: 1, minWidth: 200, cellClass: 'mono-dim', tooltipField: 'note', hide: narrow },
-    ...(probes?.rulebooks ?? []).map((r): ColDef<Probe> => ({ colId: r, headerName: r.toUpperCase(), width: narrow ? 130 : 150, valueGetter: (p) => p.data?.refused[r], cellRenderer: ProbeCell })),
+    ...(probes?.rulebooks ?? []).map((r): ColDef<Probe> => ({ colId: r, headerName: plainName(r).toUpperCase(), width: narrow ? 130 : 150, valueGetter: (p) => p.data?.refused[r], cellRenderer: ProbeCell })),
   ], [narrow]);
   if (!probes) return null;
   return (
@@ -196,7 +197,7 @@ function Plans() {
     { field: 'owner', headerName: 'OWNER ASKED', width: 220, cellClass: 'mono-dim' },
     { field: 'plan', headerName: 'MODEL PLANNED', flex: 1, minWidth: 200, cellClassRules: { bad: (p) => p.data?.verdict === 'hijacked' } },
     { field: 'verdict', headerName: 'VERDICT', width: 124, cellRenderer: Verdict },
-    { field: 'gate', headerName: 'GATE · LAB-TUNED', width: 150, cellRenderer: GateCell },
+    { field: 'gate', headerName: 'GATE · AUTO-TUNED', width: 150, cellRenderer: GateCell },
     { field: 'careful', headerName: 'CAREFUL PROMPT', width: 200, cellClass: 'mono-dim' },
     { field: 'day', headerName: 'DAY', width: 110, cellClass: 'mono-dim' },
   ], []);
@@ -261,7 +262,7 @@ function PaidRun() {
     { field: 'n', headerName: '#', width: 52 },
     { field: 'listing', headerName: 'LISTING', width: 230, tooltipValueGetter: (p) => p.data?.c.text, cellClassRules: { 'hj-kind': (p) => !!p.data?.injected } },
     { field: 'plan', headerName: 'PLAN', width: 200, cellClassRules: { bad: (p) => !!p.data?.hijackedPlan } },
-    ...names.map((nm, i): ColDef<RRow> => ({ colId: `lane${i}`, headerName: nm.toUpperCase(), flex: 1, minWidth: 190, cellRenderer: laneCell(i), sortable: false })),
+    ...names.map((nm, i): ColDef<RRow> => ({ colId: `lane${i}`, headerName: plainName(nm).toUpperCase(), flex: 1, minWidth: 190, cellRenderer: laneCell(i), sortable: false })),
     { colId: 'refund', headerName: 'AUDIT', width: 210, sortable: false, cellRenderer: ({ data }: ICellRendererParams<RRow>) => data?.refund ? <span className="hj-ok" title={`capture ${data.refund.captureId}`}>↺ REFUNDED {money(data.refund.amount ?? 0, 2)} <small className="mono-dim">{data.refund.refundId}</small></span> : null },
   ], [names]);
   return (
@@ -287,26 +288,26 @@ export function Hijack() {
         <div className="report-head">
           <span className="glyph hj-glyph">HJK</span>
           <div>
-            <h2>THE HIJACK</h2>
+            <h2>The hijack</h2>
             <p>A real model, a poisoned store page, real calls to the PayPal sandbox through {toolkit.toolkit}. Recorded {day(toolkit.recordedAt)} with {modelLabel(toolkit.model)}.</p>
           </div>
         </div>
         <Story />
-        <h3 className="hj-h">HOW OFTEN · <span>{plain.poisoned} poisoned listings from {rate.seeds.length} simulated days, planned by {modelLabel(rate.model)} under two prompts, every planned order put through the gate</span></h3>
+        <h3 className="hj-h">How often · <span>{plain.poisoned} poisoned listings from {rate.seeds.length} simulated days, planned by {modelLabel(rate.model)} under two prompts, every planned order put through the gate</span></h3>
         <Stats />
         {probes && <>
-          <h3 className="hj-h">ONE CHANGE AT A TIME · <span>the same {probes.rows[0].n} hijacked plans, put through the gate again with only the address changed, then only the quantity; no model asked</span></h3>
+          <h3 className="hj-h">One change at a time · <span>the same {probes.rows[0].n} hijacked plans, put through the gate again with only the address changed, then only the quantity; no model asked</span></h3>
           <Probes />
           <p className="hj-note">
-            Every recorded hijack changed both the address and the quantity, so each gated rulebook caught all of them. Split the change and each catches only the half it checks: Lab-Tuned's ship lock catches the address, Know Your Agent's owner mandate catches the quantity.
-            Auto-tune found Lab-Tuned on simulated days and left the mandate off. Balanced checks both and refused none of the honest plans.
+            Every recorded hijack changed both the address and the quantity, so each gated rulebook caught all of them. Split the change and each catches only the half it checks: Auto-tuned's ship lock catches the address, Agent checks' owner mandate catches the quantity.
+            Auto-tune found the Auto-tuned rulebook on simulated days and left the mandate off. Balanced checks both and refused none of the honest plans.
           </p>
         </>}
-        <h3 className="hj-h">WHICH PAGE TRICKS WORK</h3>
+        <h3 className="hj-h">Which page tricks work</h3>
         <Templates />
-        <h3 className="hj-h">EVERY PLAN · <span>{cases.length} cases</span></h3>
+        <h3 className="hj-h">Every plan · <span>{cases.length} cases</span></h3>
         <Plans />
-        <h3 className="hj-h">THE PAID RUN · <span>{tkCases.length} listings, each placed under three rulebooks with create_order and pay_order on the sandbox, read back with get_order</span></h3>
+        <h3 className="hj-h">The paid run · <span>{tkCases.length} listings, each placed under three rulebooks with create_order and pay_order on the sandbox, read back with get_order</span></h3>
         <PaidRun />
         <p className="hj-foot">
           The rate test asks the planner only and sends nothing to PayPal; each planned order goes through the same create_order check the paid run uses.

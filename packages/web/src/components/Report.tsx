@@ -1,3 +1,4 @@
+import { plainName } from '../rulebook-names';
 import { CityScope } from './Scope';
 import { ATTACK_KINDS, Metrics, PRESETS, type Policy } from '@sandbox-city/core';
 import { client } from '../sim/client';
@@ -145,7 +146,7 @@ export function Report() {
         <div className={`report-cols n${lanes.length}`}>
           {lanes.map((l, i) => l.metrics && (
             <div className="report-col" key={i}>
-              <h3>{lanes.length > 1 ? `${LANE_NAMES[i]} · ` : ''}{policies[i]?.name}</h3>
+              <h3>{lanes.length > 1 ? `${LANE_NAMES[i]} · ` : ''}{policies[i] && plainName(policies[i].name)}</h3>
               <div className="report-big">
                 <div><b className="cy">{pct(l.metrics.safety)}</b><span>fraud $ stopped</span></div>
                 <div><b className="gr">{pct(l.metrics.access)}</b><span>honest purchases accepted</span></div>

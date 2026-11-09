@@ -133,7 +133,7 @@ export function Ledger() {
     { field: 'buyer', headerName: 'AGENT', width: 110 },
     { field: 'store', headerName: 'STORE', flex: 1, minWidth: 150 },
     { field: 'amount', headerName: 'AMOUNT', width: 96, type: 'rightAligned', valueFormatter: (p) => `$${p.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
-    { field: 'gate', headerName: 'GATE', width: 92, cellRenderer: Badge },
+    { field: 'gate', headerName: 'GATE', width: 120, cellRenderer: Badge },
     { field: 'outcome', headerName: 'OUTCOME', width: 110, cellRenderer: Badge },
     { field: 'truth', headerName: 'GROUND TRUTH', width: 170, cellRenderer: Truth },
     { field: 'rules', headerName: 'WHY', flex: 1.4, minWidth: 200, cellClass: 'why' },
