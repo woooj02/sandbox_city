@@ -2,7 +2,7 @@
 
 Sandbox City shows developers which payment defense is worth its cost, and checks that the chosen defense works at checkout. Test an agent that can spend money, price each defense with your own numbers, then carry the result into CI.
 
-Try it: https://sandbox-city.91.99.162.43.sslip.io (press **E** for the evidence).
+Try it: https://sandbox-city.keepsrunning.com (press **E** for the evidence).
 
 [![verify](https://github.com/woooj02/sandbox_city/actions/workflows/verify.yml/badge.svg)](https://github.com/woooj02/sandbox_city/actions/workflows/verify.yml)
 
