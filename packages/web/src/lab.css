@@ -372,3 +372,4 @@
 .sf-result.warn, .sf-gate.warn { border-color: #8a6a33; background: #1b1710; } .sf-gate.warn b { color: #f3cf96; }
 .sf-checks span.warn { border-color: #8a6a33; background: #241d10; color: #f3dcb4; } .sf-checks span.warn::before { content: '! '; color: #f0c27a; }
 .sf-recent li i.warn { background: #2e2412; color: #f0cf95; }
+.sf { scroll-margin-top: 16px; }

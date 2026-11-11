@@ -73,7 +73,9 @@ function usePlayback(job: Job, instant: boolean) {
   if (id.current !== job.id) { id.current = job.id; setStep(instant ? total : 0); }
   useEffect(() => {
     if (step >= total) return;
-    const beat = step < job.turns.length ? (job.turns[step]?.action?.tool === 'order' ? 1900 : 1500) : 1300;
+    // a turn gets time to be read, unless more are already waiting behind it
+    const behind = job.turns.length - step > 1;
+    const beat = step < job.turns.length ? (behind ? 700 : job.turns[step]?.action?.tool === 'order' ? 1900 : 1500) : 1300;
     const t = window.setTimeout(() => setStep((s) => Math.min(s + 1, total)), step === 0 ? 500 : beat);
     return () => window.clearTimeout(t);
   }, [step, total, job.turns]);
@@ -191,7 +193,7 @@ export function LiveRun() {
     };
     void poll();
     timer.current = window.setInterval(poll, 800);
-    if (scroll) setTimeout(() => section.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 150);
+    if (scroll) setTimeout(() => (section.current?.querySelector('.sf') ?? section.current)?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 700);
   };
   useEffect(() => {
     fetch('/api/live-run').then((r) => r.json()).then(setStatus, () => setStatus(null));

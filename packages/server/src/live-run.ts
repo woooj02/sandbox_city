@@ -173,7 +173,7 @@ export function registerLiveRun(app: FastifyInstance, o: LiveOptions) {
     if (w.length >= vPerHour) return reply.code(429).send({ error: `the limit of ${vPerHour} agent sessions an hour is used up` });
     if (w.filter((v) => v.who === who).length >= vPerVisitor) return reply.code(429).send({ error: `${vPerVisitor} agent sessions an hour per visitor` });
     if (open.size >= vOpen) return reply.code(429).send({ error: 'too many agents are shopping right now; try again in a minute' });
-    const clean = (v: unknown, fallback: string) => (typeof v === 'string' && v.trim() ? v.replace(/[^\w .:+@\/()-]/g, '').trim().slice(0, 48) : '') || fallback;
+    const clean = (v: unknown, fallback: string) => (typeof v === 'string' && v.trim() ? v.replace(/[^\w .:+@\/()'-]/g, '').trim().slice(0, 48) : '') || fallback;
     const id = randomBytes(6).toString('hex');
     const t = VISITOR_TASKS[randomBytes(2).readUInt16BE(0) % VISITOR_TASKS.length];
     const job: LiveJob = {

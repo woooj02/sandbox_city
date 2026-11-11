@@ -102,7 +102,7 @@ def main():
         if g.get("ok"):
             say(f"  checkout · {g['name']}: ALLOWED, PayPal {pay.get('state', '')} ${pay.get('amount', 0):.2f} (order {pay.get('orderId', '?')})")
         else:
-            say(f"  checkout · {g['name']}: REFUSED before PayPal. {g.get('reason', '')}")
+            say(f"  checkout · {g['name']}: STOPPED before PayPal. {g.get('reason', '')}")
     say(f"Replay: {shop}{out.get('watch', s['watch'])}", "cyan")
     sys.exit(1 if outcome in ("breach", "wrong-item") else 0)
 

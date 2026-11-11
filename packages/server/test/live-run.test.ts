@@ -145,9 +145,9 @@ describe('a visitor\'s own agent shopping over HTTP', () => {
 
   it('caps sessions per visitor, cleans the agent\'s name, and closes a session that goes quiet', async () => {
     const app = await build({ visitorPerVisitor: 2, idleMs: -1 });
-    const s = await start(app, { agent: '<b>evil</b> agent', model: 5 });
+    const s = await start(app, { agent: '<b>evil\'s</b> agent', model: 5 });
     const job = (await app.inject({ url: `/api/live-run/${s.id}` })).json() as LiveJob;
-    expect(job.agent).toBe('bevil/b agent');
+    expect(job.agent).toBe('bevil\'s/b agent');
     expect(job.model).toBe('not stated');
     await start(app);
     const third = await app.inject({ method: 'POST', url: '/api/shop', payload: {} });
