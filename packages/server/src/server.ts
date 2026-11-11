@@ -6,7 +6,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import websocket from '@fastify/websocket';
 import fastifyStatic from '@fastify/static';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { SimRunner, round2, type FromSim, type SimEvent, type ToSim } from '@sandbox-city/core';
@@ -68,7 +68,7 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
   const journalPath = opts.journalPath ?? process.env.PAYMENT_JOURNAL ?? '.data/payments.log';
   registerLiveRun(app, {
     model: process.env.LIVE_MODEL || undefined, ollamaUrl: process.env.OLLAMA_URL ?? 'http://127.0.0.1:11434',
-    threads: Number(process.env.LIVE_THREADS ?? 3), perHour: Number(process.env.LIVE_PER_HOUR ?? 20), lastPath: `${journalPath}.live-last.json`, ...opts.live,
+    threads: Number(process.env.LIVE_THREADS ?? 3), perHour: Number(process.env.LIVE_PER_HOUR ?? 20), visitorPerHour: Number(process.env.SHOP_PER_HOUR ?? 40), lastPath: `${journalPath}.live-last.json`, ...opts.live,
   });
   // whatever a previous process left open is finished before this one takes traffic
   app.addHook('onReady', async () => {
@@ -168,6 +168,9 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
   });
 
   const here = dirname(fileURLToPath(import.meta.url));
+  // the example agent for the live shop, straight from the repo, so `curl -O` gets the file the README describes
+  const shopper = resolve(here, '../../../examples/agents/live_shopper.py');
+  app.get('/agents/live_shopper.py', async (_req, reply) => (existsSync(shopper) ? reply.type('text/x-python; charset=utf-8').send(readFileSync(shopper, 'utf8')) : reply.code(404).send({ error: 'not found' })));
   const staticDir = opts.staticDir ?? resolve(here, '../../web/dist');
   if (existsSync(staticDir)) {
     await app.register(fastifyStatic, { root: staticDir });

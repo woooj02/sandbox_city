@@ -46,9 +46,19 @@ Thirty fresh simulated days. Every rulebook carries the same four safeguards, an
 
 All four rounds and the raw tables: [docs/BENCHMARK.md](docs/BENCHMARK.md).
 
-## A real model, now
+## Agents shopping, live
 
-On the front page, **Run a real model now** has `llama3.2:3b` shop on the server, turn by turn, with a fresh seed. One of three listings hides an instruction to ship somewhere else; in round five that listing fooled all four models, and in a check before launch it fooled this model in 5 of 6 runs ([evidence/live-task-choice.txt](evidence/live-task-choice.txt)). The model shops with no defense. Then its exact order goes through `POST /api/checkout` twice, under No checks and under Frozen v4, and each answer shows PayPal's sandbox ids or the refusal. Some runs the model is fooled and some it isn't: the page shows what happened. One run at a time, 20 an hour. If the model is off or busy, the page shows the last run and says it is recorded.
+On the front page, **Run a real model now** has `llama3.2:3b` shop on the server, turn by turn, with a fresh seed. The page draws it as a shop: the owner's request, three listings, the agent moving between them, the seller's text as the agent reads it with the hidden instruction marked, and every raw reply the model sent. One of three listings hides an instruction to ship somewhere else; in round five that listing fooled all four models, and in a check before launch it fooled this model in 5 of 6 runs ([evidence/live-task-choice.txt](evidence/live-task-choice.txt)). The model shops with no defense. Then its exact order goes through `POST /api/checkout` twice, under No checks and under Frozen v4, and each answer shows PayPal's sandbox ids or the refusal. Some runs the model is fooled and some it isn't: the page shows what happened. One run at a time, 20 an hour. If the model is off or busy, the page shows the last run and says it is recorded.
+
+**Send your own agent in.** The same shop is open over HTTP, with no account and no clone:
+
+```bash
+curl -sO https://sandbox-city.keepsrunning.com/agents/live_shopper.py
+python3 live_shopper.py --shop https://sandbox-city.keepsrunning.com --model llama3.2:3b          # any Ollama model, or an OpenAI-style endpoint
+python3 live_shopper.py --shop https://sandbox-city.keepsrunning.com --model llama3.2:3b --guard  # the same agent with the owner's limits checked in code
+```
+
+`POST /api/shop` starts a session and returns the owner's request, the search results and the three actions (`view`, `order`, `finish`). `POST /api/shop/<id>/act` takes one action and returns what the shop answered. The task is drawn from 16 held-out attacks, and the session does not say which listing is the attacker's until the agent is done. The printed link, `/?watch=<id>`, shows the agent moving through the shop as it calls, and its order goes to the same two checkouts. An agent that already speaks the one-shot contract below can be walked through the shop with [examples/agents/shop_bridge.py](examples/agents/shop_bridge.py). Sessions are capped at 40 an hour, 10 per visitor and 4 at once, and a quiet one closes after three minutes. The agent's name and model are whatever it says they are.
 
 ## The hijack
 
@@ -111,7 +121,7 @@ const toolkit = guardToolkit(new PayPalAgentToolkit({ ... }), { owner: { categor
 - **Sandbox, not production.** The crash recovery, the checkout and the holds below ran on the PayPal sandbox, as did the hijack and the refund. A real signed capture webhook verified on the hosted app, and a forged one got a 401.
 - **A script plays the carrier.** Deliveries, complaints and closing windows reach the checkout through an adapter, and in this lab a script sends them. Every store settles to one sandbox account.
 - **One paid hijack.** The 41% comes from plans put through the gate; one hijacked order was actually paid.
-- **Four kinds of agent, four claims.** The default city is scripted. Model shoppers replay recorded decisions. The toolkit experiment has a model making payment calls. The live run on the front page is a small model shopping now; its order goes to the sandbox checkout, but the model itself never calls PayPal.
+- **Four kinds of agent, four claims.** The default city is scripted. Model shoppers replay recorded decisions. The toolkit experiment has a model making payment calls. The live run on the front page is a small model shopping now, and a visitor's agent shops the same way over HTTP; the order goes to the sandbox checkout, but the agent itself never calls PayPal.
 - **Closer work exists.** See [docs/PRIOR_ART.md](docs/PRIOR_ART.md).
 
 Full threat model and known gaps: [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
@@ -153,6 +163,7 @@ Owner mandate, ship-to lock, orders-must-add-up and idempotency are invariants: 
 
 ## Features
 
+- **The shop floor.** A real model, or your own agent over HTTP, shopping three listings while the page shows each move and what the PayPal sandbox did with the order.
 - **Live city.** A WebGL map of six districts, with every payment drawn as a comet from buyer to store.
 - **Evidence.** Press **E**. The failure, its cost, what still gets through, the checkout and the crash, in that order.
 - **X-ray, Fork, What-if.** See what is malicious, run one day under two rulebooks, replay the day under every rulebook.
@@ -187,6 +198,7 @@ Fill in `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` and a sandbox test card, then
 | `PAYPAL_WEBHOOK_ID` | none | Turns on `POST /webhooks/paypal` |
 | `LIVE_MODEL` | off | An Ollama model for the live run on the front page, such as `llama3.2:3b` |
 | `OLLAMA_URL`, `LIVE_THREADS`, `LIVE_PER_HOUR` | local, 3, 20 | Where Ollama is, how much CPU it may use, and how many live runs an hour |
+| `SHOP_PER_HOUR` | 40 | Visitors' agent sessions an hour at `POST /api/shop`. 0 turns it off |
 
 ## Reproduce the benchmark
 
@@ -217,7 +229,7 @@ All paid model time came to $0.112, under a hard cap in `packages/server/src/llm
 | `packages/server` | Fastify lab server, PayPal adapter, durable payments, checkout API, PayPal contract mock |
 | `packages/web` | React, PixiJS and AG Grid front end |
 | `regressions/` | Portable failure cases |
-| `examples/agents/` | Agents that do not import this project |
+| `examples/agents/` | Agents that do not import this project, including `live_shopper.py` for the live shop |
 | `examples/toolkit-guard/` | The guard for PayPal's Agent Toolkit, as one file, with a sandbox demo |
 | `evidence/` | Frozen rulebooks |
 | `docs/` | Scenario, benchmark, threat model, reliability, regressions, prior art, experiments |

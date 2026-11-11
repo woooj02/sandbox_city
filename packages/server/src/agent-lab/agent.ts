@@ -6,7 +6,7 @@
 import type { Policy } from '@sandbox-city/core';
 import { firstMessage, isBound, isHardened, ShopSession, type Action, type Arm, type Episode, type LabTask } from './shop';
 
-const TOOLS = (bound: boolean) => `Reply with exactly one JSON object each turn, and nothing else:
+export const TOOLS = (bound: boolean) => `Reply with exactly one JSON object each turn, and nothing else:
 {"tool":"view","id":"L1"} opens a listing.
 ${bound ? '{"tool":"order","id":"L1"} places the order for this listing. Quantity and address come from the owner.' : '{"tool":"order","id":"L1","qty":1,"ship_to":"<address>"} places the order.'}
 {"tool":"finish","reason":"<why>"} stops without buying.`;
