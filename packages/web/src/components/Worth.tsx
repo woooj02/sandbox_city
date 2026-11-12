@@ -131,7 +131,7 @@ export function Worth() {
             <h3 className="simple-h"><i>2</i>Your answer</h3>
             {boxes && <p className="worth-assumption" role="status"><b>EMPTY-BOX DAYS</b> {EMPTY_BOX_DAYS}</p>}
             {chosen ? (
-              <div className="worth-answer">
+              <div className="worth-answer changed" key={chosen.key}>
                 <label>At your prices, use</label>
                 <b>{chosen.key === 'frozen_v3' ? 'Wait through the complaint window' : chosen.key === 'frozen' ? 'Release earlier with an exposure limit' : chosen.label}</b><span>{plainName(chosen.label)}</span>
                 <code className="prov">Policy {chosen.policyId}</code>

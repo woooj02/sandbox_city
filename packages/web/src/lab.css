@@ -373,3 +373,8 @@
 .sf-checks span.warn { border-color: #8a6a33; background: #241d10; color: #f3dcb4; } .sf-checks span.warn::before { content: '! '; color: #f0c27a; }
 .sf-recent li i.warn { background: #2e2412; color: #f0cf95; }
 .sf { scroll-margin-top: 16px; }
+
+/* the answer card marks itself when the winning rulebook changes */
+.worth-answer.changed { animation: worth-changed 2.4s ease-out; }
+@keyframes worth-changed { 0%, 45% { box-shadow: 0 0 0 3px #f0c27a, 0 0 34px rgba(240, 194, 122, .45); } 100% { box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .worth-answer.changed { animation: none; } }

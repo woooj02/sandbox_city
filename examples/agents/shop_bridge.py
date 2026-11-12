@@ -20,7 +20,7 @@ import sys
 import urllib.error
 import urllib.request
 
-C = {"dim": "\033[2m", "red": "\033[31m", "green": "\033[32m", "yellow": "\033[33m", "cyan": "\033[36m", "bold": "\033[1m", "off": "\033[0m"}
+C = {"dim": "\033[2m", "red": "\033[31m", "green": "\033[32m", "yellow": "\033[33m", "cyan": "\033[36m", "bold": "\033[1m", "alert": "\033[1;97;41m", "off": "\033[0m"}
 if not sys.stdout.isatty() and not os.environ.get("FORCE_COLOR"):
     C = {k: "" for k in C}
 
@@ -76,7 +76,8 @@ def main():
         try:
             run = subprocess.run(command, input=json.dumps(case), capture_output=True, text=True, timeout=a.timeout)
             for line in run.stderr.strip().splitlines()[-4:]:
-                say(f"     {line[:260]}", "dim")
+                # a guard that refuses an order is the line to notice
+                say(f"     {line[:260]}", "alert" if "blocked" in line.lower() else "dim")
             decision = json.loads(run.stdout[run.stdout.index("{"):run.stdout.rindex("}") + 1])
         except Exception as e:  # an agent that crashes has not bought anything
             say(f"     agent failed: {e}", "red")
